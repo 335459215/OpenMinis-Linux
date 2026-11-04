@@ -84,7 +84,10 @@ jobs:
           export RANLIB_aarch64_linux_android="$BIN/llvm-ranlib"
           cd /tmp/a2a/desktop-tauri/src-tauri
           cargo build --release -p agent2api-server --target aarch64-linux-android
-          cp target/aarch64-linux-android/release/agent2api-server /tmp/liba2a.so
+          BINPATH=$(find /tmp/a2a -path '*/aarch64-linux-android/release/agent2api-server' -type f -print -quit)
+          echo "binary: $BINPATH"
+          test -n "$BINPATH"
+          cp "$BINPATH" /tmp/liba2a.so
           file /tmp/liba2a.so
           readelf -h /tmp/liba2a.so | grep -E "Type|Machine|Entry"
           strings /tmp/liba2a.so | grep -m1 -E "agent2api/3\.[0-9]" || true
