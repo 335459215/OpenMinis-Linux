@@ -731,5 +731,22 @@
             </intent-filter>
         </provider>
 
+        <!-- [A2A] Local Agent2API gateway panel. The service binary is
+             liba2a_server.so in jniLibs; this activity is the only UI shell. -->
+        <activity
+            android:name=".a2a.A2aPanelActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true"
+            android:theme="@style/Theme.Minis">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="a2a"
+                    android:scheme="minis" />
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>
