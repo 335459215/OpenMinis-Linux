@@ -1,0 +1,139 @@
+name: Repack A2A APK
+
+# Build the Agent2API server from the forked source as an Android/bionic PIE,
+# replace lib/arm64-v8a/liba2a.so inside the official OpenMinis APK, and sign
+# with the tracked release.keystore. This keeps the closed-source A2A Kotlin
+# integration from the official APK while upgrading the gateway engine.
+on:
+  workflow_dispatch:
+    inputs:
+      agent2api_tag:
+        description: "Agent2API tag to build"
+        required: true
+        default: "v3.3.0-beta.6"
+      base_tag:
+        description: "OpenMinis official release tag"
+        required: true
+        default: "2.0.82-linux"
+
+permissions:
+  contents: write
+
+jobs:
+  repack:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK r29 and build-tools
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          export ANDROID_SDK_ROOT="$SDK"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" "build-tools;35.0.0"
+          echo "ANDROID_NDK_HOME=$SDK/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Build bionic Agent2API server
+        env:
+          TAG: ${{ inputs.agent2api_tag }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "$TAG" https://github.com/335459215/Agent2API.git /tmp/a2a
+          NDK="$ANDROID_NDK_HOME"
+          BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          mkdir -p /tmp/wrap
+          cat > /tmp/wrap/clang <<EOF
+          #!/bin/bash
+          args=()
+          for a in "\$@"; do
+            [ "\$a" = "-landroid" ] || args+=("\$a")
+          done
+          exec "$BIN/aarch64-linux-android24-clang" "\${args[@]}"
+          EOF
+          cat > /tmp/wrap/clang++ <<EOF
+          #!/bin/bash
+          args=()
+          for a in "\$@"; do
+            [ "\$a" = "-landroid" ] || args+=("\$a")
+          done
+          exec "$BIN/aarch64-linux-android24-clang++" "\${args[@]}"
+          EOF
+          chmod +x /tmp/wrap/clang /tmp/wrap/clang++
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=/tmp/wrap/clang
+          export CC_aarch64_linux_android=/tmp/wrap/clang
+          export CXX_aarch64_linux_android=/tmp/wrap/clang++
+          export AR_aarch64_linux_android="$BIN/llvm-ar"
+          export RANLIB_aarch64_linux_android="$BIN/llvm-ranlib"
+          cd /tmp/a2a/desktop-tauri/src-tauri
+          cargo build --release -p agent2api-server --target aarch64-linux-android
+          cp target/aarch64-linux-android/release/agent2api-server /tmp/liba2a.so
+          file /tmp/liba2a.so
+          readelf -h /tmp/liba2a.so | grep -E "Type|Machine|Entry"
+          strings /tmp/liba2a.so | grep -m1 -E "agent2api/3\.[0-9]" || true
+
+      - name: Download official OpenMinis APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/base
+          gh release download "${{ inputs.base_tag }}" \
+            --repo tall-1997/OpenMinis-Linux \
+            --pattern "minis-ultra-com.openminis.linux.apk" \
+            --dir /tmp/base
+          ls -lh /tmp/base
+
+      - name: Repack and sign
+        env:
+          STORE_PASSWORD: ${{ secrets.MINIS_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MINIS_UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MINIS_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 scripts/repack_a2a.py \
+            /tmp/base/minis-ultra-com.openminis.linux.apk \
+            /tmp/liba2a.so /tmp/repacked.apk
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$BT/zipalign" -p -f 4 /tmp/repacked.apk /tmp/aligned.apk
+          "$BT/apksigner" sign --ks src/android/release.keystore \
+            --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" --out /tmp/minis-a2a.apk /tmp/aligned.apk
+          "$BT/apksigner" verify --print-certs /tmp/minis-a2a.apk
+          test "$(stat -c%s /tmp/minis-a2a.apk)" -gt 100000000
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minis-a2a-apk
+          path: /tmp/minis-a2a.apk
+          retention-days: 14
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="a2a-$(date -u +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" /tmp/minis-a2a.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Minis Ultra + Agent2API ${{ inputs.agent2api_tag }}" \
+            --notes "Base: ${{ inputs.base_tag }} | Agent2API: ${{ inputs.agent2api_tag }} | signed with the tracked upload keystore" \
+            --prerelease
