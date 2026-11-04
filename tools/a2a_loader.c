@@ -10,19 +10,76 @@
  * /var/minis/shared maps to inside the PRoot guest. Plugin layout:
  *   <files>/minis-global/shared/a2a-plugin/bin/agent2api-server
  *   <files>/minis-global/shared/a2a-plugin/ui/
+ *
+ * Android 10+ may deny execve() on app_data_file (W^X). The stub retries via
+ * an anonymous memfd + fexecve before falling back to the APK's native lib.
  */
 #define _GNU_SOURCE
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
+
+#ifndef SYS_memfd_create
+#define SYS_memfd_create 279
+#endif
+#ifndef SYS_execveat
+#define SYS_execveat 281
+#endif
+#ifndef AT_EMPTY_PATH
+#define AT_EMPTY_PATH 0x1000
+#endif
+
+extern char **environ;
 
 static int is_file(const char *path) {
     struct stat st;
     return path && *path && stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static void exec_memfd(const char *path, char **args) {
+    int fd = (int)syscall(SYS_memfd_create, "a2a-server", 0);
+    if (fd < 0) {
+        return;
+    }
+    int in = open(path, O_RDONLY);
+    if (in < 0) {
+        close(fd);
+        return;
+    }
+    char buf[65536];
+    ssize_t n;
+    while ((n = read(in, buf, sizeof(buf))) > 0) {
+        ssize_t off = 0;
+        while (off < n) {
+            ssize_t w = write(fd, buf + off, (size_t)(n - off));
+            if (w <= 0) {
+                close(in);
+                close(fd);
+                return;
+            }
+            off += w;
+        }
+    }
+    close(in);
+    lseek(fd, 0, SEEK_SET);
+    syscall(SYS_execveat, fd, "", args, environ, AT_EMPTY_PATH);
+    close(fd);
+}
+
+static void try_exec(const char *path, char **args) {
+    execv(path, args);
+    int e = errno;
+    if (e == EACCES || e == EPERM) {
+        exec_memfd(path, args);
+        e = errno;
+    }
+    fprintf(stderr, "a2a-loader: exec %s failed: %s\n", path, strerror(e));
 }
 
 int main(int argc, char **argv) {
@@ -42,6 +99,12 @@ int main(int argc, char **argv) {
         snprintf(self_dir, sizeof(self_dir), ".");
     }
 
+    char saved_ui[PATH_MAX] = "";
+    const char *orig_ui = getenv("AGENT2API_UI_DIR");
+    if (orig_ui && *orig_ui) {
+        snprintf(saved_ui, sizeof(saved_ui), "%s", orig_ui);
+    }
+
     char files_dir[PATH_MAX] = "";
     char bundled_bin[PATH_MAX] = "";
     char bundled_ui[PATH_MAX] = "";
@@ -59,7 +122,7 @@ int main(int argc, char **argv) {
         snprintf(root, sizeof(root), "%s", home);
         char *p = strrchr(root, '/');
         if (p) {
-            *p = '\0'; /* <files>/builtin-plugins/a2a */
+            *p = '\0';
             snprintf(bundled_ui, sizeof(bundled_ui), "%s/ui", root);
             snprintf(bundled_bin, sizeof(bundled_bin),
                      "%s/ui/bin/agent2api-server", root);
@@ -69,52 +132,66 @@ int main(int argc, char **argv) {
     char ext_root[PATH_MAX] = "";
     char ext_bin[PATH_MAX] = "";
     char ext_ui[PATH_MAX] = "";
+    char ext_index[PATH_MAX] = "";
     if (files_dir[0]) {
         snprintf(ext_root, sizeof(ext_root), "%s/minis-global/shared/a2a-plugin",
                  files_dir);
         snprintf(ext_bin, sizeof(ext_bin), "%s/bin/agent2api-server", ext_root);
         snprintf(ext_ui, sizeof(ext_ui), "%s/ui", ext_root);
-    }
-
-    const char *server = NULL;
-    const char *ui = NULL;
-    if (ext_bin[0] && is_file(ext_bin)) {
-        server = ext_bin;
-        char marker[PATH_MAX];
-        snprintf(marker, sizeof(marker), "%s/ui/index.html", ext_root);
-        if (is_file(marker)) {
-            ui = ext_ui;
-        }
-    } else if (bundled_bin[0] && is_file(bundled_bin)) {
-        server = bundled_bin;
-        ui = bundled_ui;
-    } else {
-        char fallback[PATH_MAX];
-        snprintf(fallback, sizeof(fallback), "%s/liba2a_server.so", self_dir);
-        if (is_file(fallback)) {
-            server = fallback;
-        }
-    }
-
-    if (!server) {
-        fprintf(stderr, "a2a-loader: no gateway binary found\n");
-        return 127;
-    }
-    chmod(server, 0755);
-    if (ui) {
-        setenv("AGENT2API_UI_DIR", ui, 1);
+        snprintf(ext_index, sizeof(ext_index), "%s/ui/index.html", ext_root);
     }
 
     char **args = calloc((size_t)argc + 1, sizeof(char *));
     if (!args) {
         return 127;
     }
-    args[0] = (char *)server;
-    for (int i = 1; i < argc; i++) {
-        args[i] = argv[i];
-    }
+    args[0] = NULL;
     args[argc] = NULL;
-    execv(server, args);
-    perror("execv");
+
+    if (ext_bin[0] && is_file(ext_bin)) {
+        args[0] = ext_bin;
+        for (int i = 1; i < argc; i++) {
+            args[i] = argv[i];
+        }
+        if (is_file(ext_index)) {
+            setenv("AGENT2API_UI_DIR", ext_ui, 1);
+        }
+        try_exec(ext_bin, args);
+        if (saved_ui[0]) {
+            setenv("AGENT2API_UI_DIR", saved_ui, 1);
+        } else {
+            unsetenv("AGENT2API_UI_DIR");
+        }
+    }
+
+    if (bundled_bin[0] && is_file(bundled_bin)) {
+        args[0] = bundled_bin;
+        for (int i = 1; i < argc; i++) {
+            args[i] = argv[i];
+        }
+        char bundled_index[PATH_MAX];
+        snprintf(bundled_index, sizeof(bundled_index), "%s/index.html", bundled_ui);
+        if (is_file(bundled_index)) {
+            setenv("AGENT2API_UI_DIR", bundled_ui, 1);
+        }
+        try_exec(bundled_bin, args);
+    }
+
+    char fallback[PATH_MAX];
+    snprintf(fallback, sizeof(fallback), "%s/liba2a_server.so", self_dir);
+    if (is_file(fallback)) {
+        args[0] = fallback;
+        for (int i = 1; i < argc; i++) {
+            args[i] = argv[i];
+        }
+        if (saved_ui[0]) {
+            setenv("AGENT2API_UI_DIR", saved_ui, 1);
+        } else {
+            unsetenv("AGENT2API_UI_DIR");
+        }
+        try_exec(fallback, args);
+    }
+
+    fprintf(stderr, "a2a-loader: no runnable gateway found\n");
     return 127;
 }
