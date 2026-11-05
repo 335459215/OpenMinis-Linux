@@ -216,18 +216,62 @@ class A2aPanelActivity : Activity() {
     private fun isLocal(url: String): Boolean =
         url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")
 
+    /**
+     * 面板里 `window.open(authUrl)` 的落点。
+     *
+     * ── 为什么不再就地开弹窗 ────────────────────────────────────
+     * 原来这里用同一个 WebView 实例开弹窗，授权页与面板**共享 Cookie**：
+     * 上一个账号留的会话会被下一个账号带进去，想「干净地登第二个号」
+     * 在面板里根本做不到。授权页也一直是移动 UA，很多发卡方会直接
+     * 把它导向移动版甚至拒绝服务。
+     *
+     * 现在统一交给 [A2aLoginActivity]：独立环境、桌面 UA、横屏、
+     * 每次登录重新清空。回调 URL 由它回传，这里负责提交给网关。
+     */
     private fun routeToPopup(url: String): Boolean {
         if (!url.startsWith("http")) return false
-        val popup = WebView(this)
-        configure(popup)
-        popup.webChromeClient = object : WebChromeClient() {
-            override fun onCloseWindow(window: WebView) {
-                closePopupIfAny()
-            }
+        return try {
+            startActivityForResult(
+                A2aLoginActivity.intent(this, url),
+                A2aLoginActivity.REQUEST_ISOLATED_LOGIN,
+            )
+            true
+        } catch (error: Throwable) {
+            A2aLog.write(this, "隔离登录容器启动失败: ${error.message}")
+            false
         }
-        showPopup(popup)
-        popup.loadUrl(url)
-        return true
+    }
+
+    /**
+     * 隔离登录回来了：把回调 URL 交给网关收尾。
+     *
+     * 网关侧 `POST /api/session/login/callback` 要 `{ state, callbackUrl }`，
+     * 其中 `state` 是面板 `login/start` 拿到、存在页面 JS 里的那个值 ——
+     * 这里拿不到，所以交给页面自己去提交：往 WebView 注入一段脚本，
+     * 让它用**自己手里的 state** 完成回调。
+     *
+     * 这样不必在原生侧复制一份登录状态机，也不会因为 state 对不上被网关拒。
+     */
+    private fun onIsolatedLoginCallback(callbackUrl: String) {
+        val web = webView ?: return
+        // 用 JSONObject 转义，避免 URL 里的引号/反斜杠把脚本打断
+        val literal = org.json.JSONObject.quote(callbackUrl)
+        val script = """
+            (function () {
+              var url = $literal;
+              try {
+                window.dispatchEvent(new CustomEvent('a2a-isolated-login', { detail: { callbackUrl: url } }));
+              } catch (e) {}
+              if (typeof window.__a2aSubmitLoginCallback === 'function') {
+                try { window.__a2aSubmitLoginCallback(url); } catch (e) {}
+              }
+            })();
+        """.trimIndent()
+        web.evaluateJavascript(script) { result ->
+            A2aLog.write(this, "隔离登录回调已注入: $result")
+        }
+        // 刷新一次让账号列表跟上
+        web.reload()
     }
 
     private fun showPopup(popup: WebView) {
@@ -311,25 +355,49 @@ class A2aPanelActivity : Activity() {
 
     // ── 冻结 / 解冻 ─────────────────────────────────────────────
 
-    /** 页面不可见：暂停 JS 定时器与渲染，几乎不占 CPU。 */
+    /**
+     * 页面不可见：只停渲染与 JS 定时器，**不动网关进程**。
+     *
+     * ── 这里踩过的坑 ────────────────────────────────────────────
+     * 早期实现调了 `WebView.pauseTimers()` 并关掉 `javaScriptEnabled`。
+     * `pauseTimers()` 是**进程级静态开关**，一按下去同进程里所有 WebView
+     * 的定时器都停 —— 面板自己那套轮询也跟着停，回到前台时若页面已经
+     * 断在半路，就只能看到一堆不再更新的数字。
+     *
+     * 网关是独立的子进程（`liba2a_server.so`），本来就与这里无关；
+     * 真正需要保的是**别让面板把 CPU 一直占着**，而不是去停一个只影响
+     * 渲染层的定时器。所以现在只做 `onPause()`（停渲染管线 +
+     * 释放暂停期间的动画），JS 保持可用，回来直接续上。
+     */
     private fun freeze() {
         val web = webView ?: return
-        runCatching {
-            web.onPause()
-            web.pauseTimers()
-            web.settings.javaScriptEnabled = false
-        }
+        runCatching { web.onPause() }
     }
 
-    /** 回来：恢复 JS 与渲染。 */
+    /**
+     * 回来：恢复渲染，并按需刷新一次页面。
+     *
+     * 离开期间网关在跑，账号状态、请求计数都在变；面板里的数字是上次
+     * 拉取的快照，回来不刷会一直显示旧值。刷新策略：
+     *  - 离开超过 [STALE_AFTER_MS] 才刷，避免只是切一下输入法/通知栏
+     *    就重载整个面板（重载会丢滚动位置和当前 Tab）；
+     *  - 有登录弹窗还开着时不刷（会打断正在进行的授权流程）。
+     */
     private fun unfreeze() {
         val web = webView ?: return
-        runCatching {
-            web.settings.javaScriptEnabled = true
-            web.onResume()
-            web.resumeTimers()
-        }
+        runCatching { web.onResume() }
+        val away = if (pausedAt == 0L) 0L else System.currentTimeMillis() - pausedAt
+        pausedAt = 0L
+        if (popupView != null) return
+        if (away < STALE_AFTER_MS) return
+        runCatching { web.reload() }
     }
+
+    /** 回到前台时，离开超过这个时长就重载面板（毫秒）。 */
+    private val STALE_AFTER_MS = 20_000L
+
+    /** 上次进入后台的时间戳；0 表示当前没在后台。 */
+    private var pausedAt = 0L
 
     override fun onResume() {
         super.onResume()
@@ -340,6 +408,8 @@ class A2aPanelActivity : Activity() {
     }
 
     override fun onPause() {
+        // 只有真正不可见时才记时间，多窗口/分屏下 onPause 不一定意味着离开。
+        if (!isChangingConfigurations) pausedAt = System.currentTimeMillis()
         freeze()
         super.onPause()
     }
@@ -375,6 +445,23 @@ class A2aPanelActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         unfreeze()
+    }
+
+    /** 隔离登录容器回来了：把回调交给页面收尾。 */
+    @Deprecated("Activity Result API 之外的最短路径，面板本身没有 Fragment 宿主")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != A2aLoginActivity.REQUEST_ISOLATED_LOGIN) return
+        if (resultCode != RESULT_OK) {
+            A2aLog.write(this, "隔离登录被取消")
+            return
+        }
+        val callback = A2aLoginActivity.callbackFrom(data)
+        if (callback.isNullOrEmpty()) {
+            A2aLog.write(this, "隔离登录结束但没有回调 URL")
+            return
+        }
+        onIsolatedLoginCallback(callback)
     }
 
     override fun onDestroy() {

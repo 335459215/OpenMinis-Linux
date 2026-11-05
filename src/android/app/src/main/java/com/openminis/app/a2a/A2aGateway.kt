@@ -26,7 +26,7 @@ object A2aGateway {
      * 原实现只在 `index.html` 不存在时铺一次，导致 APK 里的 UI 更新永远
      * 到不了设备 —— 用户看到的还是旧页面。
      */
-    private const val UI_VERSION = "3.4.2-sw"
+    private const val UI_VERSION = "3.4.2-sw-mobile-parity"
 
     /** UI 版本戳的短哈希，作为 URL 参数破缓存（Service Worker 也会按 URL 区分）。 */
     fun uiRevision(): String = UI_VERSION.hashCode().toUInt().toString(16)
@@ -128,7 +128,21 @@ object A2aGateway {
 
         val deadline = System.currentTimeMillis() + 20_000
         while (System.currentTimeMillis() < deadline) {
-            if (isRunning()) return Result.success(Unit)
+            if (isRunning()) {
+                // 网关就绪 → 把它接成 Minis 的一个 AI 服务商，用户在
+                // 「AI 服务商」里直接看到 Agent2API 及其模型，不必手动填地址。
+                // 失败不能影响网关本身，所以整段吞异常（内部已记日志）。
+                if (A2aPrefs.providerSyncEnabled(context)) {
+                    runCatching {
+                        val app = context.applicationContext as? MinisApp
+                        val repository = app?.providerRepositoryOrNull
+                        if (repository != null) {
+                            A2aProviderBridge.sync(repository, context)
+                        }
+                    }
+                }
+                return Result.success(Unit)
+            }
             if (!started.isAlive) break
             Thread.sleep(250)
         }

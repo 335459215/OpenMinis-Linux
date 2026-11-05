@@ -11,7 +11,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -35,6 +37,42 @@ class A2aKeepAliveService : Service() {
     private var windowManager: WindowManager? = null
     private var bubble: View? = null
     private var params: WindowManager.LayoutParams? = null
+
+    /**
+     * 网关存活监护。
+     *
+     * ── 为什么必须有 ────────────────────────────────────────────
+     * 网关是个独立子进程（`liba2a_server.so`）。前台服务只把**本进程**
+     * 钉在前台，对子进程没有任何约束：内存压力或厂商省电策略把子进程
+     * 收掉之后，面板还在、通知还在，但 18901 已经没人监听 —— 用户看到
+     * 的是「网关服务冻结了」。
+     *
+     * 所以前台服务顺带做一件事：定期探活，掉了就拉起来。间隔 15s 兼顾
+     * 「发现得快」与「不把电池拖垮」；探活本身丢到后台线程跑 ——
+     * `ensureStarted` 内部有锁且最长等待 20s，放主线程会卡住悬浮球。
+     */
+    private val watchdog = Handler(Looper.getMainLooper())
+    private val watchdogTick = object : Runnable {
+        override fun run() {
+            if (!A2aPrefs.keepAlive(this@A2aKeepAliveService)) return
+            // 探活放到后台线程：ensureStarted 内部要 synchronized + 最多 20s
+            // 等待，放主线程会卡住 UI（悬浮球都能被拖住）。
+            Thread {
+                // 连续两次失败才算「掉了」：单次 isRunning 只有 800ms 超时，
+                // 网关正忙（大批量请求/模型刷新）时会短暂探活失败，误判会
+                // 触发一次没必要的重启。
+                val alive = A2aGateway.isRunning() || run {
+                    Thread.sleep(1200)
+                    A2aGateway.isRunning()
+                }
+                if (!alive) {
+                    log("watchdog: 网关不在线，重新拉起")
+                    runCatching { A2aGateway.ensureStarted(applicationContext) }
+                }
+            }.start()
+            watchdog.postDelayed(this, WATCHDOG_INTERVAL_MS)
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -64,6 +102,10 @@ class A2aKeepAliveService : Service() {
             }
             else -> ensureForeground()
         }
+        // 服务每次被拉起（包括系统回收后 START_STICKY 重启）都重新挂上守护，
+        // 先移除旧的避免重复上链。
+        watchdog.removeCallbacks(watchdogTick)
+        watchdog.postDelayed(watchdogTick, WATCHDOG_INTERVAL_MS)
         return START_STICKY
     }
 
@@ -271,6 +313,7 @@ class A2aKeepAliveService : Service() {
     }
 
     override fun onDestroy() {
+        watchdog.removeCallbacks(watchdogTick)
         hideBubble()
         if (instance === this) instance = null
         super.onDestroy()
@@ -278,6 +321,9 @@ class A2aKeepAliveService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "a2a_gateway"
+
+        /** 网关探活间隔。15s：掉线能及时发现，又不至于把电池拖垮。 */
+        private const val WATCHDOG_INTERVAL_MS = 15_000L
         @Suppress("DEPRECATION")
         private const val LEGACY_PHONE_TYPE = WindowManager.LayoutParams.TYPE_PHONE
 
