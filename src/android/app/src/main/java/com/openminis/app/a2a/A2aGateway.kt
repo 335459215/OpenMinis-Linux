@@ -1,8 +1,6 @@
 package com.openminis.app.a2a
 
 import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -136,10 +134,9 @@ object A2aGateway {
     }
 
     /**
-     * Newer Agent2API releases load providers as plugins. The APK carries the
-     * official provider pack metadata/UI plus bionic entry binaries; stage a
-     * complete pack so existing accounts (encrypted in agent2api.db) become
-     * visible again after the 3.0.x -> 3.4.x provider-plugin split.
+     * 新版 Agent2API 把 provider 拆成插件。APK 里带着官方 pack 的清单/UI/图标和
+     * bionic 入口二进制；这里只把它们铺到配置目录，注册表交给网关自己扫描，
+     * 避免手写 plugins.json 与官方验签逻辑打架。
      */
     private fun installBundledPlugins(context: Context, dataDir: File) {
         installPack(context, dataDir, "agent2api-providers", "3.4.1", "liba2a_providers.so")
@@ -166,7 +163,6 @@ object A2aGateway {
                 binary.setExecutable(true, false)
             }
         }
-        mergeRegistry(dataDir, id, version, target)
     }
 
     private fun copyAssetTree(context: Context, assetPath: String, target: File) {
@@ -182,38 +178,5 @@ object A2aGateway {
         children.forEach { child ->
             copyAssetTree(context, "$assetPath/$child", File(target, child))
         }
-    }
-
-    private fun mergeRegistry(dataDir: File, id: String, version: String, target: File) {
-        val registryFile = File(dataDir, "plugins/plugins.json")
-        val root = if (registryFile.isFile) {
-            runCatching { JSONObject(registryFile.readText()) }.getOrElse { JSONObject() }
-        } else {
-            JSONObject()
-        }
-        val oldPacks = root.optJSONArray("packs") ?: JSONArray()
-        val newPacks = JSONArray()
-        for (i in 0 until oldPacks.length()) {
-            val pack = oldPacks.optJSONObject(i) ?: continue
-            if (pack.optString("id") != id) {
-                newPacks.put(pack)
-            }
-        }
-        val manifest = runCatching { JSONObject(File(target, "pack.json").readText()) }
-            .getOrElse { JSONObject() }
-        val entry = JSONObject()
-            .put("id", id)
-            .put("version", version)
-            .put("enabled", true)
-            .put("providers", JSONObject())
-            .put("entry", "bin/$id")
-            .put("sha256", "")
-            .put("signed", true)
-            .put("installed_at", System.currentTimeMillis())
-            .put("manifest_providers", manifest.optJSONArray("providers") ?: JSONArray())
-        newPacks.put(entry)
-        root.put("packs", newPacks)
-        registryFile.parentFile?.mkdirs()
-        registryFile.writeText(root.toString())
     }
 }
