@@ -2,11 +2,14 @@ package com.openminis.app.a2a
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
+import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -18,24 +21,26 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import kotlin.concurrent.thread
 
 /**
  * 本地 Agent2API 面板。
  *
- * 两个关键点：
- * 1. 加载 `/m` 而不是 `/` —— `/` 是桌面外壳，左侧边栏在手机上够不着；
- * 2. 必须打开多窗口支持。面板点「打开官方授权页」用的是 `window.open(...)`，
- *    WebView 默认会**静默丢弃**这个请求，于是登录页根本不弹，账号自然写不进去。
- *    这里用 `onCreateWindow` 起一个覆盖层 WebView 承载授权页，cookie 罐与主
- *    WebView 同进程共享，授权完成后网关自己的回调（`/api/session/login/
- *    remote-callback` 或 `callback`）落库，面板轮询 `/login/wait` 后自动刷新账号。
+ * 四个关键点：
+ * 1. 加载 `/m`（官方手机壳，底部五标签），不是 `/`（桌面侧边栏，手机上够不着）；
+ * 2. 打开 WebView 多窗口，否则「打开官方授权页」的 window.open 被静默丢弃；
+ * 3. 顶栏按系统状态栏内边距下移，避免标题被状态栏盖住；
+ * 4. 离开页面即冻结 WebView（暂停 JS/定时器/渲染），回到页面瞬时解冻，
+ *    同时在通知栏留一个前台服务、在桌面留一个悬浮小球，点击直接回面板。
  */
 class A2aPanelActivity : Activity() {
     private var webView: WebView? = null
     private var titleView: TextView? = null
     private var popupHost: FrameLayout? = null
     private var popupView: WebView? = null
+    private var headerHeight: Int = 0
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,6 +55,7 @@ class A2aPanelActivity : Activity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
 
+        // ── 顶栏（会按状态栏高度下移）───────────────────────────
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -82,13 +88,18 @@ class A2aPanelActivity : Activity() {
             text = "刷新"
             textSize = 14f
             setTextColor(Color.parseColor("#0A84FF"))
+            setPadding(0, 0, 0, 0)
             setOnClickListener { webView?.reload() }
         })
-        root.addView(
-            header,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 104, Gravity.TOP),
-        )
 
+        val headerParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            104,
+            Gravity.TOP,
+        )
+        root.addView(header, headerParams)
+
+        // ── WebView ────────────────────────────────────────────
         val web = WebView(this)
         configure(web)
         web.webViewClient = object : WebViewClient() {
@@ -131,13 +142,11 @@ class A2aPanelActivity : Activity() {
                 closePopupIfAny()
             }
         }
-        root.addView(
-            web,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-            ).apply { topMargin = 104 },
-        )
+        val webParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ).apply { topMargin = 104 }
+        root.addView(web, webParams)
 
         val spinner = ProgressBar(this).apply { visibility = ProgressBar.VISIBLE }
         root.addView(spinner, FrameLayout.LayoutParams(96, 96, Gravity.CENTER))
@@ -145,12 +154,25 @@ class A2aPanelActivity : Activity() {
         setContentView(root)
         webView = web
 
+        // 状态栏内边距：不把标题顶到状态栏下面去。
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            headerParams.topMargin = top
+            headerParams.height = dp(52)
+            webParams.topMargin = top + dp(52)
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+
         thread(name = "a2a-start") {
             val result = A2aGateway.ensureStarted(applicationContext)
             runOnUiThread {
                 spinner.visibility = ProgressBar.GONE
                 if (result.isSuccess) {
                     web.loadUrl("http://127.0.0.1:${A2aGateway.PORT}/m")
+                    if (A2aPrefs.keepAlive(this@A2aPanelActivity)) {
+                        A2aKeepAliveService.start(this@A2aPanelActivity)
+                    }
                 } else {
                     titleView?.text = "网关启动失败"
                     web.loadDataWithBaseURL(
@@ -176,7 +198,6 @@ class A2aPanelActivity : Activity() {
             allowFileAccess = false
             allowContentAccess = false
             mediaPlaybackRequiresUserGesture = false
-            // 面板与授权页都要 window.open 才能拉起官方登录页。
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
@@ -191,10 +212,6 @@ class A2aPanelActivity : Activity() {
     private fun isLocal(url: String): Boolean =
         url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")
 
-    /**
-     * `shouldOverrideUrlLoading` 兜底：面板自己跳出去的外链也放进覆盖层，
-     * 避免把面板本身导航走、回来还得重新加载。
-     */
     private fun routeToPopup(url: String): Boolean {
         if (!url.startsWith("http")) return false
         val popup = WebView(this)
@@ -232,16 +249,24 @@ class A2aPanelActivity : Activity() {
             },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
         )
+        val statusTop = runCatching {
+            val res = resources.getIdentifier("status_bar_height", "dimen", "android")
+            if (res > 0) resources.getDimensionPixelSize(res) else dp(28)
+        }.getOrDefault(dp(28))
         host.addView(
             bar,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 104, Gravity.TOP),
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(52),
+                Gravity.TOP,
+            ).apply { topMargin = statusTop },
         )
         host.addView(
             popup,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
-            ).apply { topMargin = 104 },
+            ).apply { topMargin = statusTop + dp(52) },
         )
         (webView?.parent as? ViewGroup)?.addView(
             host,
@@ -260,8 +285,6 @@ class A2aPanelActivity : Activity() {
         popupView?.destroy()
         popupView = null
         popupHost = null
-        // 登录多半刚完成，回主面板刷一下账号。
-        webView?.evaluateJavascript("window.dispatchEvent(new Event('a2a-resume'))", null)
         webView?.reload()
         return true
     }
@@ -282,6 +305,56 @@ class A2aPanelActivity : Activity() {
         </body></html>
     """.trimIndent()
 
+    // ── 冻结 / 解冻 ─────────────────────────────────────────────
+
+    /** 页面不可见：暂停 JS 定时器与渲染，几乎不占 CPU。 */
+    private fun freeze() {
+        val web = webView ?: return
+        runCatching {
+            web.onPause()
+            web.pauseTimers()
+            web.settings.javaScriptEnabled = false
+        }
+    }
+
+    /** 回来：恢复 JS 与渲染。 */
+    private fun unfreeze() {
+        val web = webView ?: return
+        runCatching {
+            web.settings.javaScriptEnabled = true
+            web.onResume()
+            web.resumeTimers()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        unfreeze()
+        A2aKeepAliveService.hideBubble(this)
+    }
+
+    override fun onPause() {
+        freeze()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // 离开面板（回到聊天 / 桌面）：按开关留悬浮球，并确保前台服务在跑。
+        if (!isFinishing && A2aPrefs.keepAlive(this)) {
+            A2aKeepAliveService.start(this)
+            if (A2aPrefs.floatingBubble(this) && canDrawOverlay()) {
+                A2aKeepAliveService.showBubble(this)
+            }
+        }
+    }
+
+    private fun canDrawOverlay(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         if (closePopupIfAny()) return
@@ -291,6 +364,12 @@ class A2aPanelActivity : Activity() {
         } else {
             super.onBackPressed()
         }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        unfreeze()
     }
 
     override fun onDestroy() {

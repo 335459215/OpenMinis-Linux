@@ -2,10 +2,14 @@ package com.openminis.app.a2a
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -13,6 +17,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
@@ -22,11 +27,13 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * Agent2API 网关控制页：状态、启停、重启、打开面板、清理 Cookie、查看日志。
+ * Agent2API 网关控制页：状态、启停、保活、悬浮球、授权、日志。
  */
 class A2aSettingsActivity : Activity() {
     private lateinit var statusView: TextView
     private lateinit var busy: ProgressBar
+    private lateinit var keepAliveSwitch: Switch
+    private lateinit var bubbleSwitch: Switch
     private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,15 +46,13 @@ class A2aSettingsActivity : Activity() {
         }
         scroll.addView(root)
 
-        val back = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "← 返回"
             textSize = 15f
             setTextColor(Color.parseColor("#0A84FF"))
             setPadding(0, 0, 0, 24)
             setOnClickListener { finish() }
-        }
-        root.addView(back)
-
+        })
         root.addView(TextView(this).apply {
             text = "Agent2API 网关"
             textSize = 22f
@@ -72,15 +77,72 @@ class A2aSettingsActivity : Activity() {
         root.addView(busy)
 
         root.addView(button("打开面板") {
-            startActivity(android.content.Intent(this, A2aPanelActivity::class.java))
+            startActivity(Intent(this, A2aPanelActivity::class.java))
         })
         root.addView(button("启动网关") { action { A2aGateway.ensureStarted(applicationContext) } })
         root.addView(button("停止网关") {
             A2aGateway.stop()
+            A2aKeepAliveService.stop(this)
             Toast.makeText(this, "网关已停止", Toast.LENGTH_SHORT).show()
             refresh()
         })
         root.addView(button("重启网关") { action { A2aGateway.restart(applicationContext) } })
+
+        // ── 保活 / 悬浮球 ──────────────────────────────────
+        root.addView(TextView(this).apply {
+            text = "后台运行"
+            textSize = 13f
+            setTextColor(Color.parseColor("#888888"))
+            setPadding(0, 32, 0, 4)
+        })
+
+        keepAliveSwitch = Switch(this).apply {
+            text = "跟随 Minis Ultra 保活"
+            textSize = 15f
+            isChecked = A2aPrefs.keepAlive(this@A2aSettingsActivity)
+            setOnCheckedChangeListener { _, checked ->
+                A2aPrefs.setKeepAlive(this@A2aSettingsActivity, checked)
+                if (checked) {
+                    A2aKeepAliveService.start(this@A2aSettingsActivity)
+                } else {
+                    A2aKeepAliveService.stop(this@A2aSettingsActivity)
+                }
+            }
+        }
+        root.addView(keepAliveSwitch)
+        root.addView(TextView(this).apply {
+            text = "用前台服务托管网关：Minis 不被杀，网关与插件进程就不会被系统回收。"
+            textSize = 12f
+            setTextColor(Color.GRAY)
+            setPadding(0, 0, 0, 16)
+        })
+
+        bubbleSwitch = Switch(this).apply {
+            text = "离开页面后显示悬浮小图标"
+            textSize = 15f
+            isChecked = A2aPrefs.floatingBubble(this@A2aSettingsActivity)
+            setOnCheckedChangeListener { _, checked ->
+                A2aPrefs.setFloatingBubble(this@A2aSettingsActivity, checked)
+                if (checked) {
+                    if (canDrawOverlay()) {
+                        A2aKeepAliveService.showBubble(this@A2aSettingsActivity)
+                    } else {
+                        requestOverlay()
+                    }
+                } else {
+                    A2aKeepAliveService.hideBubble(this@A2aSettingsActivity)
+                }
+            }
+        }
+        root.addView(bubbleSwitch)
+        root.addView(TextView(this).apply {
+            text = "面板离开即冻结（暂停 JS 与渲染），点小图标瞬间解冻回到原页面。"
+            textSize = 12f
+            setTextColor(Color.GRAY)
+            setPadding(0, 0, 0, 16)
+        })
+
+        root.addView(button("授权「显示在其他应用上层」") { requestOverlay() })
         root.addView(button("清理面板 Cookie") { clearCookies() })
         root.addView(button("查看网关日志") { showLog() })
 
@@ -113,6 +175,22 @@ class A2aSettingsActivity : Activity() {
         ).apply { topMargin = 10 }
     }
 
+    private fun canDrawOverlay(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
+
+    private fun requestOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+        } else {
+            Toast.makeText(this, "已获得悬浮窗权限", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun action(block: () -> Result<Unit>) {
         busy.visibility = ProgressBar.VISIBLE
         thread(name = "a2a-action") {
@@ -126,6 +204,7 @@ class A2aSettingsActivity : Activity() {
                         Toast.LENGTH_LONG,
                     ).show()
                 } else {
+                    if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
                     Toast.makeText(this, "网关已就绪", Toast.LENGTH_SHORT).show()
                 }
                 refresh()

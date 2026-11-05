@@ -748,6 +748,17 @@
             </intent-filter>
         </activity>
 
+        <!-- [A2A] 网关保活 + 悬浮小球。前台服务挂在 app 进程上：
+             Minis 活着，网关与插件子进程就不会被当成后台空闲回收。 -->
+        <service
+            android:name=".a2a.A2aKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local Agent2API gateway keep-alive: keeps a loopback-only HTTP gateway and its provider plugin processes reachable for the on-device agent while the user has it enabled." />
+        </service>
+
         <activity
             android:name=".a2a.A2aSettingsActivity"
             android:exported="false"
