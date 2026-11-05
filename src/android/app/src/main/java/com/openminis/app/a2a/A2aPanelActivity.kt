@@ -267,11 +267,12 @@ class A2aPanelActivity : Activity() {
               }
             })();
         """.trimIndent()
+        // 不在这里 reload：页面刚发出 POST /api/session/login/callback，
+        // 立刻 reload 会把这条还在飞的请求打断，登录又回到「等回调」状态。
+        // 账号列表由页面自己在这轮登录 wait 结束后刷新（见 add-account-dynamic-sheet）。
         web.evaluateJavascript(script) { result ->
             A2aLog.write(this, "隔离登录回调已注入: $result")
         }
-        // 刷新一次让账号列表跟上
-        web.reload()
     }
 
     private fun showPopup(popup: WebView) {
