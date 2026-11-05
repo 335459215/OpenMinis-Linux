@@ -162,15 +162,37 @@ object A2aGateway {
             copyAssetTree(context, "a2a/packs/$id", target)
         }
         val binary = File(File(target, "bin"), id)
-        if (!binary.isFile) {
-            val source = File(context.applicationInfo.nativeLibraryDir, nativeName)
-            if (source.isFile) {
-                binary.parentFile?.mkdirs()
+        val source = File(context.applicationInfo.nativeLibraryDir, nativeName)
+        if (!source.isFile) return
+
+        /*
+         * Android 10+ 的 app 私有目录是 noexec 的：把 bionic 二进制 copy 到
+         * files/plugins/.../bin/ 后再 execve 会被 SELinux 拒（Permission denied）。
+         * 官方集成能跑起来，是因为它执行的是 nativeLibraryDir 里的 liba2a*.so
+         * —— apk 的 lib 目录是 exec 允许的。这里照做：pack 里的 bin/<id> 指向
+         * nativeLibraryDir 的符号链接，execve 解析到 apk lib 目录的真实文件。
+         */
+        if (binary.exists() || runCatching {
+                java.nio.file.Files.isSymbolicLink(binary.toPath())
+            }.getOrDefault(false)
+        ) {
+            binary.delete()
+        }
+        binary.parentFile?.mkdirs()
+        val linked = runCatching {
+            java.nio.file.Files.createSymbolicLink(
+                binary.toPath(),
+                source.toPath(),
+            )
+            true
+        }.getOrElse { false }
+        if (!linked) {
+            // 退路：不支持 symlink 的文件系统才复制（某些设备上仍可能 noexec）。
+            runCatching {
                 source.copyTo(binary, overwrite = true)
                 binary.setExecutable(true, false)
-            }
+            }.onFailure { return }
         }
-        if (!binary.isFile) return
         registerPack(dataDir, id, version)
     }
 
