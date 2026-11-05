@@ -25,7 +25,7 @@ import java.net.URL
  * 「Agent2API」，展开就是网关当前可用的模型。
  *
  * ── 几个容易踩的点 ──────────────────────────────────────────
- * 1. `appendV1Suffix = true`：网关的 OpenAI 面是 `/v1/*`（`/v1/models`、
+ * 1. `appendV1Suffix = true`：网关的 OpenAI 面在 `/v1` 之下（`/v1/models`、
  *    `/v1/chat/completions`），而 Minis 存的是**裸 host**，拼接发生在
  *    请求时。设 false 会打到 `/models` 上 404。
  * 2. `providerType = openAI` + 自定义 baseURL 会让 `addInstance` 走
