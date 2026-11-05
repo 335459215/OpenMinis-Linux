@@ -3,6 +3,7 @@ package com.openminis.app.a2a
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import com.openminis.app.MinisApp
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -134,7 +135,7 @@ object A2aGateway {
                 // 失败不能影响网关本身，所以整段吞异常（内部已记日志）。
                 if (A2aPrefs.providerSyncEnabled(context)) {
                     runCatching {
-                        val app = context.applicationContext as? MinisApp
+                        val app: MinisApp? = context.applicationContext as? MinisApp
                         val repository = app?.providerRepositoryOrNull
                         if (repository != null) {
                             A2aProviderBridge.sync(repository, context)

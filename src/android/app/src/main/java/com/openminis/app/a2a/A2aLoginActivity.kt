@@ -180,8 +180,6 @@ class A2aLoginActivity : Activity() {
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
-            // 站点若写死 viewport，用 initialScale 把版面拉到屏幕宽度
-            setInitialScale(desktopInitialScale())
             setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = true
             mediaPlaybackRequiresUserGesture = false
@@ -195,6 +193,10 @@ class A2aLoginActivity : Activity() {
             userAgentString = DesktopUa.random()
         }
         view.setBackgroundColor(Color.WHITE)
+        // setInitialScale 是 WebView 的方法，不在 WebSettings 上。
+        // 站点若写死 viewport，用它把版面压到屏幕宽度；useWideViewPort +
+        // loadWithOverviewMode 已经让 WebView 按桌面宽度排版了。
+        runCatching { view.setInitialScale(desktopInitialScale()) }
 
         // OAuth 跳转跨域，必须允许第三方 Cookie，否则 Google/微软的回调链会断
         runCatching { CookieManager.getInstance().setAcceptThirdPartyCookies(view, true) }

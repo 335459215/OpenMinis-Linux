@@ -59,7 +59,7 @@ object A2aProviderBridge {
      * 模型列表空着，刷新报 connection refused，比没有更糟。
      */
     private fun gatewayReady(): Boolean = try {
-        val connection = URL("$baseUrl()/health").openConnection() as HttpURLConnection
+        val connection = URL("${baseUrl()}/health").openConnection() as HttpURLConnection
         connection.connectTimeout = 2000
         connection.readTimeout = 2000
         connection.requestMethod = "GET"
@@ -120,7 +120,7 @@ object A2aProviderBridge {
      * 能力标记），这里不重复实现，只提供一个「网关到底给了什么」的探针。
      */
     fun probeModelIds(): List<String> = try {
-        val connection = URL("$baseUrl()/v1/models").openConnection() as HttpURLConnection
+        val connection = URL("${baseUrl()}/v1/models").openConnection() as HttpURLConnection
         connection.connectTimeout = 3000
         connection.readTimeout = 5000
         val body = connection.inputStream.bufferedReader().use { it.readText() }
