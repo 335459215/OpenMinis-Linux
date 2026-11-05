@@ -91,7 +91,7 @@ fun PluginMarketScreen(
                     context.startActivity(
                         android.content.Intent(
                             context,
-                            com.openminis.app.a2a.A2aPanelActivity::class.java,
+                            com.openminis.app.a2a.A2aSettingsActivity::class.java,
                         ),
                     )
                 },

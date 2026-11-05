@@ -1,6 +1,8 @@
 package com.openminis.app.a2a
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -47,7 +49,7 @@ object A2aGateway {
             runCatching { deployUi(context, uiDir) }
                 .onFailure { return Result.failure(it) }
         }
-        installBundledPlugins(context, dataDir)
+        runCatching { installBundledPlugins(context, dataDir) }
 
         val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
         if (!binary.isFile) {
@@ -84,7 +86,13 @@ object A2aGateway {
         }
         started.destroy()
         process = null
-        Result.failure(IllegalStateException("health timeout; see ${File(dataDir, "gateway.log")}"))
+        Result.failure(IllegalStateException("health timeout; see ${logFile(context)}"))
+    }
+
+    fun restart(context: Context): Result<Unit> {
+        stop()
+        Thread.sleep(400)
+        return ensureStarted(context)
     }
 
     fun stop() {
@@ -93,6 +101,9 @@ object A2aGateway {
             process = null
         }
     }
+
+    fun logFile(context: Context): File =
+        File(context.filesDir, "builtin-plugins/a2a/data/gateway.log")
 
     private fun deployUi(context: Context, uiDir: File) {
         val parent = uiDir.parentFile ?: context.filesDir
@@ -126,29 +137,83 @@ object A2aGateway {
 
     /**
      * Newer Agent2API releases load providers as plugins. The APK carries the
-     * Android/bionic provider binaries; stage them where the gateway's
-     * `android-bin` bootstrap looks first. A missing pack is harmless: the
-     * gateway still serves the panel and the account list simply stays hidden.
+     * official provider pack metadata/UI plus bionic entry binaries; stage a
+     * complete pack so existing accounts (encrypted in agent2api.db) become
+     * visible again after the 3.0.x -> 3.4.x provider-plugin split.
      */
     private fun installBundledPlugins(context: Context, dataDir: File) {
-        val root = File(dataDir, "plugins/android-bin")
-        copyPlugin(context, root, "agent2api-providers", "3.4.1", "liba2a_providers.so")
-        copyPlugin(context, root, "agent2api-web-providers", "3.4.2", "liba2a_web_providers.so")
+        installPack(context, dataDir, "agent2api-providers", "3.4.1", "liba2a_providers.so")
+        installPack(context, dataDir, "agent2api-web-providers", "3.4.2", "liba2a_web_providers.so")
     }
 
-    private fun copyPlugin(
+    private fun installPack(
         context: Context,
-        root: File,
+        dataDir: File,
         id: String,
         version: String,
         nativeName: String,
     ) {
-        val target = File(File(root, "$id/$version"), id)
-        if (target.length() > 0) return
-        val source = File(context.applicationInfo.nativeLibraryDir, nativeName)
-        if (!source.isFile) return
-        target.parentFile?.mkdirs()
-        source.copyTo(target, overwrite = true)
-        target.setExecutable(true, false)
+        val target = File(dataDir, "plugins/$id/$version")
+        if (!File(target, "pack.json").isFile) {
+            copyAssetTree(context, "a2a/packs/$id", target)
+        }
+        val binary = File(File(target, "bin"), id)
+        if (!binary.isFile) {
+            val source = File(context.applicationInfo.nativeLibraryDir, nativeName)
+            if (source.isFile) {
+                binary.parentFile?.mkdirs()
+                source.copyTo(binary, overwrite = true)
+                binary.setExecutable(true, false)
+            }
+        }
+        mergeRegistry(dataDir, id, version, target)
+    }
+
+    private fun copyAssetTree(context: Context, assetPath: String, target: File) {
+        val children = context.assets.list(assetPath)
+        if (children == null || children.isEmpty()) {
+            target.parentFile?.mkdirs()
+            context.assets.open(assetPath).use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+            return
+        }
+        target.mkdirs()
+        children.forEach { child ->
+            copyAssetTree(context, "$assetPath/$child", File(target, child))
+        }
+    }
+
+    private fun mergeRegistry(dataDir: File, id: String, version: String, target: File) {
+        val registryFile = File(dataDir, "plugins/plugins.json")
+        val root = if (registryFile.isFile) {
+            runCatching { JSONObject(registryFile.readText()) }.getOrElse { JSONObject() }
+        } else {
+            JSONObject()
+        }
+        val oldPacks = root.optJSONArray("packs") ?: JSONArray()
+        val newPacks = JSONArray()
+        for (i in 0 until oldPacks.length()) {
+            val pack = oldPacks.optJSONObject(i) ?: continue
+            if (pack.optString("id") != id) {
+                newPacks.put(pack)
+            }
+        }
+        val manifest = runCatching { JSONObject(File(target, "pack.json").readText()) }
+            .getOrElse { JSONObject() }
+        val entry = JSONObject()
+            .put("id", id)
+            .put("version", version)
+            .put("enabled", true)
+            .put("providers", JSONObject())
+            .put("entry", "bin/$id")
+            .put("sha256", "")
+            .put("signed", true)
+            .put("installed_at", System.currentTimeMillis())
+            .put("manifest_providers", manifest.optJSONArray("providers") ?: JSONArray())
+        newPacks.put(entry)
+        root.put("packs", newPacks)
+        registryFile.parentFile?.mkdirs()
+        registryFile.writeText(root.toString())
     }
 }

@@ -1,0 +1,37 @@
+{
+  "id": "agent2api-web-providers",
+  "name": "网页提供商",
+  "description": "为 Agent2API 扩展网页提供商，支持智谱清言与 DeepSeek 网页登录账号的模型调用；具体续期、目录、积分与签到能力以各提供商声明为准。",
+  "license": "AGPL-3.0",
+  "version": "3.4.2",
+  "protocol": 1,
+  "provider_category": "web",
+  "providers": [
+    {
+      "id": "chatglm",
+      "label": "智谱清言",
+      "order": 0,
+      "default_enabled": true
+    },
+    {
+      "id": "deepseek-web",
+      "label": "DeepSeek 网页",
+      "order": 1,
+      "default_enabled": true
+    }
+  ],
+  "icons": "assets",
+  "entry": {
+    "x86_64-pc-windows-msvc": "bin/agent2api-web-providers.exe",
+    "x86_64-unknown-linux-gnu": "bin/agent2api-web-providers",
+    "aarch64-unknown-linux-gnu": "bin/agent2api-web-providers",
+    "x86_64-apple-darwin": "bin/agent2api-web-providers",
+    "aarch64-apple-darwin": "bin/agent2api-web-providers"
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "keyId": "official-2026",
+    "value": "Afswe3BZY8j0iAE0WJmYx19ScF54tF4jmC/4x49JkZ9mU1FD35QSGhzcrmvtd9uMo2x7gxdQoNrqxZ+3CXziCQ==",
+    "target": "aarch64-unknown-linux-gnu"
+  }
+}

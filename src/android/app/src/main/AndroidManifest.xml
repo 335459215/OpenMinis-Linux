@@ -748,5 +748,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".a2a.A2aSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Minis" />
+
     </application>
 </manifest>
