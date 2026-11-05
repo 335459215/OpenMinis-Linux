@@ -125,12 +125,12 @@ class A2aSettingsActivity : Activity() {
                 A2aPrefs.setFloatingBubble(this@A2aSettingsActivity, checked)
                 if (checked) {
                     if (canDrawOverlay()) {
-                        A2aKeepAliveService.showBubble(this@A2aSettingsActivity)
+                        A2aBubble.show(this@A2aSettingsActivity)
                     } else {
                         requestOverlay()
                     }
                 } else {
-                    A2aKeepAliveService.hideBubble(this@A2aSettingsActivity)
+                    A2aBubble.hide()
                 }
             }
         }

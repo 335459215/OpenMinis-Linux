@@ -7,7 +7,6 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
-import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -169,10 +168,15 @@ class A2aPanelActivity : Activity() {
             runOnUiThread {
                 spinner.visibility = ProgressBar.GONE
                 if (result.isSuccess) {
-                    web.loadUrl("http://127.0.0.1:${A2aGateway.PORT}/m")
-                    if (A2aPrefs.keepAlive(this@A2aPanelActivity)) {
-                        A2aKeepAliveService.start(this@A2aPanelActivity)
+                    if (A2aGateway.uiDeployed) {
+                        // 面板 UI 刚被重铺：清掉旧缓存与旧 Service Worker
+                        // （旧 sw.js 会拦截请求，导致新页面永远到不了眼前）。
+                        runCatching {
+                            web.clearCache(true)
+                            CookieManager.getInstance().flush()
+                        }
                     }
+                    web.loadUrl("http://127.0.0.1:${A2aGateway.PORT}/m?rev=${A2aGateway.uiRevision()}")
                 } else {
                     titleView?.text = "网关启动失败"
                     web.loadDataWithBaseURL(
@@ -330,7 +334,7 @@ class A2aPanelActivity : Activity() {
     override fun onResume() {
         super.onResume()
         unfreeze()
-        A2aKeepAliveService.hideBubble(this)
+        A2aBubble.hide()
         // 前台时才允许启动前台服务（Android 12+ 的后台启动限制）。
         if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
     }
@@ -343,17 +347,15 @@ class A2aPanelActivity : Activity() {
     override fun onStop() {
         super.onStop()
         // 离开面板（回到聊天 / 桌面）：按开关留悬浮球，并确保前台服务在跑。
-        if (!isFinishing && A2aPrefs.keepAlive(this)) {
-            if (A2aPrefs.floatingBubble(this) && canDrawOverlay()) {
-                // 同进程直调：此时进程已在后台，走 Intent 会被系统丢掉。
-                val shown = A2aKeepAliveService.showBubbleDirect()
-                if (!shown) A2aKeepAliveService.showBubble(this)
-            }
+        // 只要离开面板就显示悬浮球：返回键回 Minis Ultra、切到别的 App、
+        // 按 Home 都算。**不判断 isFinishing** —— 按返回键时面板正在结束，
+        // 但用户只是回到 Minis Ultra，并不是退出网关，球应该留下。
+        // 直接由 Activity 走 WindowManager 加窗，不经过服务：后台
+        // startService 会被系统丢弃，那条路根本到不了。
+        if (A2aPrefs.floatingBubble(this)) {
+            A2aBubble.show(this)
         }
     }
-
-    private fun canDrawOverlay(): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()

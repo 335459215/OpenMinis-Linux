@@ -21,6 +21,21 @@ object A2aGateway {
     private const val HOST = "127.0.0.1"
     private const val ROOT = "a2a-gateway"
 
+    /**
+     * 面板 UI 版本戳。改这个字符串（或换 a2a-ui.zip）就会在下次启动时重铺 UI。
+     * 原实现只在 `index.html` 不存在时铺一次，导致 APK 里的 UI 更新永远
+     * 到不了设备 —— 用户看到的还是旧页面。
+     */
+    private const val UI_VERSION = "3.4.1-sw"
+
+    /** UI 版本戳的短哈希，作为 URL 参数破缓存（Service Worker 也会按 URL 区分）。 */
+    fun uiRevision(): String = UI_VERSION.hashCode().toUInt().toString(16)
+
+    /** 本次 ensureStarted 是否重铺了 UI（面板据此清 HTTP 缓存）。 */
+    @Volatile
+    var uiDeployed: Boolean = false
+        private set
+
     @Volatile
     private var process: Process? = null
     private val lock = Any()
@@ -66,11 +81,23 @@ object A2aGateway {
         dataDir.mkdirs()
         File(dataDir, "tmp").mkdirs()
 
-        if (!File(uiDir, "index.html").isFile) {
+        val stamp = File(rootDir(context), "ui.version")
+        val needUi = !File(uiDir, "index.html").isFile ||
+            !stamp.isFile ||
+            stamp.readText().trim() != UI_VERSION
+        if (needUi) {
             runCatching { deployUi(context, uiDir) }
                 .onFailure { return Result.failure(it) }
+            uiDeployed = true
+            runCatching { stamp.writeText(UI_VERSION) }
         }
         runCatching { installBundledPlugins(context, dataDir) }
+        // 清掉历史插件安装失败记录。网关把 operations 持久化在 kv 里
+        // （键 `pluginOperation:<id>`），启动时读回内存 —— 之前尝试「在面板里
+        // 升级插件」必然失败（它把二进制解到 app 私有目录再 exec，被 noexec 拒），
+        // 那条红字会一直挂在插件页上，让人以为插件坏了。此刻网关还没起，独占
+        // 写库是安全的。
+        runCatching { clearStalePluginOperations(dataDir) }
 
         val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
         if (!binary.isFile) {
@@ -108,6 +135,24 @@ object A2aGateway {
         started.destroy()
         process = null
         Result.failure(IllegalStateException("health timeout; see ${logFile(context)}"))
+    }
+
+    /**
+     * 删除 kv 里的 `pluginOperation:*` 记录（插件页那条「启动失败」的来源）。
+     * 只在网关停止时调用。
+     */
+    private fun clearStalePluginOperations(dataDir: File) {
+        val dbFile = File(dataDir, "agent2api.db")
+        if (!dbFile.isFile) return
+        runCatching {
+            android.database.sqlite.SQLiteDatabase.openDatabase(
+                dbFile.absolutePath,
+                null,
+                android.database.sqlite.SQLiteDatabase.OPEN_READWRITE,
+            ).use { db ->
+                db.delete("kv", "key LIKE ?", arrayOf("pluginOperation:%"))
+            }
+        }
     }
 
     fun restart(context: Context): Result<Unit> {
