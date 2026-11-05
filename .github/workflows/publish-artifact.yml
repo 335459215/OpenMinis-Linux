@@ -1,0 +1,45 @@
+name: Publish Artifact APK
+
+# 把某次构建产物直接发布成 Release，避免手机端拉 100MB+ 的 Actions artifact。
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Actions run id that produced minis-ultra-apk"
+        required: true
+      tag:
+        description: "Release tag to create"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: minis-ultra-apk
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: /tmp/apk
+
+      - name: Show files
+        run: ls -lh /tmp/apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          APK=$(find /tmp/apk -name '*.apk' | head -1)
+          echo "APK=$APK"
+          gh release create "${{ inputs.tag }}" "$APK" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Minis Ultra 2.0.83 + Agent2API 3.4.1" \
+            --notes "Source build: upstream main + A2A shell (LLM provider entry, Chinese UI, /m mobile panel)." \
+            --prerelease
