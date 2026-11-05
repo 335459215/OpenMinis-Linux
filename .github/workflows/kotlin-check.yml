@@ -1,0 +1,71 @@
+name: Kotlin compile check
+
+# 只做一件事：把 app 模块的 Kotlin 编出来。
+#
+# 为什么单独一条：完整 APK 构建的输出有 2 MB+，GitHub 的 job log 接口会在
+# SDK 解包那一段就截断，真正的编译错误根本读不到。这条 pipleline 不下载
+# NDK、不打 APK、不跑单测，`compileDebugKotlin` 失败时会直接把 `e: file://…`
+# 打到日志尾部 —— 那正是需要看的东西。
+#
+# 手动触发即可，不挂 push，避免和主构建抢 runner。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: "17"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "35.0.0"
+  ANDROID_CMDLINE_TOOLS: "11076708"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g"
+
+jobs:
+  compile:
+    name: :app:compileDebugKotlin
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: ${{ env.ANDROID_CMDLINE_TOOLS }}
+          packages: "platforms;${{ env.ANDROID_PLATFORM }} build-tools;${{ env.ANDROID_BUILD_TOOLS }}"
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: kotlin-check-${{ runner.os }}-${{ hashFiles('src/android/**/*.gradle*', 'src/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: kotlin-check-${{ runner.os }}-
+
+      - name: Compile app Kotlin
+        working-directory: src/android
+        run: |
+          set -o pipefail
+          ./gradlew :app:compileDebugKotlin --stacktrace 2>&1 | tee /tmp/compile.log
+          # 刻意不用 --continue：第一个错误停下，日志短、定位快。
+
+      - name: Show compiler errors
+        if: failure()
+        run: |
+          echo '===== e: file:// ====='
+          grep -a 'e: file://' /tmp/compile.log | head -60 || true
+          echo '===== What went wrong ====='
+          grep -a -A 12 'What went wrong' /tmp/compile.log | head -60 || true
+          echo '===== tail ====='
+          tail -60 /tmp/compile.log
