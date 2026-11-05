@@ -22,12 +22,10 @@ import java.net.URL
 import kotlin.concurrent.thread
 
 /**
- * Control surface for the embedded Agent2API gateway: status, start/stop,
- * restart, panel entry, cookie reset and gateway log.
+ * Agent2API 网关控制页：状态、启停、重启、打开面板、清理 Cookie、查看日志。
  */
 class A2aSettingsActivity : Activity() {
     private lateinit var statusView: TextView
-    private lateinit var detailView: TextView
     private lateinit var busy: ProgressBar
     private val handler = Handler(Looper.getMainLooper())
 
@@ -41,44 +39,58 @@ class A2aSettingsActivity : Activity() {
         }
         scroll.addView(root)
 
+        val back = TextView(this).apply {
+            text = "← 返回"
+            textSize = 15f
+            setTextColor(Color.parseColor("#0A84FF"))
+            setPadding(0, 0, 0, 24)
+            setOnClickListener { finish() }
+        }
+        root.addView(back)
+
         root.addView(TextView(this).apply {
-            text = "Agent2API Gateway"
+            text = "Agent2API 网关"
             textSize = 22f
             setTextColor(Color.parseColor("#222222"))
-            gravity = Gravity.START
         })
+        root.addView(TextView(this).apply {
+            text = "本地 OpenAI 兼容网关，供 Minis Ultra 与其它客户端共用登录态"
+            textSize = 13f
+            setTextColor(Color.GRAY)
+            setPadding(0, 8, 0, 0)
+        })
+
         statusView = TextView(this).apply {
-            textSize = 16f
-            setPadding(0, 24, 0, 0)
+            textSize = 15f
+            setPadding(0, 28, 0, 0)
             setTextColor(Color.DKGRAY)
+            setLineSpacing(8f, 1f)
         }
         root.addView(statusView)
-        detailView = TextView(this).apply {
-            textSize = 13f
-            setPadding(0, 8, 0, 0)
-            setTextColor(Color.GRAY)
-        }
-        root.addView(detailView)
+
         busy = ProgressBar(this).apply { visibility = ProgressBar.GONE }
         root.addView(busy)
 
-        root.addView(button("Start gateway") { action { A2aGateway.ensureStarted(applicationContext) } })
-        root.addView(button("Stop gateway") {
-            A2aGateway.stop()
-            refresh()
-        })
-        root.addView(button("Restart gateway") { action { A2aGateway.restart(applicationContext) } })
-        root.addView(button("Open panel") {
+        root.addView(button("打开面板") {
             startActivity(android.content.Intent(this, A2aPanelActivity::class.java))
         })
-        root.addView(button("Clear panel cookies") { clearCookies() })
-        root.addView(button("View gateway log") { showLog() })
+        root.addView(button("启动网关") { action { A2aGateway.ensureStarted(applicationContext) } })
+        root.addView(button("停止网关") {
+            A2aGateway.stop()
+            Toast.makeText(this, "网关已停止", Toast.LENGTH_SHORT).show()
+            refresh()
+        })
+        root.addView(button("重启网关") { action { A2aGateway.restart(applicationContext) } })
+        root.addView(button("清理面板 Cookie") { clearCookies() })
+        root.addView(button("查看网关日志") { showLog() })
 
         root.addView(TextView(this).apply {
-            text = "OpenAI-compatible API:\nhttp://127.0.0.1:18901/v1"
+            text = "接口地址：http://127.0.0.1:18901/v1\n" +
+                "面板地址：http://127.0.0.1:18901/m"
             textSize = 13f
-            setPadding(0, 24, 0, 0)
+            setPadding(0, 28, 0, 0)
             setTextColor(Color.GRAY)
+            setLineSpacing(6f, 1f)
         })
 
         setContentView(scroll)
@@ -93,11 +105,12 @@ class A2aSettingsActivity : Activity() {
     private fun button(label: String, onClick: () -> Unit): Button = Button(this).apply {
         text = label
         isAllCaps = false
+        textSize = 15f
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = 12 }
+        ).apply { topMargin = 10 }
     }
 
     private fun action(block: () -> Result<Unit>) {
@@ -109,9 +122,11 @@ class A2aSettingsActivity : Activity() {
                 if (result.isFailure) {
                     Toast.makeText(
                         this,
-                        result.exceptionOrNull()?.message ?: "Agent2API action failed",
+                        result.exceptionOrNull()?.message ?: "操作失败",
                         Toast.LENGTH_LONG,
                     ).show()
+                } else {
+                    Toast.makeText(this, "网关已就绪", Toast.LENGTH_SHORT).show()
                 }
                 refresh()
             }
@@ -122,22 +137,26 @@ class A2aSettingsActivity : Activity() {
         thread(name = "a2a-refresh") {
             val running = A2aGateway.isRunning()
             val summary = StringBuilder()
-            summary.append("Status: ").append(if (running) "Running" else "Stopped")
-            summary.append("\nEndpoint: http://127.0.0.1:18901/v1")
+            summary.append(if (running) "状态：运行中" else "状态：已停止")
             if (running) {
                 runCatching {
-                    val connection = URL("http://127.0.0.1:18901/health").openConnection() as HttpURLConnection
-                    connection.connectTimeout = 1000
-                    connection.readTimeout = 1000
+                    val connection =
+                        URL("http://127.0.0.1:18901/health").openConnection() as HttpURLConnection
+                    connection.connectTimeout = 1200
+                    connection.readTimeout = 1200
                     val body = connection.inputStream.bufferedReader().readText()
                     connection.disconnect()
                     val json = JSONObject(body)
                     val models = json.optInt("models", 0)
                     val login = json.optJSONObject("login")
                     val loggedIn = login?.optBoolean("loggedIn", false) ?: false
-                    summary.append("\nModels: ").append(models)
-                    summary.append("\nUpstream login: ").append(if (loggedIn) "yes" else "no")
+                    summary.append("\n模型数量：").append(models)
+                    summary.append("\n上游登录：").append(if (loggedIn) "已登录" else "未登录")
+                }.onFailure {
+                    summary.append("\n健康检查失败：").append(it.message ?: "未知")
                 }
+            } else {
+                summary.append("\n点击「启动网关」后即可打开面板")
             }
             val text = summary.toString()
             handler.post { statusView.text = text }
@@ -146,15 +165,16 @@ class A2aSettingsActivity : Activity() {
 
     private fun clearCookies() {
         CookieManager.getInstance().removeAllCookies {
-            handler.post { Toast.makeText(this, "Panel cookies cleared", Toast.LENGTH_SHORT).show() }
+            handler.post { Toast.makeText(this, "面板 Cookie 已清理", Toast.LENGTH_SHORT).show() }
         }
     }
 
     private fun showLog() {
         val file: File = A2aGateway.logFile(this)
         val text = runCatching {
-            if (!file.isFile) "No gateway log yet." else file.readLines().takeLast(300).joinToString("\n")
-        }.getOrElse { "Cannot read log: ${it.message}" }
+            if (!file.isFile) "还没有网关日志。" else
+                file.readLines().takeLast(300).joinToString("\n")
+        }.getOrElse { "读取日志失败：${it.message}" }
         val view = TextView(this).apply {
             this.text = text.takeLast(30_000)
             textSize = 11f
@@ -162,9 +182,9 @@ class A2aSettingsActivity : Activity() {
             setTextIsSelectable(true)
         }
         AlertDialog.Builder(this)
-            .setTitle("Gateway log")
+            .setTitle("网关日志")
             .setView(ScrollView(this).apply { addView(view) })
-            .setPositiveButton("Close", null)
+            .setPositiveButton("关闭", null)
             .show()
     }
 }

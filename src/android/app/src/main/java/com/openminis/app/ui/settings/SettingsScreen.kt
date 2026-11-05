@@ -46,6 +46,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -162,6 +163,20 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
                     onClick = onUsageClick,
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Tune,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.settings_a2a_gateway),
+                    subtitle = stringResource(R.string.settings_a2a_gateway_subtitle),
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(
+                                context,
+                                com.openminis.app.a2a.A2aSettingsActivity::class.java,
+                            ),
+                        )
+                    },
                     showDivider = false,
                 )
             }
@@ -241,20 +256,6 @@ fun SettingsScreen(
                     title = stringResource(R.string.plugin_market_title),
                     subtitle = stringResource(R.string.plugin_market_subtitle),
                     onClick = onPluginMarketClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Settings,
-                    iconColor = IosIndigo,
-                    title = "Agent2API Gateway",
-                    subtitle = "Local gateway · 127.0.0.1:18901",
-                    onClick = {
-                        context.startActivity(
-                            android.content.Intent(
-                                context,
-                                com.openminis.app.a2a.A2aSettingsActivity::class.java,
-                            ),
-                        )
-                    },
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Terminal,

@@ -131,6 +131,8 @@
     <string name="settings_model_groups_subtitle">備援與負載平衡</string>
     <string name="settings_token_usage">Token 用量</string>
     <string name="settings_token_usage_subtitle">追蹤各供應商的 API 用量</string>
+    <string name="settings_a2a_gateway">Agent2API 閘道</string>
+    <string name="settings_a2a_gateway_subtitle">本機 OpenAI 相容閘道 · 127.0.0.1:18901</string>
     <string name="settings_section_appearance">外觀</string>
     <string name="settings_appearance_subtitle">主題、字型大小與顯示</string>
     <string name="settings_section_agent_runtime">Agent 執行環境</string>

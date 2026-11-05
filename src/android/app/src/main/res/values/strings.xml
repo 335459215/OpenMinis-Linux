@@ -204,6 +204,8 @@
     <string name="settings_model_groups_subtitle">Fallback and load balancing</string>
     <string name="settings_token_usage">Token Usage</string>
     <string name="settings_token_usage_subtitle">Track API usage across providers</string>
+    <string name="settings_a2a_gateway">Agent2API Gateway</string>
+    <string name="settings_a2a_gateway_subtitle">Local OpenAI-compatible gateway · 127.0.0.1:18901</string>
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_appearance_subtitle">Theme, font size, and display</string>
     <string name="settings_section_agent_runtime">Agent Runtime</string>

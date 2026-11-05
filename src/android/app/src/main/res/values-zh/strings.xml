@@ -171,6 +171,8 @@
     <string name="settings_model_groups_subtitle">回退与负载均衡</string>
     <string name="settings_token_usage">Token 用量</string>
     <string name="settings_token_usage_subtitle">跨提供商追踪 API 使用情况</string>
+    <string name="settings_a2a_gateway">Agent2API 网关</string>
+    <string name="settings_a2a_gateway_subtitle">本地 OpenAI 兼容网关 · 127.0.0.1:18901</string>
     <string name="settings_section_appearance">外观</string>
     <string name="settings_appearance_subtitle">主题、字号与显示</string>
     <string name="settings_section_agent_runtime">Agent 运行时</string>

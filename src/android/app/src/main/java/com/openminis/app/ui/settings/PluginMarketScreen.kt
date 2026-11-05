@@ -70,35 +70,6 @@ fun PluginMarketScreen(
         title = stringResource(R.string.plugin_market_title),
         onBack = null,
     ) {
-        var a2aRunning by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            a2aRunning = withContext(Dispatchers.IO) {
-                com.openminis.app.a2a.A2aGateway.isRunning()
-            }
-        }
-        SettingsSection(
-            header = "Agent2API",
-            footer = "Local gateway · 127.0.0.1:18901",
-        ) {
-            SettingsRow(
-                title = "Agent2API Gateway",
-                subtitle = if (a2aRunning) {
-                    "Running · tap to open panel"
-                } else {
-                    "Stopped · tap to open panel"
-                },
-                onClick = {
-                    context.startActivity(
-                        android.content.Intent(
-                            context,
-                            com.openminis.app.a2a.A2aSettingsActivity::class.java,
-                        ),
-                    )
-                },
-                showDivider = false,
-            )
-        }
-
         if (status.isNotBlank()) {
             Text(
                 status,
