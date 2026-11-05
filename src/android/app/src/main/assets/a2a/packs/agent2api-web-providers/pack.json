@@ -27,11 +27,5 @@
     "aarch64-unknown-linux-gnu": "bin/agent2api-web-providers",
     "x86_64-apple-darwin": "bin/agent2api-web-providers",
     "aarch64-apple-darwin": "bin/agent2api-web-providers"
-  },
-  "signature": {
-    "algorithm": "ed25519",
-    "keyId": "official-2026",
-    "value": "Afswe3BZY8j0iAE0WJmYx19ScF54tF4jmC/4x49JkZ9mU1FD35QSGhzcrmvtd9uMo2x7gxdQoNrqxZ+3CXziCQ==",
-    "target": "aarch64-unknown-linux-gnu"
   }
 }

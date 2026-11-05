@@ -1,6 +1,8 @@
 package com.openminis.app.a2a
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -134,9 +136,14 @@ object A2aGateway {
     }
 
     /**
-     * 新版 Agent2API 把 provider 拆成插件。APK 里带着官方 pack 的清单/UI/图标和
-     * bionic 入口二进制；这里只把它们铺到配置目录，注册表交给网关自己扫描，
-     * 避免手写 plugins.json 与官方验签逻辑打架。
+     * 新版 Agent2API 把 provider 拆成插件，启动时只认 plugins.json 注册表，
+     * 不会扫描目录。APK 里带着官方 pack 的清单/UI/图标和 bionic 入口二进制，
+     * 这里把它们铺到配置目录并写入注册表。
+     *
+     * 注意：官方 pack 里的 ed25519 签名是签「官方原版内容」的，我们换了 bionic
+     * 入口二进制后内容已变，签名必然验不过。网关的验签是三态：
+     * Unsigned（允许安装，标黄） / Invalid（拒绝）。所以这里直接去掉签名，
+     * 让它以 Unsigned 身份存在，而不是伪造一份验不过的签名。
      */
     private fun installBundledPlugins(context: Context, dataDir: File) {
         installPack(context, dataDir, "agent2api-providers", "3.4.1", "liba2a_providers.so")
@@ -163,6 +170,51 @@ object A2aGateway {
                 binary.setExecutable(true, false)
             }
         }
+        if (!binary.isFile) return
+        registerPack(dataDir, id, version)
+    }
+
+    /** 把包写进 `plugins.json`，字段对齐网关的 InstalledPack。 */
+    private fun registerPack(dataDir: File, id: String, version: String) {
+        val registryFile = File(dataDir, "plugins/plugins.json")
+        val root = if (registryFile.isFile) {
+            runCatching { JSONObject(registryFile.readText()) }.getOrElse { JSONObject() }
+        } else {
+            JSONObject()
+        }
+        val old = root.optJSONArray("packs") ?: JSONArray()
+        val packs = JSONArray()
+        var found = false
+        for (i in 0 until old.length()) {
+            val pack = old.optJSONObject(i) ?: continue
+            val packId = pack.optString("id")
+            if (packId == id) {
+                if (pack.optString("version") == version) {
+                    pack.put("enabled", true)
+                    pack.put("entry", "bin/$id")
+                    found = true
+                } else {
+                    continue // 丢掉旧版本条目
+                }
+            }
+            packs.put(pack)
+        }
+        if (!found) {
+            packs.put(
+                JSONObject()
+                    .put("id", id)
+                    .put("version", version)
+                    .put("enabled", true)
+                    .put("providers", JSONObject())
+                    .put("entry", "bin/$id")
+                    .put("sha256", "")
+                    .put("signed", false)
+                    .put("installed_at", System.currentTimeMillis()),
+            )
+        }
+        root.put("packs", packs)
+        registryFile.parentFile?.mkdirs()
+        registryFile.writeText(root.toString())
     }
 
     private fun copyAssetTree(context: Context, assetPath: String, target: File) {

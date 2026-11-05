@@ -205,11 +205,5 @@
     "x86_64-apple-darwin": "bin/agent2api-providers",
     "aarch64-apple-darwin": "bin/agent2api-providers"
   },
-  "homepage": "https://github.com/ProvidersPlugin/Agent2Providers",
-  "signature": {
-    "algorithm": "ed25519",
-    "keyId": "official-2026",
-    "value": "gdjUYkzRwm5Y+sdu+ogjcjru+AxFiZUGvI2xjVHB/+7Vj0lygjlcVNvt7bkRZPpY74tvMYaYByklziFJqQM2DQ==",
-    "target": "aarch64-unknown-linux-gnu"
-  }
+  "homepage": "https://github.com/ProvidersPlugin/Agent2Providers"
 }
