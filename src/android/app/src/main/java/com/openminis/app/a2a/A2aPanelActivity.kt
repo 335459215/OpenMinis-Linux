@@ -345,7 +345,9 @@ class A2aPanelActivity : Activity() {
         // 离开面板（回到聊天 / 桌面）：按开关留悬浮球，并确保前台服务在跑。
         if (!isFinishing && A2aPrefs.keepAlive(this)) {
             if (A2aPrefs.floatingBubble(this) && canDrawOverlay()) {
-                A2aKeepAliveService.showBubble(this)
+                // 同进程直调：此时进程已在后台，走 Intent 会被系统丢掉。
+                val shown = A2aKeepAliveService.showBubbleDirect()
+                if (!shown) A2aKeepAliveService.showBubble(this)
             }
         }
     }

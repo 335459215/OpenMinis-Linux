@@ -41,6 +41,7 @@ class A2aKeepAliveService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        instance = this
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -256,15 +257,22 @@ class A2aKeepAliveService : Service() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun log(line: String) {
+        val text = "${System.currentTimeMillis()} $line\n"
+        // 内部目录 shell 读不到；同时写一份到 Download，方便直接查看排查。
         runCatching {
-            val file = File(A2aGateway.rootDir(this), "bubble.log")
-            file.parentFile?.mkdirs()
-            file.appendText("${System.currentTimeMillis()} $line\n")
+            val internal = File(A2aGateway.rootDir(this), "bubble.log")
+            internal.parentFile?.mkdirs()
+            internal.appendText(text)
+        }
+        runCatching {
+            val external = File("/sdcard/Download/a2a-bubble.log")
+            external.appendText(text)
         }
     }
 
     override fun onDestroy() {
         hideBubble()
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
@@ -272,6 +280,10 @@ class A2aKeepAliveService : Service() {
         private const val CHANNEL_ID = "a2a_gateway"
         @Suppress("DEPRECATION")
         private const val LEGACY_PHONE_TYPE = WindowManager.LayoutParams.TYPE_PHONE
+
+        @Volatile
+        var instance: A2aKeepAliveService? = null
+            private set
         private const val NOTIFICATION_ID = 0x2A2A
 
         const val ACTION_SHOW_BUBBLE = "com.openminis.app.a2a.SHOW_BUBBLE"
@@ -299,6 +311,21 @@ class A2aKeepAliveService : Service() {
             context.startService(
                 Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_SHOW_BUBBLE),
             )
+        }
+
+        /**
+         * 同进程直接显示悬浮球。
+         *
+         * 走 Intent 时，Activity 已经 `onStop`（进程进入后台），Android 会静默
+         * 丢掉后台 `startService`，服务收不到 SHOW_BUBBLE —— 这就是「球不出现」
+         * 的直接原因。服务和 Activity 同进程，直接拿实例调用最可靠。
+         */
+        fun showBubbleDirect(): Boolean {
+            val service = instance ?: return false
+            return runCatching { service.showBubbleInternal() }.getOrElse {
+                service.log("showBubbleDirect failed: ${it.javaClass.simpleName} ${it.message}")
+                false
+            }
         }
 
         fun hideBubble(context: Context) = runCatching {
