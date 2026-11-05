@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
@@ -18,15 +19,16 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
+import java.io.File
 import kotlin.math.abs
 
 /**
- * A2A 网关的前台服务。
+ * A2A 网关的前台服务：保活 + 悬浮小球。
  *
- * 两个职责：
- * 1. **保活**：网关是 app 进程的子进程，把 app 放进前台服务就不会被系统
- *    按「后台空闲」回收，Minis 活着 → 网关活着 → 插件子进程活着。
- * 2. **悬浮小球**：离开面板时留一个可拖动的小图标，点一下回到面板。
+ * 悬浮球失败一律写进 `files/a2a-gateway/bubble.log`，并同时尝试
+ * TYPE_APPLICATION_OVERLAY → TYPE_PHONE 两种窗口类型。Honor / 部分国产 ROM
+ * 上 appops 的 SYSTEM_ALERT_WINDOW 为 allow、但厂商安全中心仍会拦窗，
+ * 这种时候只有日志能说清原因。
  */
 class A2aKeepAliveService : Service() {
 
@@ -45,13 +47,13 @@ class A2aKeepAliveService : Service() {
         when (intent?.action) {
             ACTION_SHOW_BUBBLE -> {
                 ensureForeground()
-                showBubble()
+                val ok = showBubbleInternal()
+                log("SHOW_BUBBLE ok=$ok canDraw=${canDrawOverlay()} sdk=${Build.VERSION.SDK_INT}")
             }
             ACTION_HIDE_BUBBLE -> {
                 hideBubble()
-                if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunning()) {
-                    stopSelf()
-                }
+                log("HIDE_BUBBLE")
+                if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunning()) stopSelf()
             }
             ACTION_STOP -> {
                 hideBubble()
@@ -71,15 +73,16 @@ class A2aKeepAliveService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
             if (manager.getNotificationChannel(channelId) == null) {
-                val channel = NotificationChannel(
-                    channelId,
-                    "Agent2API 网关",
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    description = "保持本地网关运行，供客户端调用"
-                    setShowBadge(false)
-                }
-                manager.createNotificationChannel(channel)
+                manager.createNotificationChannel(
+                    NotificationChannel(
+                        channelId,
+                        "Agent2API 网关",
+                        NotificationManager.IMPORTANCE_LOW,
+                    ).apply {
+                        description = "保持本地网关运行，供客户端调用"
+                        setShowBadge(false)
+                    },
+                )
             }
         }
 
@@ -104,18 +107,20 @@ class A2aKeepAliveService : Service() {
             .setContentIntent(open)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                } else {
-                    0
-                },
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, 0)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (error: Throwable) {
+            log("startForeground failed: ${error.javaClass.simpleName} ${error.message}")
         }
     }
 
@@ -133,9 +138,13 @@ class A2aKeepAliveService : Service() {
     private fun canDrawOverlay(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
 
-    private fun showBubble() {
-        if (bubble != null) return
-        if (!canDrawOverlay()) return
+    /** 供控制页「立即显示悬浮球」直接调用，返回是否加窗成功。 */
+    fun showBubbleInternal(): Boolean {
+        if (bubble != null) return true
+        if (!canDrawOverlay()) {
+            log("cannot draw overlay (permission denied)")
+            return false
+        }
 
         val size = dp(52)
         val view = FrameLayout(this).apply {
@@ -144,7 +153,6 @@ class A2aKeepAliveService : Service() {
                 setColor(Color.parseColor("#1F6FEB"))
                 setStroke(dp(2), Color.parseColor("#3399FF"))
             }
-            elevation = dp(6).toFloat()
         }
         view.addView(
             TextView(this).apply {
@@ -159,37 +167,18 @@ class A2aKeepAliveService : Service() {
             ),
         )
 
-        val lp = WindowManager.LayoutParams(
-            size,
-            size,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            android.graphics.PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = dp(12)
-            y = dp(240)
-        }
-
         var downX = 0f
         var downY = 0f
         var startX = 0
         var startY = 0
         var moved = false
+        val lp = buildParams(size)
 
-        view.setOnTouchListener { _, event ->
+        view.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX
-                    downY = event.rawY
-                    startX = lp.x
-                    startY = lp.y
+                    downX = event.rawX; downY = event.rawY
+                    startX = lp.x; startY = lp.y
                     moved = false
                     true
                 }
@@ -199,7 +188,7 @@ class A2aKeepAliveService : Service() {
                     if (abs(dx) > dp(6) || abs(dy) > dp(6)) moved = true
                     lp.x = startX + dx.toInt()
                     lp.y = startY + dy.toInt()
-                    runCatching { windowManager?.updateViewLayout(view, lp) }
+                    runCatching { windowManager?.updateViewLayout(v, lp) }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -210,11 +199,42 @@ class A2aKeepAliveService : Service() {
             }
         }
 
-        runCatching { windowManager?.addView(view, lp) }
-            .onSuccess {
+        val wm = windowManager ?: return false
+        // 先 TYPE_APPLICATION_OVERLAY，被 ROM 拦了就退到 TYPE_PHONE。
+        val types: List<Int> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            listOf(
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                LEGACY_PHONE_TYPE,
+            )
+        } else {
+            listOf(LEGACY_PHONE_TYPE)
+        }
+        for (type in types) {
+            lp.type = type
+            val result = runCatching { wm.addView(view, lp) }
+            if (result.isSuccess) {
                 bubble = view
                 params = lp
+                log("bubble added type=$type x=${lp.x} y=${lp.y}")
+                return true
+            } else {
+                log("addView failed type=$type: ${result.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }}")
             }
+        }
+        return false
+    }
+
+    private fun buildParams(size: Int) = WindowManager.LayoutParams(
+        size,
+        size,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        gravity = Gravity.TOP or Gravity.START
+        x = dp(12)
+        y = dp(240)
     }
 
     private fun hideBubble() {
@@ -225,7 +245,6 @@ class A2aKeepAliveService : Service() {
     }
 
     private fun openPanel() {
-        // 收起小球，回到面板；面板 onResume 会解冻 WebView。
         hideBubble()
         startActivity(
             Intent(this, A2aPanelActivity::class.java).apply {
@@ -234,8 +253,15 @@ class A2aKeepAliveService : Service() {
         )
     }
 
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun log(line: String) {
+        runCatching {
+            val file = File(A2aGateway.rootDir(this), "bubble.log")
+            file.parentFile?.mkdirs()
+            file.appendText("${System.currentTimeMillis()} $line\n")
+        }
+    }
 
     override fun onDestroy() {
         hideBubble()
@@ -244,46 +270,46 @@ class A2aKeepAliveService : Service() {
 
     companion object {
         private const val CHANNEL_ID = "a2a_gateway"
+        @Suppress("DEPRECATION")
+        private const val LEGACY_PHONE_TYPE = WindowManager.LayoutParams.TYPE_PHONE
         private const val NOTIFICATION_ID = 0x2A2A
 
         const val ACTION_SHOW_BUBBLE = "com.openminis.app.a2a.SHOW_BUBBLE"
         const val ACTION_HIDE_BUBBLE = "com.openminis.app.a2a.HIDE_BUBBLE"
         const val ACTION_STOP = "com.openminis.app.a2a.STOP"
 
-        fun showBubble(context: Context) {
+        /**
+         * 启动前台服务。**必须在 App 处于前台时调用**（面板 onResume/onCreate），
+         * 否则 Android 12+ 会抛 ForegroundServiceStartNotAllowedException。
+         */
+        fun start(context: Context) = runCatching {
             val intent = Intent(context, A2aKeepAliveService::class.java)
-                .setAction(ACTION_SHOW_BUBBLE)
-            runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
             }
         }
 
-        fun hideBubble(context: Context) {
+        /**
+         * 显示悬浮球。走普通 startService —— 此时服务已在前台运行，
+         * 后台启动普通服务不受限制；用 startForegroundService 反而会被拦。
+         */
+        fun showBubble(context: Context) = runCatching {
             context.startService(
-                Intent(context, A2aKeepAliveService::class.java)
-                    .setAction(ACTION_HIDE_BUBBLE),
+                Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_SHOW_BUBBLE),
             )
         }
 
-        fun start(context: Context) {
-            val intent = Intent(context, A2aKeepAliveService::class.java)
-            runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
-            }
+        fun hideBubble(context: Context) = runCatching {
+            context.startService(
+                Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_HIDE_BUBBLE),
+            )
         }
 
-        fun stop(context: Context) {
+        fun stop(context: Context) = runCatching {
             context.startService(
-                Intent(context, A2aKeepAliveService::class.java)
-                    .setAction(ACTION_STOP),
+                Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_STOP),
             )
         }
     }

@@ -331,6 +331,8 @@ class A2aPanelActivity : Activity() {
         super.onResume()
         unfreeze()
         A2aKeepAliveService.hideBubble(this)
+        // 前台时才允许启动前台服务（Android 12+ 的后台启动限制）。
+        if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
     }
 
     override fun onPause() {
@@ -342,7 +344,6 @@ class A2aPanelActivity : Activity() {
         super.onStop()
         // 离开面板（回到聊天 / 桌面）：按开关留悬浮球，并确保前台服务在跑。
         if (!isFinishing && A2aPrefs.keepAlive(this)) {
-            A2aKeepAliveService.start(this)
             if (A2aPrefs.floatingBubble(this) && canDrawOverlay()) {
                 A2aKeepAliveService.showBubble(this)
             }

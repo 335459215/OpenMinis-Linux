@@ -11,18 +11,38 @@ import java.util.zip.ZipInputStream
 /**
  * Local Agent2API gateway lifecycle for the in-app A2A panel.
  *
- * The gateway binary is shipped as `liba2a_server.so` (bionic PIE) and is
- * started as a child of the app, matching the official integration: data and
- * UI live under files/builtin-plugins/a2a, loopback only, no panel captcha,
- * no self-update.
+ * 数据目录**不能**放在 `files/builtin-plugins/a2a` 下面：Minis 每次启动都会执行
+ * `ProviderConfigStore.purgeRetiredBuiltInLaneFiles()`，把那个目录整个
+ * `deleteRecursively()`（连同 agent2api.db、account.key、插件包）。
+ * 所以这里换到 `files/a2a-gateway/`，那是我们自己独占、不会被上游清理的路径。
  */
 object A2aGateway {
     const val PORT = 18901
     private const val HOST = "127.0.0.1"
+    private const val ROOT = "a2a-gateway"
 
     @Volatile
     private var process: Process? = null
     private val lock = Any()
+
+    /** 网关根目录；服务与日志也用它。 */
+    fun rootDir(context: Context): File = File(context.filesDir, ROOT)
+    fun dataDir(context: Context): File = File(rootDir(context), "data")
+    fun uiDir(context: Context): File = File(rootDir(context), "ui")
+
+    /**
+     * 旧路径（`builtin-plugins/a2a`）如果还在，把数据搬过来。
+     * 只在目标不存在时搬，避免覆盖用户当前数据。
+     */
+    private fun migrateLegacyData(context: Context) {
+        val legacy = File(context.filesDir, "builtin-plugins/a2a/data")
+        val target = dataDir(context)
+        if (!legacy.isDirectory || target.isDirectory) return
+        runCatching {
+            target.parentFile?.mkdirs()
+            legacy.copyRecursively(target, overwrite = false)
+        }
+    }
 
     fun isRunning(): Boolean {
         return try {
@@ -40,8 +60,9 @@ object A2aGateway {
     fun ensureStarted(context: Context): Result<Unit> = synchronized(lock) {
         if (isRunning()) return Result.success(Unit)
 
-        val dataDir = File(context.filesDir, "builtin-plugins/a2a/data")
-        val uiDir = File(context.filesDir, "builtin-plugins/a2a/ui")
+        migrateLegacyData(context)
+        val dataDir = dataDir(context)
+        val uiDir = uiDir(context)
         dataDir.mkdirs()
         File(dataDir, "tmp").mkdirs()
 
@@ -102,8 +123,7 @@ object A2aGateway {
         }
     }
 
-    fun logFile(context: Context): File =
-        File(context.filesDir, "builtin-plugins/a2a/data/gateway.log")
+    fun logFile(context: Context): File = File(dataDir(context), "gateway.log")
 
     private fun deployUi(context: Context, uiDir: File) {
         val parent = uiDir.parentFile ?: context.filesDir
