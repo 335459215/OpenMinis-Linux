@@ -145,9 +145,21 @@
       "default_enabled": true
     },
     {
+      "id": "qwenwork",
+      "label": "千问办公 国内版",
+      "order": 24,
+      "default_enabled": true
+    },
+    {
+      "id": "qwenwork-intl",
+      "label": "千问办公 国际版",
+      "order": 25,
+      "default_enabled": true
+    },
+    {
       "id": "trae",
       "label": "Trae",
-      "order": 24,
+      "order": 26,
       "default_enabled": true
     },
     {
@@ -184,6 +196,18 @@
       "id": "doubaowork",
       "label": "豆包工作",
       "order": 30,
+      "default_enabled": true
+    },
+    {
+      "id": "kiro",
+      "label": "Kiro",
+      "order": 31,
+      "default_enabled": true
+    },
+    {
+      "id": "astudio",
+      "label": "AStudio",
+      "order": 32,
       "default_enabled": true
     }
   ],

@@ -204,6 +204,13 @@ object A2aGateway {
         } else {
             JSONObject()
         }
+        val packJson = File(dataDir, "plugins/$id/$version/pack.json")
+        val manifest = runCatching { JSONObject(packJson.readText()) }.getOrElse { JSONObject() }
+        // manifest_providers 是「这个包提供哪些 provider」的缓存，隐藏账号的
+        // 判定（account_store::hidden_accounts）就靠它 —— 少了这个字段，账号
+        // 会一直显示为 not_installed，即使插件已经装好。
+        val manifestProviders = manifest.optJSONArray("providers") ?: JSONArray()
+
         val old = root.optJSONArray("packs") ?: JSONArray()
         val packs = JSONArray()
         var found = false
@@ -214,6 +221,7 @@ object A2aGateway {
                 if (pack.optString("version") == version) {
                     pack.put("enabled", true)
                     pack.put("entry", "bin/$id")
+                    pack.put("manifest_providers", manifestProviders)
                     found = true
                 } else {
                     continue // 丢掉旧版本条目
@@ -231,7 +239,8 @@ object A2aGateway {
                     .put("entry", "bin/$id")
                     .put("sha256", "")
                     .put("signed", false)
-                    .put("installed_at", System.currentTimeMillis()),
+                    .put("installed_at", System.currentTimeMillis())
+                    .put("manifest_providers", manifestProviders),
             )
         }
         root.put("packs", packs)
