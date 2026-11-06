@@ -33,6 +33,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # GITHUB_TOKEN **永远**没有 workflow 权限：上游一改 .github/workflows/*
+          # rebase 后的推送就被拒（refusing to allow a GitHub App to create or
+          # update workflow ... without workflows permission）。用带 workflow
+          # scope 的 PAT。仓库 secret：Settings → Secrets → SYNC_TOKEN。
+          token: ${{ secrets.SYNC_TOKEN }}
 
       - name: Sync
         env:
