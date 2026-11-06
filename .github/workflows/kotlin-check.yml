@@ -20,7 +20,7 @@ env:
   ANDROID_PLATFORM: "android-36"
   ANDROID_BUILD_TOOLS: "35.0.0"
   ANDROID_CMDLINE_TOOLS: "11076708"
-  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g"
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g"
 
 jobs:
   compile:
@@ -59,12 +59,6 @@ jobs:
           set -o pipefail
           # 本项目只有 release variant（没有 debug buildType），任务名必须是
           # compileReleaseKotlin；写 compileDebugKotlin 会直接报 task not found。
-          #
-          # 堆必须抬到 4g 以上：gradle.properties 默认只有 2048m，这个工程
-          # 的 KSP + inline 优化阶段会 OOM（报错是"Not enough memory to run
-          # compilation"，不是编译错误）。主构建 workflow 也是这么抬的。
-          sed -i 's|org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8|' gradle.properties
-          sed -i 's|kotlin.daemon.jvmargs=.*|kotlin.daemon.jvmargs=-Xmx4g|' gradle.properties
           ./gradlew :app:compileReleaseKotlin --stacktrace 2>&1 | tee /tmp/compile.log
 
       - name: Show compiler errors

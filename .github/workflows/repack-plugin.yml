@@ -1,0 +1,126 @@
+name: Repack Plugin APK
+
+# One-time APK build that installs a loader stub as liba2a.so and bundles a
+# fallback Agent2API server as liba2a_server.so. After this APK is installed,
+# updating Agent2API means replacing <files>/minis-global/shared/a2a-plugin/
+# (which is /var/minis/shared/a2a-plugin inside the sandbox); no APK rebuild.
+on:
+  workflow_dispatch:
+    inputs:
+      base_tag:
+        description: "OpenMinis official release tag"
+        required: true
+        default: "2.0.82-linux"
+      server_release:
+        description: "Release tag containing the built 3.4.0 APK"
+        required: true
+        default: "a2a-20261104-125039"
+
+permissions:
+  contents: write
+
+jobs:
+  repack:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android NDK r29 and build-tools
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          export ANDROID_SDK_ROOT="$SDK"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.14206865" "build-tools;35.0.0"
+          echo "ANDROID_NDK_HOME=$SDK/ndk/29.0.14206865" >> "$GITHUB_ENV"
+
+      - name: Compile loader stub
+        run: |
+          set -euo pipefail
+          NDK="$ANDROID_NDK_HOME"
+          CC="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang"
+          "$CC" -O2 -fPIE -pie -o /tmp/liba2a_loader.so tools/a2a_loader.c
+          file /tmp/liba2a_loader.so
+          readelf -h /tmp/liba2a_loader.so | grep -E "Type|Machine"
+
+      - name: Download built Agent2API APK and extract server
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/server-apk
+          gh release download "${{ inputs.server_release }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "minis-a2a.apk" \
+            --dir /tmp/server-apk
+          python3 - <<'PY'
+          import zipfile
+          z = zipfile.ZipFile('/tmp/server-apk/minis-a2a.apk')
+          data = z.read('lib/arm64-v8a/liba2a.so')
+          open('/tmp/liba2a_server.so', 'wb').write(data)
+          print('server bytes:', len(data))
+          PY
+          file /tmp/liba2a_server.so
+          strings /tmp/liba2a_server.so | grep -m1 -E 'agent2api/3\.[0-9]' || true
+
+      - name: Download official OpenMinis APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/base
+          gh release download "${{ inputs.base_tag }}" \
+            --repo tall-1997/OpenMinis-Linux \
+            --pattern "minis-ultra-com.openminis.linux.apk" \
+            --dir /tmp/base
+          ls -lh /tmp/base
+
+      - name: Patch and sign
+        env:
+          STORE_PASSWORD: ${{ secrets.MINIS_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MINIS_UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MINIS_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 tools/patch_plugin_apk.py \
+            /tmp/base/minis-ultra-com.openminis.linux.apk \
+            /tmp/liba2a_loader.so \
+            /tmp/liba2a_server.so \
+            /tmp/repacked.apk
+          BT="$ANDROID_SDK_ROOT/build-tools/35.0.0"
+          "$BT/zipalign" -p -f 4 /tmp/repacked.apk /tmp/aligned.apk
+          "$BT/apksigner" sign --ks src/android/release.keystore \
+            --ks-pass env:STORE_PASSWORD --key-pass env:KEY_PASSWORD \
+            --ks-key-alias "$KEY_ALIAS" --out /tmp/minis-plugin.apk /tmp/aligned.apk
+          "$BT/apksigner" verify --print-certs /tmp/minis-plugin.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: minis-plugin-apk
+          path: /tmp/minis-plugin.apk
+          retention-days: 14
+
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="plugin-$(date -u +%Y%m%d-%H%M%S)"
+          gh release create "$TAG" /tmp/minis-plugin.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Minis Ultra plugin-host APK" \
+            --notes "One-time plugin-host build. Base: ${{ inputs.base_tag }}. Bundled fallback server from ${{ inputs.server_release }}. External plugin: /var/minis/shared/a2a-plugin." \
+            --prerelease
