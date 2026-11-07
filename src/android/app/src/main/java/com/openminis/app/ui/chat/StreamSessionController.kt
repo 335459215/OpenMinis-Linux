@@ -75,6 +75,17 @@ internal class StreamSessionController(
     private val streamFlushStates = HashMap<String, StreamFlushState>()
 
     /**
+     * [T-perf-background-session] Background-session pause gate. When true the
+     * controller keeps accumulating deltas (into each message's pendingContent)
+     * but does NOT publish them to [_streamingById], so a background chat that is
+     * still streaming no longer drives recomposition / message-list copies while
+     * the user is elsewhere. The turn's canonical persist still runs at stream
+     * end. [resumePublishing] flushes every parked delta and clears the gate.
+     */
+    @Volatile
+    var publishPaused: Boolean = false
+
+    /**
      * [T-android-stream-flush-review] Cancel a message's pending trailing flush
      * and drop its throttle accumulator. Call from EVERY stream-termination
      * path (natural end, cancel, turn-limit, retry-truncate, clearChat) so a
@@ -91,6 +102,29 @@ internal class StreamSessionController(
         streamFlushStates.clear()
     }
 
+    /**
+     * [T-perf-background-session] Clear the background gate and drain every
+     * parked delta into [_streamingById] in one go. Called when the chat becomes
+     * the foreground session again, so the transcript catches up to the live
+     * stream without a per-token recomposition storm while it was backgrounded.
+     */
+    fun resumePublishing() {
+        if (!publishPaused) return
+        publishPaused = false
+        for ((id, st) in streamFlushStates) {
+            val pc = st.pendingContent
+            if (pc == null) continue
+            st.pendingContent = null
+            streamingById.value = streamingById.value + (
+                id to StreamingDelta(
+                    content = pc,
+                    toolBlocks = snapshotAssistantBlocks(st.pendingBlocks),
+                    isAwaitingModelResponse = st.pendingAwaiting,
+                )
+            )
+        }
+    }
+
     /** Cancel + drop flush states for any message id NOT in [keptIds] (retry/truncate). */
     fun retainStreamFlushStates(keptIds: Set<String>) {
         val drop = streamFlushStates.keys.filter { it !in keptIds }
@@ -103,8 +137,11 @@ internal class StreamSessionController(
     // box-drawing streams don't pin the flush rate to the per-token cadence.
     // [T-android-throttle-ladder-converge] Ladder body moved to
     // [StreamingThrottle.ladderFor]; the flush surface uses the default 200ms
-    // first tier.
-    fun streamFlushThrottleMs(len: Int): Long = StreamingThrottle.ladderFor(len)
+    // first tier. [T-android-tail-sprint] A large unflushed backlog (gateway
+    // tail burst / smooth-forwarding relay) clamps the tier to the sprint
+    // cadence so the display chases the arrival.
+    fun streamFlushThrottleMs(len: Int, unflushedChars: Int): Long =
+        StreamingThrottle.throttleFor(len, unflushedChars)
 
     fun updateAssistantMessage(
         id: String,
@@ -183,11 +220,11 @@ internal class StreamSessionController(
                 toolContentChanged
             val now = System.currentTimeMillis()
             val elapsed = now - st.lastFlushMs
-            val throttle = streamFlushThrottleMs(content.length)
             val newChunk = if (content.length > st.lastFlushedLen) {
                 content.substring(st.lastFlushedLen.coerceAtMost(content.length))
             } else ""
             val unflushed = content.length - st.lastFlushedLen
+            val throttle = streamFlushThrottleMs(content.length, unflushed)
             val newlineFlush = content.length < newlineFlushMaxLen &&
                 newChunk.contains('\n') &&
                 unflushed >= newlineFlushMinChars
@@ -199,6 +236,14 @@ internal class StreamSessionController(
              * false path — see [T-android-stream-flush-reentry].
              */
             fun publish(text: String, blocks: List<AssistantBlock>, awaiting: Boolean): Boolean {
+                if (publishPaused) {
+                    // Background gate: park the freshest delta, don't touch the
+                    // side channel. resumePublishing() drains it on foreground.
+                    st.pendingContent = text
+                    st.pendingBlocks = blocks
+                    st.pendingAwaiting = awaiting
+                    return false
+                }
                 val at = System.currentTimeMillis()
                 if (!UIBus.admit(at, criticalEvent = false)) {
                     st.pendingContent = text
@@ -353,15 +398,29 @@ internal class StreamSessionController(
     }
 
     /**
-     * Read a message's content + toolBlocks honoring any active streaming
-     * delta. Use this from non-render code that needs the "current" view of
-     * a message during a live turn (e.g. agent history builders, persistence
-     * snapshots) without forcing the render layer to consult the delta map.
+     * The freshest known delta for [id]: the parked [StreamFlushState
+     * .pendingContent] when one exists, else the last PUBLISHED side-channel
+     * delta. pendingContent is updated on EVERY suppressed tick — a throttled
+     * trailing publish AND every tick parked by the [publishPaused] gate,
+     * which never touches the side channel at all — so whenever it is set it
+     * is at least as fresh as the published delta. The length comparison only
+     * guards a pathological mid-turn content shrink, where the published
+     * (longer) value stays the safer flush.
      */
-    fun effectiveContent(id: String): String? {
-        val delta = streamingById.value[id]
-        if (delta != null) return delta.content
-        return messages.value.firstOrNull { it.id == id }?.content
+    private fun freshestDeltaFor(id: String): StreamingDelta? {
+        val st = streamFlushStates[id]
+        val pending = st?.pendingContent
+        if (st != null && pending != null) {
+            val published = streamingById.value[id]
+            if (published == null || pending.length >= published.content.length) {
+                return StreamingDelta(
+                    content = pending,
+                    toolBlocks = snapshotAssistantBlocks(st.pendingBlocks),
+                    isAwaitingModelResponse = st.pendingAwaiting,
+                )
+            }
+        }
+        return streamingById.value[id]
     }
 
     /**
@@ -370,9 +429,19 @@ internal class StreamSessionController(
      * exit paths (cancel / error / retry / resume / clearChat) so the
      * canonical message reflects all accumulated content even if the last
      * [updateAssistantMessage] call had isStreaming=true.
+     *
+     * [review 2.1 background-pause-gate] The flushed delta prefers the parked
+     * pendingContent over the published side-channel entry: while the
+     * background gate holds, fresh content ONLY accumulates in pendingContent
+     * (publish() parks without touching [_streamingById]), so flushing the
+     * published value wrote pre-pause text back into the bubble and
+     * clearStreamFlushState then dropped everything streamed since — the
+     * stopped bubble visibly regressed. The same preference covers the
+     * foreground window where the last delta sits unpublished in a trailing
+     * job at stop time.
      */
     fun flushStreamingDelta(id: String) {
-        val delta = streamingById.value[id] ?: return
+        val delta = freshestDeltaFor(id) ?: return
         val current = messages.value
         val idx = current.indexOfLast { it.id == id }
         if (idx >= 0) {
@@ -396,12 +465,21 @@ internal class StreamSessionController(
 
     /** Drain ALL outstanding streaming deltas (called on global resets). */
     fun flushAllStreamingDeltas() {
+        // Snapshot the freshest delta per id BEFORE clearing the flush
+        // states: clearAllStreamFlushStates drops pendingContent, and a
+        // delta parked by the background gate or a trailing job at this
+        // moment is the freshest content the turn produced (same rationale
+        // as [flushStreamingDelta]). streamFlushStates keys are included so
+        // a stream that started under the pause gate — never published to
+        // the side channel at all — still drains into the canonical list.
+        val freshest = (streamingById.value.keys + streamFlushStates.keys)
+            .associateWith { freshestDeltaFor(it) }
         clearAllStreamFlushStates()
-        val pending = streamingById.value
-        if (pending.isEmpty()) return
+        if (freshest.isEmpty()) return
         val current = messages.value.toMutableList()
         var changed = false
-        for ((id, delta) in pending) {
+        for ((id, delta) in freshest) {
+            if (delta == null) continue
             val idx = current.indexOfLast { it.id == id }
             if (idx < 0) continue
             current[idx] = current[idx].copy(

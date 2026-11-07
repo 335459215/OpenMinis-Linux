@@ -72,7 +72,12 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     ) ?: return null
     val hits = engine.recall(query)
     if (hits.isEmpty()) return null
-    return engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() }
+    val fragment = engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() } ?: return null
+    // [T-memory-recall-count] Count entries that actually reached the prompt:
+    // display metadata only (ranking no longer feeds on it), kept for future
+    // strength-style signals.
+    engine.acceptRecallBatch(hits.map { it.source to it.line })
+    return fragment
 }
 
 private const val ASSISTANT_TAIL_CHARS = 400
@@ -105,8 +110,14 @@ internal fun ChatViewModel.withGoalAndPlanContext(
  * Null before the first report, so a chat that has not used the tool pays nothing
  * for it.
  */
-internal fun ChatViewModel.workReportPrompt(): String? =
+internal fun ChatViewModel.workReportPrompt(): String? = runCatching {
+    // [review 2.3 corrupt-report] stagePrompt re-loads report.json and THROWS
+    // on a corrupt file ("... delete it to reset") — unwrapped, that IOException
+    // would brick EVERY request assembly for the session with no self-heal.
+    // Same policy as [planBoardPrompt] above: the prompt path degrades to no
+    // block instead of failing the turn; the tool surfaces the corruption.
     com.openminis.app.tools.AgentReportStore.stagePrompt(activeSessionId, context)
+}.getOrNull()
 
 /**
  * [T-lane-awareness] Lanes that are still working, rendered from the registry.

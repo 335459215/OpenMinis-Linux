@@ -614,13 +614,15 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
     // where the same UserDefaults gate sits at the one-shot auto-expand site.
     val context = LocalContext.current
     val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    var expanded by remember(block.id) { mutableStateOf(autoExpandThinking && isLast && isStreaming) }
+    val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
+    var expanded by remember(block.id) {
+        mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else false)
+    }
     var userTouched by remember(block.id) { mutableStateOf(false) }
     var wasStreaming by remember(block.id) { mutableStateOf(isStreaming) }
     LaunchedEffect(block.id, isStreaming) {
-        // Collapse only on a real active->finished edge. Historic/non-active
-        // thinking blocks can be rendered while their assistant turn streams.
-        if (wasStreaming && !isStreaming && !userTouched) {
+        // Collapse only on a real active->finished edge (showFullThinking keeps it open).
+        if (wasStreaming && !isStreaming && !userTouched && !showFullThinking) {
             delay(500)
             expanded = false
         }
@@ -632,8 +634,7 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
         charCount >= 1000 -> "${charCount / 1000}K"
         else -> "$charCount"
     }
-    // Keep layout bounded; shorter content renders only the newest tail.
-    val thinkingWindowSize = 8000
+
     val thinkingHardCap = 100_000
     val overHardCap = charCount > thinkingHardCap
     var showFullContent by remember(block.id) { mutableStateOf(false) }
@@ -741,19 +742,12 @@ internal fun ThinkingBlock(block: AssistantBlock, isStreaming: Boolean, isLast: 
         // the next token.
         AnimatedVisibility(visible = expanded && !overHardCap) {
             val scrollState = rememberScrollState()
-            // [T-thinking-render-perf-android] Render only the tail window so
-            // Compose lays out at most `thinkingWindowSize` chars. `remember`
-            // keyed on the length recomputes the substring on each token, but
-            // the cost is O(window) not O(total). Snap the cut to the next
-            // newline (within 200 chars) so we don't start mid-line.
-            // [T-android-thinking-poll-removal] Read block.content directly —
-            // the VM-side UiUpdateBatcher already paces recomposition at
-            // 200-500ms, so the old 100ms poll only added lag between the
-            // state write and the frame that showed it. ThinkingAutoFollow
-            // publishes its SideEffect on recomposition, not on the poll.
+            // [T-thinking-render-perf-android] Render only the tail window (O(window) not O(total));
+            // UiUpdateBatcher already paces recomposition at 200-500ms.
             val renderedContent = block.content
-            val isTruncated = renderedContent.length > thinkingWindowSize
-            val displayContent = visibleThinkingTail(renderedContent, thinkingWindowSize)
+            val effectiveWindow = if (showFullThinking) thinkingHardCap else 8000 // 8k tail window
+            val isTruncated = renderedContent.length > effectiveWindow
+            val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
             ThinkingAutoFollow(
                 blockId = block.id,
                 contentVersionValue = block.content.length,
@@ -1042,9 +1036,8 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
         if (isThinking) {
             AnimatedVisibility(visible = stepExpanded && block.content.isNotEmpty()) {
                 val scrollState = rememberScrollState()
-                val thinkingWindowSize = 8000
-                val isTruncated = block.content.length > thinkingWindowSize
-                val displayContent = visibleThinkingTail(block.content, thinkingWindowSize)
+                val isTruncated = block.content.length > 8000
+                val displayContent = visibleThinkingTail(block.content, 8000)
                 ThinkingAutoFollow(
                     blockId = block.id,
                     contentVersionValue = block.content.length,
@@ -1076,61 +1069,6 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                         color = muted,
                     )
                 }
-            }
-        }
-    }
-}
-
-/**
- * [T-thinking-render-perf-android] Full-screen viewer for thinking content
- * that exceeds the inline hard cap. Wraps a native Android [android.widget.TextView]
- * (inside a scroller) — it lays out very large strings far more cheaply than
- * Compose `Text`, and stays selectable.
- */
-@Composable
-private fun ThinkingFullContentDialog(content: String, onDismiss: () -> Unit) {
-    val textColor = MaterialTheme.colorScheme.onSurface
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.chat_thinking_header),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF007AFF),
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    MinisTextButton(onClick = onDismiss) {
-                        Text(text = stringResource(android.R.string.ok))
-                    }
-                }
-                androidx.compose.ui.viewinterop.AndroidView(
-                    factory = { ctx ->
-                        android.widget.ScrollView(ctx).apply {
-                            addView(
-                                android.widget.TextView(ctx).apply {
-                                    textSize = 13f
-                                    setTextColor(textColor.toArgb())
-                                    setTextIsSelectable(true)
-                                    setPadding(36, 24, 36, 48)
-                                    text = content
-                                }
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                )
             }
         }
     }

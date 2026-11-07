@@ -486,18 +486,17 @@ fun ChatScreen(
     // T311: publish "this is the active chat" while ChatScreen is composed,
     // so `minis-config session.*` reads/writes target it. Mirrors iOS
     // `AIChatViewModel.activeSessionId` which is updated on appear / disappear.
-    // [T-HANG-DIAG] capture the application context so we can read the
-    // current hang count from non-composable scopes below. LocalContext is
-    // already used elsewhere in this file via `context`, but DisposableEffect
-    // is a non-composable scope so we lift the read up here.
+    // [T-HANG-DIAG] App context for the hang count — DisposableEffect is non-composable, so lift the read here.
     val tHangDiagAppContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     androidx.compose.runtime.DisposableEffect(sessionId) {
         ChatViewModelStore.screenEntered(sessionId)
-        // Enter / dispose markers around the ChatScreen lifetime so we can
-        // correlate "user tapped session X" → loadSession timings and any
-        // subsequent hang record. Ride the PerfLongCtx reentry timeline
-        // (same mechanism loadSession uses) instead of raw println — the
-        // hangCount extra is preserved.
+        viewModel.onForegroundChanged(true)
+        // Stamp read on enter AND dispose so streamed rows aren't "unseen" on leave.
+        com.openminis.app.data.UnreadRegistry.markRead(
+            tHangDiagAppContext,
+            viewModel.realSessionId.ifBlank { sessionId },
+        )
+        // Mount/dispose markers (PerfLongCtx, hangCount extra preserved).
         com.openminis.app.diagnostics.PerfLongCtx.step(
             sessionId,
             "chatScreen.mount",
@@ -506,6 +505,12 @@ fun ChatScreen(
         onDispose {
             com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.unmount")
             ChatViewModelStore.screenLeft(sessionId)
+            viewModel.onForegroundChanged(false)
+            // Final read stamp.
+            com.openminis.app.data.UnreadRegistry.markRead(
+                tHangDiagAppContext,
+                viewModel.realSessionId.ifBlank { sessionId },
+            )
             // T-android-new-chat-empty-residue: drop sessions materialised by
             // a settings toggle (ensureSession via /memory, /thinking, etc.)
             // but never sent a real message. VM guards on streaming + DB count
@@ -744,6 +749,7 @@ fun ChatScreen(
             maxItems = ATTACHMENT_PICK_LIMIT,
         ),
     ) { uris: List<Uri> ->
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val limited = uris.take(ATTACHMENT_PICK_LIMIT)
         for (uri in limited) {
@@ -756,19 +762,14 @@ fun ChatScreen(
                     fileName = fileName,
                     uri = uri,
                     mimeType = mimeType,
-                    // Videos are routed as DOCUMENT for now — vision pipeline only
-                    // handles images today; videos still upload as raw files so
-                    // tools that read them (e.g. ffmpeg) get the bytes.
+                    // Videos route as DOCUMENT — the vision pipeline handles images today; videos still upload as raw files so ffmpeg-class tools get the bytes.
                     kind = if (isVideo) com.openminis.app.session.InputAttachment.Kind.DOCUMENT else com.openminis.app.session.InputAttachment.Kind.IMAGE,
                 ),
             )
         }
         if (uris.size > ATTACHMENT_PICK_LIMIT) {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(R.string.attachment_pick_truncated_items, ATTACHMENT_PICK_LIMIT),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.attachment_pick_truncated_items, ATTACHMENT_PICK_LIMIT), android.widget.Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
@@ -796,7 +797,7 @@ fun ChatScreen(
         // gate as soon as we hear back from the camera Activity (success,
         // cancel, or system kill). Without this the floating overlay
         // would stay suppressed indefinitely after a single capture.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         val uri = pendingCameraUri
         val file = pendingCameraFilePath?.let { java.io.File(it) }
         pendingCameraUri = null
@@ -836,13 +837,13 @@ fun ChatScreen(
         // takes foreground, which by #451's rule would otherwise satisfy
         // "Minis backgrounded → show overlay" and the capsule would draw
         // on top of the viewfinder. Cleared in the ActivityResult callback.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(true)
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(true)
         runCatching { cameraLauncher.launch(intent) }
             .onFailure {
                 AppLogger.warning("Camera", "launch failed: ${it.message}")
                 // Launch never reached the camera Activity — release the
                 // suppress flag here since the result callback won't fire.
-                com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+                com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
                 pendingCameraUri = null
                 pendingCameraFilePath = null
                 file.delete()
@@ -885,6 +886,7 @@ fun ChatScreen(
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
+        com.openminis.app.service.SessionActivityTracker.setExternalPickerSuppressActive(false)
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val limited = uris.take(ATTACHMENT_PICK_LIMIT)
         for (uri in limited) {
@@ -1233,6 +1235,12 @@ fun ChatScreen(
     val hasHardwareKeyboard = configuration.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY &&
         configuration.hardKeyboardHidden == android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
 
+    // [T-android-send-follow-race] Bumped on every send; SendFollowAwaitEffect
+    // (below, after flatItems) snaps once THIS user message joins the flat
+    // list — the in-handler scrolls fire before sendMessage's state lands and
+    // on an ended session hit the PREVIOUS turn's tail.
+    var sendFollowSeq by remember { mutableLongStateOf(0L) }
+
     /**
      * [T-android-hwkeyboard-keep-focus] Release the composer after a send —
      * except on a hardware keyboard, where focus is kept so the user can keep
@@ -1273,11 +1281,8 @@ fun ChatScreen(
         viewModel.sendMessage(rawText)
         noteSendForInputModePref()
         scrollPolicy.pin()
-        coroutineScope.launch {
-            tracedScrollToItem("SEND-PATH/initial", 0, 0)
-            kotlinx.coroutines.delay(100)
-            tracedScrollToItem("SEND-PATH/settle", 0, 0)
-        }
+        // SendFollowEffects: initial snap + await-the-row + settle pipeline.
+        sendFollowSeq++
     }
     // Last drag-stop. Content-driven follow is suppressed briefly after a
     // gesture even when the viewport is still "near bottom"; the controller's
@@ -1286,6 +1291,8 @@ fun ChatScreen(
     // Finger-down only: programmatic scrolls also set isScrollInProgress but
     // emit no DragInteraction, and focus handling must not confuse the two.
     var isUserDragging by remember { mutableStateOf(false) }
+    // A drag whose scroll has not ended yet (a fling outlives the finger lift).
+    var dragEndPending by remember { mutableStateOf(false) }
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             // T-android-jank-profile: drag interactions fire on every drag
@@ -1295,6 +1302,7 @@ fun ChatScreen(
                 is androidx.compose.foundation.interaction.DragInteraction.Start -> {
                     scrollController.beginUserGesture()
                     isUserDragging = true
+                    dragEndPending = false
                     // [T-android-scrollbtn-turn-walk] A manual drag breaks the
                     // up-button's turn-walk chain: the next tap should re-anchor
                     // to wherever the user landed, not continue the old sequence.
@@ -1304,6 +1312,7 @@ fun ChatScreen(
                     scrollController.endUserGesture()
                     isUserDragging = false
                     lastInterruptMs = System.currentTimeMillis()
+                    dragEndPending = true
                     // [T-android-scroll-policy] Finger lift decides ownership:
                     // still at the bottom → keep following; anywhere else →
                     // Reading anchored where the user stopped.
@@ -1313,6 +1322,7 @@ fun ChatScreen(
                 is androidx.compose.foundation.interaction.DragInteraction.Cancel -> {
                     scrollController.endUserGesture()
                     isUserDragging = false
+                    dragEndPending = false
                 }
                 else -> Unit
             }
@@ -1332,36 +1342,14 @@ fun ChatScreen(
     LaunchedEffect(imeBottomPx) {
         if (!scrollPolicy.isPinned && isNearBottom.value) scrollPolicy.pin()
     }
-    // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume() /
-    // retryLast() / retryFromMessage() / rerunFromToolBlock() emit Unit on
-    // forceScrollToBottom because they don't append a new user-message row, so
-    // LE(messages.size) below skips them. Without this collector the "Minis is
-    // thinking…" placeholder stays parked behind the input bar until the first
-    // streamed token finally bumps the auto-follow tuple.
+    // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume/retry/
+    // rerun emit Unit on forceScrollToBottom because they don't append a new
+    // user-message row, so LE(messages.size) below skips them. Only a PINNED
+    // viewport follows — a reader keeps their place; the down-FAB is the way back.
     LaunchedEffect(listState, viewModel) {
         viewModel.forceScrollToBottom.collect {
-            // [T-android-scroll-policy] Only a PINNED viewport follows
-            // resume/retry/rerun. These emissions arrive unbidden (queued
-            // retries, auto-resume while the user is elsewhere) and used to
-            // unconditionally clear userScrolledAway + jump to the bottom —
-            // one of the three surviving jump paths of the reading-history
-            // bug. A reader keeps their place; the down-FAB is the way back.
             if (!scrollPolicy.allowsContentScroll()) return@collect
             tracedScrollToItem("FORCE-SCROLL-TO-BOTTOM(resume/retry/rerun)", 0, 0)
-        }
-    }
-    // Auto-scroll on user-send: explicit "show me the next response"
-    // gesture, fires regardless of current scroll position.
-    LaunchedEffect(messages.size) {
-        val lastMsg = messages.lastOrNull() ?: return@LaunchedEffect
-        if (lastMsg.role != "user") return@LaunchedEffect
-        // [T-android-scroll-away-retain] 发送按钮回调已显式 pin；此 LE 是
-        // 兜底路径（enqueue-while-streaming 等），只更新 lastUserAppendMs
-        // 供 sendGrace 窗口使用。用户正在读历史时，排队消息到达不应把
-        // 视口弹回底部 —— 只在 Pinned 时吸附。
-        lastUserAppendMs = System.currentTimeMillis()
-        if (scrollPolicy.isPinned) {
-            tracedScrollToItem("LE(messages.size)USER-SEND-SNAP", 0, 0)
         }
     }
     // T128: streaming auto-follow when the user is at the bottom.
@@ -1453,9 +1441,6 @@ fun ChatScreen(
             .sample(120L)
             .collect {
                 if (!viewModel.isStreaming.value) return@collect
-                // 视口必须确实锚在最新一条的底部才跟随。停在上一条回复里
-                // （index 离开 0）或停在最新一条中部（偏移不为 0）都不跳，
-                // 否则新一轮回复开始时正在阅读的位置会被拽到底部。
                 val sinceInterrupt = System.currentTimeMillis() - lastInterruptMs
                 if (ScrollAnchor.shouldFollow(
                         isPinned = scrollPolicy.isPinned,
@@ -1478,38 +1463,31 @@ fun ChatScreen(
     // VM flow directly (turn-level signal) rather than reading per-token
     // assistant content, so this state doesn't tick during a stream.
     //
-    // [T-android-scroll-policy] Rewritten: Pinned-only single re-pin. The
-    // Reading branch is a HARD NO-OP — versions v6..v17 of cross-key restore
-    // all made the symptom worse (commits cd08a334, 9873a3ed), and with
-    // stable keys (FlatKeys) LazyColumn holds the reader's position
-    // natively. The old LATE-REPIN second stage is gone: it existed to work
-    // around the arm-net fights that no longer exist.
+    // [T-android-scroll-policy] Pinned-only single re-pin; the Reading branch is
+    // a hard no-op (stable FlatKeys let LazyColumn hold the reader's position).
     val streamingNowFlag = isStreaming
     LaunchedEffect(streamingNowFlag) {
         if (streamingNowFlag) return@LaunchedEffect  // edge fires only on streaming→idle
         kotlinx.coroutines.delay(220)
-        if (listState.isScrollInProgress) return@LaunchedEffect
+        // Wait out a finishing fling instead of giving up: the error banner and
+        // its retry row land on this edge and must not stay cut off below the fold.
+        withTimeoutOrNull(1200) { snapshotFlow { listState.isScrollInProgress }.first { !it } }
         if (!scrollPolicy.isPinned) return@LaunchedEffect
         tracedScrollToItem("stream-end/AT-BOTTOM-RE-PIN", 0, 0)
     }
-    // T170: when a user-initiated drag or fling settles away from the bottom
-    // while still Pinned, flip into Reading. DragInteraction.Stop fires at
-    // finger lift — before the fling carries the viewport off-bottom — so
-    // the isScrollInProgress falling edge is the authoritative checkpoint.
-    //
-    // [T-android-scroll-policy] The old settle-after-interaction re-pin and
-    // the position-driven arm-net are gone: every programmatic jump now
-    // lands Reading/Pinned explicitly at its click site, so "jumped off-
-    // bottom and nothing knows" cannot happen; and content growth during a
-    // stream is not a gesture, so streaming is excluded here (the glide owns
-    // the pinned viewport mid-stream).
+    // T170: a fling keeps scrolling after the finger lifts, so when the drag
+    // carried the viewport off-bottom the authoritative checkpoint is the
+    // isScrollInProgress falling edge. SettleAfterInteractionGate tells a drag's
+    // own scroll end from a programmatic one (auto-follow glide, pin-to-bottom,
+    // queued settle) — the latter must not rearm anything.
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { inProgress ->
-                if (!inProgress && !isNearBottom.value &&
-                    !viewModel.isStreaming.value && scrollPolicy.isPinned
-                ) {
+                if (SettleAfterInteractionGate.mayRearmFromScrollEnd(
+                        inProgress, isNearBottom.value, viewModel.isStreaming.value,
+                        scrollPolicy.isPinned, dragEndPending)) {
+                    dragEndPending = false
                     val anchor = visibleTopAnchor()
                     scrollPolicy.rearmIfDraggedAway(anchor?.first, anchor?.second ?: 0)
                 }
@@ -2048,6 +2026,9 @@ fun ChatScreen(
         // [T-android-scroll-fab-content-inset] The chat pane's own width, used
         // below to inset the scroll buttons to the capped content column.
         var chatPaneWidthPx by remember { mutableStateOf(0) }
+        // [T-android-chrome-resize-repin] Laid-out height of the composer
+        // cluster (input box + plan/goal board + attachment preview).
+        var composerChromeHeightPx by remember { mutableStateOf(0) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -2061,6 +2042,7 @@ fun ChatScreen(
             if (showSubAgentBar) {
                 SubAgentLiveBar(sessionId = sessionId, onStop = com.openminis.app.service.SubAgentActivityTracker::stop)
             }
+            ScheduledCountdownPill(currentSessionId = { viewModel.realSessionId.ifBlank { sessionId } })
             ChatGateBanners(
                 approvals = pendingApprovals,
                 intercepts = interceptEvents,
@@ -2238,41 +2220,35 @@ fun ChatScreen(
                 // Breathing room above the input bar in both states. The
                 // pill's 34dp height + 6dp mount padding is what the reserve
                 // has to clear.
-                // Breathing room above the bottom chrome. 14dp is the same gap the
-                // old floating bar used between the last row and the overlay
-                // (T245); the no-tools branch stays 20dp (T-bottom-occluded:
-                // 14dp left the trailing line clipped against the composer).
-                // [P0-4] visualOverlayHeight dropped from the old thumbnail's
-                // 65dp to the pill's 34dp, so a streaming turn now reserves
-                // 48dp instead of 79dp.
+                // Breathing room above the bottom chrome; 48dp clears the pill,
+                // 20dp is the plain gap.
                 val bottomReserve =
                     if (hasFloatingTools) visualOverlayHeight + 14.dp else 20.dp
-                // T174: when bottomReserve changes (toolbar appearing /
-                // disappearing or thumbnail height shift), re-pin to bottom
-                // if we are currently following. Without this, the new
-                // contentPadding is honoured for layout but reverseLayout
-                // won't actively scroll the list — items can wind up below
-                // the viewport's new bottom edge until the next streaming
-                // delta triggers a follow. iOS does the same in V3:54-68
-                // when contentInset.bottom changes.
+                // T174: reserve changes need an explicit re-pin (reverseLayout
+                // does not scroll itself); iOS does the same when its inset moves.
                 LaunchedEffect(bottomReserve) {
-                    // [T-android-send-no-autoscroll-behind-preview] Send-grace
-                    // bypass: within SEND_FOLLOW_GRACE_MS of a user message
-                    // append the isNearBottom gate is waived — the user JUST
-                    // sent (the send path pins explicitly), but the
-                    // freshly-inserted user/thinking rows leave the live
-                    // anchor transiently "not at bottom", which used to skip
-                    // this pin and strand the new rows behind the floating
-                    // tool bar when the reserve grew. All gates stay in force
-                    // outside the grace window, so the C2 stream-end
-                    // protections are untouched (a stream end is never
-                    // within 2s of the user's send).
+                    // Send-grace: a just-sent turn leaves the anchor transiently
+                    // off-bottom; the pin must still run.
                     val sinceSendMs = System.currentTimeMillis() - lastUserAppendMs
                     val sendGrace = lastUserAppendMs > 0L && sinceSendMs in 0..SEND_FOLLOW_GRACE_MS
                     if (scrollPolicy.isPinned && (isNearBottom.value || sendGrace)) {
                         val reason = if (!isNearBottom.value) "send-grace" else "near-bottom"
                         tracedScrollToItem("reserve-change/$reason", 0, 0)
                     }
+                }
+                // [T-android-chrome-resize-repin] The composer grows (plan
+                // board, goal row, attachment preview) and the viewport shrinks
+                // under an offset-0 anchor: the tail is laid out BELOW the new
+                // bottom edge, and the streaming follow refuses to re-pin
+                // because its anchor check wants offset == 0. Re-pin per change.
+                LaunchedEffect(composerChromeHeightPx) {
+                    if (composerChromeHeightPx <= 0) return@LaunchedEffect
+                    if (!scrollPolicy.isPinned) return@LaunchedEffect
+                    val sinceSendMs = System.currentTimeMillis() - lastUserAppendMs
+                    val sendGrace = lastUserAppendMs > 0L && sinceSendMs in 0..SEND_FOLLOW_GRACE_MS
+                    if (!isNearBottom.value && !sendGrace) return@LaunchedEffect
+                    kotlinx.coroutines.delay(50)
+                    tracedScrollToItem("composer-resize/re-pin", 0, 0)
                 }
                 // T120: removed three streaming-time LaunchedEffects that
                 // each called scrollToItem(0) on every chunk:
@@ -2311,6 +2287,20 @@ fun ChatScreen(
                 // the list below actually renders, so the pin and the list
                 // can never disagree about whether a tail row exists.
                 SideEffect { composedTailRows = flatItems.size }
+
+                // [T-android-send-follow-race] See [SendFollowEffects]:
+                // initial snap + await-the-row + settle, and the
+                // enqueue-while-streaming user-send snap.
+                SendFollowEffects(
+                    seq = sendFollowSeq,
+                    messagesSize = messages.size,
+                    lastMessage = messages.lastOrNull(),
+                    isPinned = scrollPolicy.isPinned,
+                    flatItems = flatItems,
+                    snap = { source -> tracedScrollToItem(source, 0, 0) },
+                    onConsumed = { sendFollowSeq = 0L },
+                    onUserAppend = { lastUserAppendMs = System.currentTimeMillis() },
+                )
 
                 // [T-android-message-usage-footer] Flat row key → usage for
                 // the LAST row of each non-streaming assistant reply that has
@@ -2481,11 +2471,14 @@ fun ChatScreen(
                     // now, so the down-FAB shows and no follower moves the
                     // viewport out from under the highlight.
                     scrollPolicy.landReading(targetKey, topOffset)
-                    // Hold the pulse, then fade it out. Clearing `active`
-                    // (rather than the id) keeps the highlight state reusable:
-                    // a same-session re-tap re-enters this effect and
-                    // re-lights it without fighting a stale id.
-                    kotlinx.coroutines.delay(2400)
+                    // Hold the highlight until streaming moves content under it or the user
+                    // scrolls away (5-min bound guards a forgotten highlight).
+                    val landedSize = viewModel.uiMessages.value.size
+                    withTimeoutOrNull(300_000L) {
+                        snapshotFlow {
+                            listState.isScrollInProgress to viewModel.uiMessages.value.size
+                        }.first { (scrolling, size) -> scrolling || size != landedSize }
+                    }
                     searchFocusActive = false
                 }
 
@@ -3836,7 +3829,10 @@ fun ChatScreen(
                     // window, not this anchor). MUST come AFTER widthIn/
                     // wrapContentWidth — modifiers measure against constraints
                     // imposed by the modifiers before them.
-                    .onGloballyPositioned { composerWidthPx = it.size.width }
+                    .onGloballyPositioned {
+                        composerWidthPx = it.size.width
+                        composerChromeHeightPx = it.size.height
+                    }
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp)
                     .padding(top = 2.dp, bottom = 8.dp),
@@ -4860,14 +4856,15 @@ fun ChatScreen(
                                     leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        val granted = ContextCompat.checkSelfPermission(
-                                            context,
-                                            android.Manifest.permission.CAMERA,
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                        if (granted) {
-                                            launchCamera()
-                                        } else {
-                                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                        launchExternalPickerAfterMenuDismiss {
+                                            val granted = ContextCompat.checkSelfPermission(
+                                                context, android.Manifest.permission.CAMERA,
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                            if (granted) {
+                                                launchCamera()
+                                            } else {
+                                                cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                            }
                                         }
                                     },
                                 )
@@ -4876,11 +4873,13 @@ fun ChatScreen(
                                     leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        mediaPickerLauncher.launch(
-                                            androidx.activity.result.PickVisualMediaRequest(
-                                                ActivityResultContracts.PickVisualMedia.ImageAndVideo,
-                                            ),
-                                        )
+                                        launchExternalPickerAfterMenuDismiss {
+                                            mediaPickerLauncher.launch(
+                                                androidx.activity.result.PickVisualMediaRequest(
+                                                    ActivityResultContracts.PickVisualMedia.ImageAndVideo,
+                                                ),
+                                            )
+                                        }
                                     },
                                 )
                                 DropdownMenuItem(
@@ -4888,9 +4887,7 @@ fun ChatScreen(
                                     leadingIcon = { Icon(m3Icon(Icons.Default.Description), contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
-                                        // OpenMultipleDocuments takes a mime-
-                                        // type array; "*/*" stays the wildcard.
-                                        filePickerLauncher.launch(arrayOf("*/*"))
+                                        launchExternalPickerAfterMenuDismiss { filePickerLauncher.launch(arrayOf("*/*")) }
                                     },
                                 )
                             }
@@ -5411,31 +5408,19 @@ fun ChatScreen(
                             // between idle and streaming (the ring appears
                             // around the 38dp button instead of resizing it),
                             // so the message list does not jump.
-                            Box(
-                                modifier = Modifier.size(46.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(46.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color(0xFFFF3B30),
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .background(Color(0xFFFF3B30), CircleShape)
-                                        .clip(CircleShape)
-                                        .clickable { viewModel.cancelStream() },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Stop,
-                                        contentDescription = stringResource(R.string.cd_stop),
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
+                            // Tap = confirm-or-stop; long-press = scope menu (tool/all + confirm toggle).
+                            StopButtonWithOptions(
+                                sessionId = viewModel.realSessionId.ifBlank { sessionId },
+                                onStopRun = { viewModel.cancelStream() },
+                                onStopAll = {
+                                    // The run first, then every sub agent working for this chat.
+                                    viewModel.cancelStream()
+                                    val sid = viewModel.realSessionId
+                                    com.openminis.app.service.SubAgentActivityTracker.members.value
+                                        .filter { it.parentSessionId == sid || it.parentSessionId == sessionId }
+                                        .forEach { com.openminis.app.service.SubAgentActivityTracker.stop(it.id) }
+                                },
+                            )
                         } else {
                             // Streaming with content → Send-into-queue; Idle with content → Send.
                             // Idle without text or attachments → disabled.
