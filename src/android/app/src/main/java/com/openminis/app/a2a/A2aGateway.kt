@@ -27,7 +27,7 @@ object A2aGateway {
      * 原实现只在 `index.html` 不存在时铺一次，导致 APK 里的 UI 更新永远
      * 到不了设备 —— 用户看到的还是旧页面。
      */
-    private const val UI_VERSION = "3.4.2-sw-mobile-parity"
+    private const val UI_VERSION = "3.4.2-sw-mobile-editV4"
 
     /** UI 版本戳的短哈希，作为 URL 参数破缓存（Service Worker 也会按 URL 区分）。 */
     fun uiRevision(): String = UI_VERSION.hashCode().toUInt().toString(16)
@@ -99,6 +99,9 @@ object A2aGateway {
         // 那条红字会一直挂在插件页上，让人以为插件坏了。此刻网关还没起，独占
         // 写库是安全的。
         runCatching { clearStalePluginOperations(dataDir) }
+        // 内嵌手机端不提供面板账号体系：启动前删掉管理员记录，让网关按
+        // “尚未初始化”放行 /m。只保留对外请求用的 API Key。
+        runCatching { clearPanelAdmin(dataDir) }
 
         val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
         if (!binary.isFile) {
@@ -150,6 +153,25 @@ object A2aGateway {
         started.destroy()
         process = null
         Result.failure(IllegalStateException("health timeout; see ${logFile(context)}"))
+    }
+
+    /**
+     * 删除 kv 里的 `panelAdmin` 记录。手机端由外壳直接打开面板，不做账号密码
+     * 登录；管理员记录只存在于 app 私有 sqlite，必须在原生层、网关启动前删。
+     * 只在网关停止时调用。
+     */
+    private fun clearPanelAdmin(dataDir: File) {
+        val dbFile = File(dataDir, "agent2api.db")
+        if (!dbFile.isFile) return
+        runCatching {
+            android.database.sqlite.SQLiteDatabase.openDatabase(
+                dbFile.absolutePath,
+                null,
+                android.database.sqlite.SQLiteDatabase.OPEN_READWRITE,
+            ).use { db ->
+                db.delete("kv", "key = ?", arrayOf("panelAdmin"))
+            }
+        }
     }
 
     /**

@@ -101,6 +101,15 @@ class ChatViewModel(
     private var sessionMemoryRepoCache: MemoryRepository? = null
     @Volatile
     private var sessionMemoryRepoCacheSid: String? = null
+
+    /** [T-runtime-hook] Local HTTP hooks (before_prompt / after_turn). */
+    private val hookRepository by lazy { com.openminis.app.hooks.HookRepository(context) }
+    private val hookClient by lazy { com.openminis.app.hooks.HookClient(hookRepository) }
+    @Volatile
+    internal var externalHookPromptCache: String? = null
+    @Volatile
+    private var externalHookPromptKey: String? = null
+
     /** Daily logs and session GLOBAL.md live in this chat's workspace. */
     internal fun sessionMemoryRepo(): MemoryRepository {
         val sid = com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
@@ -115,6 +124,49 @@ class ChatViewModel(
         sessionMemoryRepoCacheSid = sid
         return repo
     }
+
+    /** Rendered external hook block for the current turn; consumed by PromptParts. */
+    internal fun externalHookPrompt(): String? =
+        externalHookPromptCache?.takeIf { it.isNotBlank() }?.let { "<external_hook>\n$it\n</external_hook>" }
+
+    /**
+     * [T-runtime-hook] Ask local hook services for extra prompt context before
+     * the model call. Fail-open: any error returns null and the chat proceeds.
+     */
+    internal suspend fun refreshExternalHookPrompt(query: String): String? {
+        if (!hookRepository.hasAny()) {
+            externalHookPromptCache = null
+            externalHookPromptKey = null
+            return null
+        }
+        val normalized = query.trim()
+        if (normalized.length < 2) {
+            externalHookPromptCache = null
+            externalHookPromptKey = null
+            return null
+        }
+        val sid = realSessionId.ifEmpty { sessionId }
+        val key = "$sid:${normalized.hashCode()}:${normalized.length}"
+        if (key == externalHookPromptKey) return externalHookPromptCache
+        val result = hookClient.beforePrompt(
+            sessionId = sid,
+            query = normalized,
+            budgetChars = 1400,
+        )
+        externalHookPromptCache = result.block.takeIf { it.isNotBlank() }
+        externalHookPromptKey = key
+        return externalHookPromptCache
+    }
+
+    /** Fire-and-forget after-turn hook. Never blocks the assistant reply. */
+    internal fun notifyAfterTurnHooks(userText: String, assistantText: String) {
+        if (!hookRepository.hasEvent("after_turn")) return
+        val sid = realSessionId.ifEmpty { sessionId }
+        viewModelScope.launch(Dispatchers.IO) {
+            hookClient.afterTurn(sid, userText, assistantText)
+        }
+    }
+
     companion object {
         internal const val TAG = "ChatViewModel"
         internal val HTTP_5XX_STATUS_RE = Regex("""\[5\d{2}\]""")

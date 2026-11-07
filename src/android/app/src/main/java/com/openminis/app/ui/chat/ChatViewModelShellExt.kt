@@ -213,6 +213,21 @@ internal suspend fun ChatViewModel.executeShellCommand(
                 resourceClass = resourceClass)
         }
 
+        // [SecretPathGuard] Refuse reads of credential-bearing paths BEFORE
+        // their contents are captured. EnvVarRedactor only masks env-var
+        // *values*; a `cat .git/config` or `grep` over a keystore yields file
+        // content the redactor cannot match. Checking here also covers the
+        // bash self-heal rerun above, which bypasses the entry-point check.
+        com.openminis.app.data.SecretPathGuard
+            .offendingPath(originalCommand)
+            ?.let { blocked ->
+                return ToolExecutionResult(
+                    com.openminis.app.data.SecretPathGuard.blockedMessage(blocked),
+                    false,
+                    toolTitle = toolTitle,
+                )
+            }
+
         // Also scrub markers from the aggregated one-shot output and
         // broker any URLs that only appeared there (defensive — handles
         // executors that don't fire lineCallback for every line).

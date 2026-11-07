@@ -15,7 +15,9 @@ import android.content.SharedPreferences
  *   - true (the default): crossing the compact threshold before a send
  *     compacts silently and then sends.
  *   - false: the same crossing PROMPTS the user.
- * Threshold percent defaults to 90 and is user-configurable.
+ * Threshold percent defaults to 75 (compact while there is still headroom;
+ * the old 90% default effectively waited until the window was nearly full)
+ * and is user-configurable.
  *
  * Global rather than per-session on purpose: iOS persists it so "future
  * conversations inherit it", which is the whole point of the one-tap opt-in
@@ -25,7 +27,7 @@ object AutoCompactPrefs {
     private const val PREFS = "minis_auto_compact_prefs"
     private const val KEY_ENABLED = "autoCompactOnThreshold"
     private const val KEY_THRESHOLD = "autoCompactThresholdPercent"
-    const val DEFAULT_THRESHOLD_PERCENT = 90
+    const val DEFAULT_THRESHOLD_PERCENT = 75
 
     @Volatile
     private var appContext: Context? = null
