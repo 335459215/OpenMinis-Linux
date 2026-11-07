@@ -96,17 +96,29 @@ internal fun withGoalContext(
     // rides on the same message (see [ChatViewModel.withGoalAndPlanContext]) and
     // must be stripped on the same pass, or every turn stacks another copy.
     if (userIndex >= 0 && requestHistory[userIndex].content.let {
-            it.contains("<goal_context>") || it.contains("<plan_board>")
+            it.contains("<goal_context>") ||
+                it.contains("<plan_board>") ||
+                it.contains("<external_hook>")
         }
     ) {
         val user = requestHistory[userIndex]
         val withoutOldGoal = user.content
             .replace(Regex("\\n*<goal_context>.*?</goal_context>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
             .replace(Regex("\\n*<plan_board>.*?</plan_board>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
+            .replace(
+                Regex(
+                    "\\n*<external_data precedence=\"5\">\\s*<external_hook>.*?</external_hook>\\s*</external_data>\\n*",
+                    setOf(RegexOption.DOT_MATCHES_ALL),
+                ),
+                "",
+            )
+            .replace(Regex("\\n*<external_hook>.*?</external_hook>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
             .trimEnd()
         val retainedParts = user.contentParts.dropLastWhile {
             it is AgentContentPart.Text &&
-                (it.text.contains("<goal_context>") || it.text.contains("<plan_board>"))
+                (it.text.contains("<goal_context>") ||
+                    it.text.contains("<plan_board>") ||
+                    it.text.contains("<external_hook>"))
         }
         requestHistory[userIndex] = user.copy(
             content = withoutOldGoal,

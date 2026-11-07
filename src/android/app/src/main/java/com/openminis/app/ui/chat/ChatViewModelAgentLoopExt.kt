@@ -636,9 +636,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break
                 }
+                val agentHistory = effectiveAgentHistory()
+                refreshExternalHookPrompt(
+                    agentHistory.lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty()
+                )
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     withGoalAndPlanContext(
-                    effectiveAgentHistory(),
+                    agentHistory,
                     goalMount.prompt,
                     appendNewUser = goalExecutionRun && turn == 0,
                 ).let { history ->
@@ -1677,6 +1681,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
             val persistedId = persistAssistantTurnForRun(
                 checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+            )
+            notifyAfterTurnHooks(
+                effectiveAgentHistory().lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty(),
+                accumulatedText,
             )
             if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
             // [T-error-persist-android] Empty-response hint: the model ended a
