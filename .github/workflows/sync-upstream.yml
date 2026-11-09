@@ -1,10 +1,20 @@
 name: Sync from upstream
 
-# 每 6 小时把上游 main 拉到本 fork 的 main，保持镜像。
-# 手动触发：Actions → Sync from upstream → Run workflow（可临时换上游仓库）。
+# 两分支模型：
+#   main —— 上游镜像。内容与 tall-1997/OpenMinis-Linux 的 main 完全一致（同一 SHA），
+#           不带任何本地改动。由本任务强制对齐，不做 rebase/merge。
+#   dev  —— 全部本地改动所在分支。本任务把 dev rebase 到新的 main 之上，本地提交
+#           永远在顶部，不会被上游覆盖。
+#
+# 为什么默认分支是 dev：GitHub 的 schedule 只在**默认分支**上读取 workflow。
+# 同步脚本本身是本地新增文件，放进 main 就会让 main 不再是纯上游，所以脚本住在
+# dev，dev 是默认分支。
+#
+# 手动触发：Actions → Sync from upstream → Run workflow。
 
 on:
   schedule:
+    # 每 6 小时一次，错开整点（GitHub 定时队列在整点最堵）
     - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
@@ -12,8 +22,8 @@ on:
         description: "上游仓库，格式 owner/repo"
         required: false
         default: "tall-1997/OpenMinis-Linux"
-      branch:
-        description: "要同步的分支"
+      upstream_branch:
+        description: "上游分支"
         required: false
         default: "main"
 
@@ -29,20 +39,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout
+      - name: Checkout dev
         uses: actions/checkout@v4
         with:
+          ref: dev
+          # 必须全量历史：rebase 需要共同祖先，depth=1 会让 merge-base 失败
           fetch-depth: 0
           # GITHUB_TOKEN **永远**没有 workflow 权限：上游一改 .github/workflows/*
-          # rebase 后的推送就被拒（refusing to allow a GitHub App to create or
-          # update workflow ... without workflows permission）。用带 workflow
-          # scope 的 PAT。仓库 secret：Settings → Secrets → SYNC_TOKEN。
+          # 推送就被拒（refusing to allow a GitHub App to create or update
+          # workflow ... without workflows permission）。用带 workflow scope 的
+          # PAT。仓库 secret：Settings → Secrets → SYNC_TOKEN。
           token: ${{ secrets.SYNC_TOKEN }}
 
-      - name: Sync
+      - name: Mirror upstream into main
         env:
           UPSTREAM: ${{ inputs.upstream || 'tall-1997/OpenMinis-Linux' }}
-          BRANCH: ${{ inputs.branch || 'main' }}
+          UPSTREAM_BRANCH: ${{ inputs.upstream_branch || 'main' }}
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
@@ -51,24 +63,34 @@ jobs:
           git remote add upstream "https://github.com/${UPSTREAM}.git"
           git fetch --no-tags --prune upstream "+refs/heads/*:refs/remotes/upstream/*"
 
-          echo "上游：${UPSTREAM}  分支：${BRANCH}"
+          SRC="refs/remotes/upstream/${UPSTREAM_BRANCH}"
+          echo "上游：${UPSTREAM}  分支：${UPSTREAM_BRANCH}  ->  ${SRC} $(git rev-parse --short "$SRC")"
 
-          if ! git rev-parse --verify "refs/remotes/upstream/${BRANCH}" >/dev/null 2>&1; then
-            echo "::error::上游不存在分支 ${BRANCH}"
+          if ! git rev-parse --verify "$SRC" >/dev/null 2>&1; then
+            echo "::error::上游不存在分支 ${UPSTREAM_BRANCH}"
             exit 1
           fi
 
-          if git merge-base --is-ancestor "refs/remotes/upstream/${BRANCH}" HEAD; then
-            echo "已经是最新，无需同步。"
+          # main 是纯镜像：直接指向上游提交，不做 rebase、不产生本地提交。
+          git push --force origin "${SRC}:refs/heads/main"
+          echo "main 已对齐上游：$(git rev-parse --short "$SRC")"
+
+      - name: Rebase dev onto main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "dev 已包含 main，无需 rebase。"
             exit 0
           fi
 
-          echo "落后 $(git rev-list --count HEAD..refs/remotes/upstream/${BRANCH}) 个提交，开始同步。"
-          if git rebase "refs/remotes/upstream/${BRANCH}"; then
-            git push --force-with-lease origin "HEAD:refs/heads/${BRANCH}"
-            echo "同步完成：$(git rev-parse --short HEAD)"
+          echo "dev 落后 main $(git rev-list --count HEAD..origin/main) 个提交，开始 rebase。"
+          if git rebase origin/main; then
+            git push --force-with-lease origin "HEAD:refs/heads/dev"
+            echo "dev 已跟到：$(git rev-parse --short HEAD)"
           else
             git rebase --abort || true
-            echo "::error::与上游冲突，自动同步已中止。请手动 merge 解决一次，之后会恢复自动同步。"
+            echo "::error::dev 与上游冲突，自动同步已中止。手动解一次冲突后恢复自动同步。"
             exit 1
           fi
