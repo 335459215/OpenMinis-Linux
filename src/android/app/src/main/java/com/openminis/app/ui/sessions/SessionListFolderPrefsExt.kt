@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
  * architecture-policy line ceiling. The VM's [SessionListViewModel.uiPrefs]
  * is internal for exactly this reason. Deliberately OUTSIDE the safe-mode
  * await — folder collapse state has nothing to do with the crash gate and
- * must not wait for the user to dismiss the share dialog.
+ * must not wait for crash recovery to finish.
  */
 internal fun SessionListViewModel.loadCollapsedFolderIds() {
     viewModelScope.launch(Dispatchers.IO) {

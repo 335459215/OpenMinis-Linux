@@ -522,6 +522,16 @@
     <string name="soul_icon_error_unreadable">That image couldn\'t be read. Try a different one.</string>
     <string name="soul_icon_error_too_large">That image is too large to store. Try a simpler one.</string>
     <string name="settings_env_vars">Environment Variables</string>
+
+    <string name="settings_auto_new_session">Auto new chat after compaction</string>
+    <string name="settings_auto_new_session_subtitle">Start a fresh chat when this session reaches the limit</string>
+    <string name="settings_auto_new_session_threshold">Compactions before new chat</string>
+    <string name="settings_auto_new_session_threshold_subtitle">Counted separately for each chat</string>
+    <string name="settings_auto_new_session_dialog_body">Choose how many successful compactions should trigger a fresh chat.</string>
+    <string name="settings_auto_new_session_times">%1$d times</string>
+    <string name="settings_compact_threshold">Auto-compact threshold</string>
+    <string name="settings_compact_threshold_subtitle">Compress context when this share is reached</string>
+    <string name="settings_compact_threshold_dialog_body">Drag to choose when automatic context compression starts (50–95%).</string>
     <string name="settings_env_vars_subtitle">Variables injected into the sandbox</string>
     <string name="settings_section_storage">Storage</string>
     <string name="settings_storage_subtitle">Manage Ubuntu Linux rootfs and browse files</string>
@@ -2121,23 +2131,7 @@
     <string name="update_error_network_unreachable">Couldn\'t reach the update server. Check your network and try again.</string>
     <string name="update_error_forbidden_with_link">Couldn\'t access the update server, possibly blocked by your network. Open GitHub Releases to download manually.</string>
     <string name="update_error_open_releases">Open GitHub Releases</string>
-    <!-- T-android-crash-freq-share -->
-    <string name="crash_freq_dialog_dismiss">Not now</string>
     <string name="crash_safe_mode_restart_needed">Minis Ultra needs to restart to finish recovering. Please tap the app icon again.</string>
-    <string name="crash_freq_email_subject">Minis Ultra Crash Report %1$s</string>
-    <string name="crash_freq_email_body">Crash log zip is attached. Device model, Minis Ultra version, and timestamp are included inside.</string>
-    <string name="crash_freq_share_chooser">Send crash logs</string>
-    <string name="crash_freq_pick_files_title">Multiple recent crashes detected — share the logs below with the developer?</string>
-    <string name="crash_freq_pick_continue">Continue</string>
-    <string name="crash_freq_pick_section_crashes">Crash logs (last 24h)</string>
-    <string name="crash_freq_pick_section_logs">Recent runtime logs (last 3 days)</string>
-    <string name="crash_freq_method_title">Share %1$d file(s) via</string>
-    <string name="crash_freq_method_email">Send via email</string>
-    <string name="crash_freq_method_share">Share to…</string>
-    <string name="crash_freq_method_save">Save to…</string>
-    <string name="crash_freq_zip_failed">Failed to package logs: %1$s</string>
-    <string name="crash_freq_save_failed">Failed to save logs: %1$s</string>
-    <string name="crash_freq_save_success">Saved logs to %1$s</string>
 
     <!-- T-android-app-icon-shortcuts: app-icon long-press quick actions
          (mirrors iOS QuickActionRouter strings). shortLabel is shown in

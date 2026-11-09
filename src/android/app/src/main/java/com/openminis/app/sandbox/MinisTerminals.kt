@@ -201,6 +201,12 @@ object MinisTerminals {
         val rows: Int,
     )
 
+    /** Read-only snapshot of one owning session's terminals. */
+    data class TerminalOwnerSnapshot(
+        val owner: String,
+        val terminals: List<TerminalInfo>,
+    )
+
     /**
      * Open a new interactive terminal for [sessionId]'s owner. When [command]
      * is non-blank it is typed into the shell once the PTY is up (see
@@ -425,6 +431,37 @@ object MinisTerminals {
             // records by the monotonic id number so list() is deterministic.
             .sortedWith(compareBy({ idNumber(it.id) }, { it.createdAtMs }))
             .map { TerminalInfo(it.id, it.status, it.createdAtMs, it.lastActivityMs.get(), it.cols, it.rows) }
+    }
+
+    /**
+     * Global, read-only terminal inventory for the cross-session process
+     * overview. Callers must authorize cross-session visibility before
+     * exposing this (see [SessionAccessPolicy]).
+     */
+    fun listAll(): List<TerminalOwnerSnapshot> {
+        tableLock.withLock {
+            table.keys.toList().forEach { pruneExitedLocked(it, retentionMs = EXITED_RETENTION_MS) }
+            return table.entries
+                .filter { it.value.isNotEmpty() }
+                .sortedBy { it.key }
+                .map { (owner, ownerTable) ->
+                    TerminalOwnerSnapshot(
+                        owner = owner,
+                        terminals = ownerTable.values
+                            .sortedWith(compareBy({ idNumber(it.id) }, { it.createdAtMs }))
+                            .map {
+                                TerminalInfo(
+                                    it.id,
+                                    it.status,
+                                    it.createdAtMs,
+                                    it.lastActivityMs.get(),
+                                    it.cols,
+                                    it.rows,
+                                )
+                            },
+                    )
+                }
+        }
     }
 
     private fun idNumber(id: String): Int = id.removePrefix("t").toIntOrNull() ?: Int.MAX_VALUE

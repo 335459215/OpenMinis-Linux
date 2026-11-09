@@ -178,7 +178,7 @@ fun AppNavigation(
             // When CrashFrequencyDetector tripped on the previous boot it set
             // a 1-hour force-home grace window — within that window every
             // launch lands on Home regardless of the user's Launch Session
-            // preference, even after they dismissed the share dialog. Avoids
+            // preference. Avoids
             // re-entering the session that may have been the crash trigger.
             //
             // An auto-entered route that did not survive a 60s healthy tick is not

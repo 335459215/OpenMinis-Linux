@@ -54,10 +54,13 @@ class A2aKeepAliveService : Service() {
     private val watchdog = Handler(Looper.getMainLooper())
     private val watchdogTick = object : Runnable {
         override fun run() {
+            if (A2aGateway.stopRequested) return
             if (!A2aPrefs.keepAlive(this@A2aKeepAliveService)) return
             // 探活放到后台线程：ensureStarted 内部要 synchronized + 最多 20s
             // 等待，放主线程会卡住 UI（悬浮球都能被拖住）。
             Thread {
+                // 用户点过停止后绝不能拉起——否则网关会被 watchdog 在下个周期复活。
+                if (A2aGateway.stopRequested) return@Thread
                 // 连续两次失败才算「掉了」：单次 isRunning 只有 800ms 超时，
                 // 网关正忙（大批量请求/模型刷新）时会短暂探活失败，误判会
                 // 触发一次没必要的重启。
@@ -65,8 +68,13 @@ class A2aKeepAliveService : Service() {
                     Thread.sleep(1200)
                     A2aGateway.isRunning()
                 }
+                if (A2aGateway.stopRequested) return@Thread
                 if (!alive) {
+                    if (A2aGateway.stopRequested) return@Thread
+                    if (A2aGateway.isStartingNow()) return@Thread
                     log("watchdog: 网关不在线，重新拉起")
+                    if (A2aGateway.stopRequested) return@Thread
+                    if (A2aGateway.isStartingNow()) return@Thread
                     runCatching { A2aGateway.ensureStarted(applicationContext) }
                 }
             }.start()
@@ -95,6 +103,7 @@ class A2aKeepAliveService : Service() {
                 if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunning()) stopSelf()
             }
             ACTION_STOP -> {
+                A2aBubble.hide()
                 hideBubble()
                 stopForegroundCompat()
                 stopSelf()
@@ -183,6 +192,13 @@ class A2aKeepAliveService : Service() {
 
     /** 供控制页「立即显示悬浮球」直接调用，返回是否加窗成功。 */
     fun showBubbleInternal(): Boolean {
+        // 与 A2aBubble.show() 共用同一门禁：网关未运行时不允许加任何悬浮窗。
+        // 这条是服务内第二套悬浮球实现（A2 圆球），旧版缺失此拦截，
+        // ACTION_SHOW_BUBBLE / showBubbleDirect 都会在网关已停时仍把圆球冒出来。
+        if (!A2aGateway.bubbleAllowed()) {
+            log("bubble blocked: gateway not running or stopRequested")
+            return false
+        }
         if (bubble != null) return true
         if (!canDrawOverlay()) {
             log("cannot draw overlay (permission denied)")
@@ -381,6 +397,7 @@ class A2aKeepAliveService : Service() {
         }
 
         fun stop(context: Context) = runCatching {
+            A2aBubble.hide()
             context.startService(
                 Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_STOP),
             )

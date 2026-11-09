@@ -754,38 +754,37 @@ class ProviderRepository(
             android.util.Log.i("ProviderRepo", "[ModelList] replaceEntries preserved ${preservedVoice.size} voice-template seed entries: ${preservedVoice.map { it.baseModel.id }.take(10)}")
         }
 
-        // Prune stale group member references
+        // Group memberships and agent-loop pins survive a refresh BY
+        // DESIGN. A refresh only replaces the entries themselves; the ids
+        // a user picked into a model group / loop set are their choices,
+        // not the vendor catalog's. If the vendor drops a model, the id
+        // simply stops resolving (every reader filters through
+        // mapNotNull) — the selection is NOT deleted, which is exactly
+        // what the provider-page refresh button used to do here: the
+        // hard-clear path regenerated entry uuids and the prune below
+        // then emptied every group the user had built. Pruning member
+        // references is reserved for explicit removal flows (removeEntry,
+        // removeInstance), in both directions: users can still delete
+        // models one by one.
+        //
+        // [T-refresh-preserve-groups]
         val survivingEntryIds = config.modelEntries.map { it.id }.toSet()
         val prunedEntryIds = existingEntryIds - survivingEntryIds
+        val droppedRefs = prunedEntryIds.isNotEmpty() &&
+            (dropStaleRefs || existing.size < 4 || models.size * 2 >= existing.size)
         if (prunedEntryIds.isNotEmpty()) {
             val suspiciousShrink = !dropStaleRefs && existing.size >= 4 && models.size * 2 < existing.size
             if (suspiciousShrink) {
                 android.util.Log.w("ProviderRepo", "[ModelList] replaceEntries SUSPICIOUS SHRINK before=${existing.size} after=${models.size} — group references PRESERVED as stale")
             } else {
-                for (i in config.modelGroups.indices) {
-                    val before = config.modelGroups[i].memberEntryIds.size
-                    config.modelGroups[i].memberEntryIds.removeAll { it in prunedEntryIds }
-                    val removed = before - config.modelGroups[i].memberEntryIds.size
-                    if (removed > 0) {
-                        android.util.Log.i("ProviderRepo", "[ModelList] replaceEntries pruned $removed stale refs from group '${config.modelGroups[i].name}'")
-                    }
-                }
-                // T171: same cascade for agent-loop direct-entry pins —
-                // mirrors iOS ProviderConfigStore.replaceEntries (L716).
-                // Skipped under the suspicious-shrink branch alongside the
-                // group-member preservation, so a transient API hiccup
-                // never silently nukes the user's curated agent-loop set.
-                val agentBefore = config.agentLoopModelEntryIds.size
-                config.agentLoopModelEntryIds.removeAll { it in prunedEntryIds }
-                val agentRemoved = agentBefore - config.agentLoopModelEntryIds.size
-                if (agentRemoved > 0) {
-                    android.util.Log.i("ProviderRepo", "[ModelList] replaceEntries pruned $agentRemoved stale agent-loop entry pins")
-                }
+                android.util.Log.w("ProviderRepo", "[ModelList] replaceEntries ${prunedEntryIds.size} stale entry id(s) after refresh — group/agent-loop membership preserved (selection is not catalog)")
+                // Scrub only non-selection references: chat/session and
+                // scheduled-task bindings copied the entry id, and those
+                // must point at the default instead of at a vanished row.
+                // Nothing user-selected is touched here.
+                scrubExternalEntryRefs(prunedEntryIds)
             }
         }
-
-        val droppedRefs = prunedEntryIds.isNotEmpty() && (dropStaleRefs || existing.size < 4 || models.size * 2 >= existing.size)
-        if (droppedRefs) scrubConfigEntryRefs(config, prunedEntryIds)
         saveConfig(config)
         // Stamp so staleness checks know this instance just refreshed.
         catalogCache.markInstanceFetched(instanceId)

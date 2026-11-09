@@ -27,7 +27,7 @@ object A2aGateway {
      * 原实现只在 `index.html` 不存在时铺一次，导致 APK 里的 UI 更新永远
      * 到不了设备 —— 用户看到的还是旧页面。
      */
-    private const val UI_VERSION = "3.4.2-sw-mobile-editV4"
+    private const val UI_VERSION = "3.4.2-sw-mobile-editV5-nologin"
 
     /** UI 版本戳的短哈希，作为 URL 参数破缓存（Service Worker 也会按 URL 区分）。 */
     fun uiRevision(): String = UI_VERSION.hashCode().toUInt().toString(16)
@@ -39,6 +39,14 @@ object A2aGateway {
 
     @Volatile
     private var process: Process? = null
+
+    @Volatile
+    var isStarting: Boolean = false
+        private set
+
+    /** 正在启动中（进程已起但 health 未就绪），供面板判断是否应踢保活服务。 */
+    fun isStartingNow(): Boolean = isStarting || process != null
+
     private val lock = Any()
 
     /** 网关根目录；服务与日志也用它。 */
@@ -74,85 +82,107 @@ object A2aGateway {
     }
 
     fun ensureStarted(context: Context): Result<Unit> = synchronized(lock) {
+        if (stopRequested) {
+            return Result.failure(IllegalStateException("stopRequested"))
+        }
         if (isRunning()) return Result.success(Unit)
+        isStarting = true
+        try {
+            if (stopRequested) {
+                return Result.failure(IllegalStateException("stopRequested"))
+            }
+            migrateLegacyData(context)
+            val dataDir = dataDir(context)
+            val uiDir = uiDir(context)
+            dataDir.mkdirs()
+            File(dataDir, "tmp").mkdirs()
 
-        migrateLegacyData(context)
-        val dataDir = dataDir(context)
-        val uiDir = uiDir(context)
-        dataDir.mkdirs()
-        File(dataDir, "tmp").mkdirs()
+            val stamp = File(rootDir(context), "ui.version")
+            val needUi = !File(uiDir, "index.html").isFile ||
+                !stamp.isFile ||
+                stamp.readText().trim() != UI_VERSION
+            if (needUi) {
+                runCatching { deployUi(context, uiDir) }
+                    .onFailure { return Result.failure(it) }
+                uiDeployed = true
+                runCatching { stamp.writeText(UI_VERSION) }
+            }
+            runCatching { installBundledPlugins(context, dataDir) }
+            // 清掉历史插件安装失败记录。网关把 operations 持久化在 kv 里
+            // （键 `pluginOperation:<id>`），启动时读回内存 —— 之前尝试「在面板里
+            // 升级插件」必然失败（它把二进制解到 app 私有目录再 exec，被 noexec 拒），
+            // 那条红字会一直挂在插件页上，让人以为插件坏了。此刻网关还没起，独占
+            // 写库是安全的。
+            runCatching { clearStalePluginOperations(dataDir) }
+            // 内嵌手机端不提供面板账号体系：启动前删掉管理员记录，让网关按
+            // “尚未初始化”放行 /m。只保留对外请求用的 API Key。
+            runCatching { clearPanelAdmin(dataDir) }
 
-        val stamp = File(rootDir(context), "ui.version")
-        val needUi = !File(uiDir, "index.html").isFile ||
-            !stamp.isFile ||
-            stamp.readText().trim() != UI_VERSION
-        if (needUi) {
-            runCatching { deployUi(context, uiDir) }
-                .onFailure { return Result.failure(it) }
-            uiDeployed = true
-            runCatching { stamp.writeText(UI_VERSION) }
-        }
-        runCatching { installBundledPlugins(context, dataDir) }
-        // 清掉历史插件安装失败记录。网关把 operations 持久化在 kv 里
-        // （键 `pluginOperation:<id>`），启动时读回内存 —— 之前尝试「在面板里
-        // 升级插件」必然失败（它把二进制解到 app 私有目录再 exec，被 noexec 拒），
-        // 那条红字会一直挂在插件页上，让人以为插件坏了。此刻网关还没起，独占
-        // 写库是安全的。
-        runCatching { clearStalePluginOperations(dataDir) }
-        // 内嵌手机端不提供面板账号体系：启动前删掉管理员记录，让网关按
-        // “尚未初始化”放行 /m。只保留对外请求用的 API Key。
-        runCatching { clearPanelAdmin(dataDir) }
+            val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
+            if (!binary.isFile) {
+                return Result.failure(IllegalStateException("liba2a_server.so missing"))
+            }
 
-        val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
-        if (!binary.isFile) {
-            return Result.failure(IllegalStateException("liba2a_server.so missing"))
-        }
+            val builder = ProcessBuilder(binary.absolutePath)
+            builder.redirectErrorStream(true)
+            builder.redirectOutput(File(dataDir, "gateway.log"))
+            val panelPassword = A2aPrefs.panelAdminPassword(context)
+            builder.environment().apply {
+                put("AGENT2API_HOST", HOST)
+                put("AGENT2API_PROXY_PORT", PORT.toString())
+                put("AGENT2API_PROXY_HOME", dataDir.absolutePath)
+                put("AGENT2API_UI_DIR", uiDir.absolutePath)
+                put("AGENT2API_ALLOW_NO_KEY", "1")
+                // 手机壳直接打开 /m：启动时预置一个只属于本机的管理员，随后
+                // A2aPanelAuth 会静默换取会话 Cookie。不要再把 panelAdmin 删掉，
+                // 否则网页端会进入“首次注册管理员”的登录页。
+                put("AGENT2API_ADMIN_USER", A2aPrefs.PANEL_ADMIN_USER)
+                put("AGENT2API_ADMIN_PASSWORD", panelPassword)
+                put("AGENT2API_SELF_UPDATE", "0")
+                put("AGENT2API_CAPTCHA_ENABLED", "0")
+                put("HOME", dataDir.absolutePath)
+                put("TMPDIR", File(dataDir, "tmp").absolutePath)
+            }
 
-        val builder = ProcessBuilder(binary.absolutePath)
-        builder.redirectErrorStream(true)
-        builder.redirectOutput(File(dataDir, "gateway.log"))
-        builder.environment().apply {
-            put("AGENT2API_HOST", HOST)
-            put("AGENT2API_PROXY_PORT", PORT.toString())
-            put("AGENT2API_PROXY_HOME", dataDir.absolutePath)
-            put("AGENT2API_UI_DIR", uiDir.absolutePath)
-            put("AGENT2API_ALLOW_NO_KEY", "1")
-            put("AGENT2API_SELF_UPDATE", "0")
-            put("AGENT2API_CAPTCHA_ENABLED", "0")
-            put("HOME", dataDir.absolutePath)
-            put("TMPDIR", File(dataDir, "tmp").absolutePath)
-        }
+            val started = try {
+                builder.start()
+            } catch (error: Throwable) {
+                return Result.failure(error)
+            }
+            process = started
 
-        val started = try {
-            builder.start()
-        } catch (error: Throwable) {
-            return Result.failure(error)
-        }
-        process = started
-
-        val deadline = System.currentTimeMillis() + 20_000
-        while (System.currentTimeMillis() < deadline) {
-            if (isRunning()) {
-                // 网关就绪 → 把它接成 Minis 的一个 AI 服务商，用户在
-                // 「AI 服务商」里直接看到 Agent2API 及其模型，不必手动填地址。
-                // 失败不能影响网关本身，所以整段吞异常（内部已记日志）。
-                if (A2aPrefs.providerSyncEnabled(context)) {
-                    runCatching {
-                        val app: MinisApp? = context.applicationContext as? MinisApp
-                        val repository = app?.providerRepositoryOrNull
-                        if (repository != null) {
-                            A2aProviderBridge.sync(repository, context)
+            val deadline = System.currentTimeMillis() + 20_000
+            while (System.currentTimeMillis() < deadline) {
+                if (stopRequested) {
+                    started.destroy()
+                    process = null
+                    return Result.failure(IllegalStateException("stopRequested"))
+                }
+                if (isRunning()) {
+                    // 网关就绪 → 把它接成 Minis 的一个 AI 服务商，用户在
+                    // 「AI 服务商」里直接看到 Agent2API 及其模型，不必手动填地址。
+                    // 失败不能影响网关本身，所以整段吞异常（内部已记日志）。
+                    if (A2aPrefs.providerSyncEnabled(context)) {
+                        runCatching {
+                            val app: MinisApp? = context.applicationContext as? MinisApp
+                            val repository = app?.providerRepositoryOrNull
+                            if (repository != null) {
+                                A2aProviderBridge.sync(repository, context)
+                            }
                         }
                     }
+                    stopRequested = false
+                    return Result.success(Unit)
                 }
-                return Result.success(Unit)
+                if (!started.isAlive) break
+                Thread.sleep(250)
             }
-            if (!started.isAlive) break
-            Thread.sleep(250)
+            started.destroy()
+            process = null
+            Result.failure(IllegalStateException("health timeout; see ${logFile(context)}"))
+        } finally {
+            isStarting = false
         }
-        started.destroy()
-        process = null
-        Result.failure(IllegalStateException("health timeout; see ${logFile(context)}"))
     }
 
     /**
@@ -195,15 +225,35 @@ object A2aGateway {
     fun restart(context: Context): Result<Unit> {
         stop()
         Thread.sleep(400)
+        // stop() 置 stopRequested=true；重启意图明确，先清位否则 ensureStarted
+        // 开头的 stopRequested 守卫会直接拒绝，导致重启自锁。
+        stopRequested = false
         return ensureStarted(context)
     }
 
     fun stop() {
+        stopRequested = true
+        A2aBubble.hide()
         synchronized(lock) {
             process?.destroy()
             process = null
         }
     }
+
+    /** 用户主动停止网关后，面板离场时不得再把悬浮花加回来。 */
+    @Volatile
+    var stopRequested: Boolean = false
+
+    /**
+     * 悬浮球是否允许显示：只有网关进程真实活着且用户没有点停止时才允许。
+     *
+     * 仅靠各处调用 `hide()` 不够：设置页的开关、面板的 onStop、保活服务的
+     * 广播都会在各自时机调 A2aBubble.show()。只要有一条路在网关已停时
+     * 绕过 hide()，悬浮花朵就会在点停止后重新冒出来。所以把这条判断
+     * 收敛在这里——所有入口都查到同一个运行状态，而不是每个调用方
+     * 自己拼一次弱守卫。
+     */
+    fun bubbleAllowed(): Boolean = !stopRequested && isRunning()
 
     fun logFile(context: Context): File = File(dataDir(context), "gateway.log")
 
@@ -216,6 +266,13 @@ object A2aGateway {
             ZipInputStream(raw).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
+                    // 手机壳自己完成本机认证，不部署网页端管理员登录页。
+                    // 服务端若仍把 /login 重定向过来，这里也不会留下可进入的页面。
+                    val baseName = entry.name.substringAfterLast('/')
+                    if (baseName == "login.html" || baseName == "sms-login.html" || baseName == "web-login.html") {
+                        zip.closeEntry()
+                        continue
+                    }
                     val target = File(staging, entry.name)
                     if (!target.canonicalPath.startsWith(staging.canonicalPath + File.separator)) {
                         zip.closeEntry()
@@ -234,6 +291,16 @@ object A2aGateway {
         uiDir.deleteRecursively()
         if (!staging.renameTo(uiDir)) {
             throw IllegalStateException("cannot deploy a2a UI")
+        }
+        // 旧缓存目录可能已在 uiDir 里残留登录页（升级 UI_VERSION 强制重铺会整目录
+        // 删掉，但防御性再删一次，覆盖 staging 修复/异常恢复路径）。
+        runCatching {
+            File(uiDir, "login.html").delete()
+            File(uiDir, "sms-login.html").delete()
+            File(uiDir, "web-login.html").delete()
+        }
+        runCatching {
+            File(parent, "ui.version").writeText(UI_VERSION)
         }
     }
 

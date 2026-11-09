@@ -165,6 +165,11 @@ class A2aPanelActivity : Activity() {
 
         thread(name = "a2a-start") {
             val result = A2aGateway.ensureStarted(applicationContext)
+            // 网关已就绪后，先用本机预置管理员静默换取面板 Cookie，再加载 /m。
+            // 这样 WebView 不会先落到 /login 再跳转，也不会闪现管理员登录页。
+            if (result.isSuccess) {
+                A2aPanelAuth.ensureSession(applicationContext)
+            }
             runOnUiThread {
                 spinner.visibility = ProgressBar.GONE
                 if (result.isSuccess) {
@@ -404,6 +409,13 @@ class A2aPanelActivity : Activity() {
         super.onResume()
         unfreeze()
         A2aBubble.hide()
+        // 网关正在 starting 或已 stopRequested 时不直接 start service / kick 保活：
+        // ① 正在启动中时面板 onCreate 的 ensureStarted 已独占 lock，watchdog
+        //    再拉 ensureStarted 会撞锁或复活已停网关；② gateway not ready
+        //    时自动 kick keepAlive 会在 stopRequested=true 时把服务拉回来。
+        if (A2aGateway.stopRequested) return
+        if (A2aGateway.isStartingNow()) return
+        if (!A2aGateway.isRunning()) return
         // 前台时才允许启动前台服务（Android 12+ 的后台启动限制）。
         if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
     }
@@ -423,7 +435,7 @@ class A2aPanelActivity : Activity() {
         // 但用户只是回到 Minis Ultra，并不是退出网关，球应该留下。
         // 直接由 Activity 走 WindowManager 加窗，不经过服务：后台
         // startService 会被系统丢弃，那条路根本到不了。
-        if (A2aPrefs.floatingBubble(this)) {
+        if (A2aPrefs.floatingBubble(this) && A2aGateway.bubbleAllowed()) {
             A2aBubble.show(this)
         }
     }

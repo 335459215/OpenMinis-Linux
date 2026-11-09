@@ -40,17 +40,14 @@ import com.openminis.app.R
  *
  * ## The dead end this replaces
  *
- * The previous behaviour on this path was: log the cause with `Log.e`, return
- * from `MainActivity.onCreate` **without ever calling `setContent`**, show a
- * crash-share dialog if a burst of crash files happened to exist — and when
- * there were none, `maybeShowOnActivity` invokes `onClosed` immediately, which
- * ran `finishAndRestartProcess()`: a 1.2-second Toast, `finish()`, then
- * `killProcess`.
+ * The previous behaviour on this path was: log the cause with `Log.e`, then
+ * return from `MainActivity.onCreate` **without ever calling `setContent`**,
+ * which restarted the process and left the user with no in-app way out.
  *
- * An init failure is caught and logged, not written as a crash file, so
- * `pendingShareFiles` was essentially always null here. The user therefore saw
- * the white system splash, then a content-less window go black, then the app
- * vanish — with no dialog, no reason, and no in-app way out. Because
+ * An init failure is caught and logged, not written as a crash file. The
+ * user therefore saw the white system splash, then a content-less window go
+ * black, then the app vanish — with no dialog, no reason, and no in-app
+ * way out. Because
  * `Application.onCreate` never re-runs for the life of a process and the
  * underlying cause is usually deterministic (an unreadable store, a missing
  * migration path, a corrupt row), every subsequent tap repeated it exactly.

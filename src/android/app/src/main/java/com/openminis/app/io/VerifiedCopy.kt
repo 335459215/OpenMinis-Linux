@@ -65,7 +65,7 @@ object VerifiedCopy {
      * Verify a document/MediaStore URI after writing.
      *
      * @param exact when true, a known destination length must equal
-     *        [expectedLen] (used for crash zips and pre-Q files, where the
+     *        [expectedLen] (used for pre-Q files, where the
      *        target is a regular file we fully control). SAF providers only
      *        get the emptiness class check because they may report a
      *        transcoded/rounded length.
@@ -353,7 +353,7 @@ object VerifiedCopy {
         return result.copy(uri = uri)
     }
 
-    /** Insert + file copy + verify + publish; shared by gallery and crash zip. */
+    /** Insert + file copy + verify + publish; shared by gallery exports. */
     fun copyFileToMediaStore(
         resolver: ContentResolver,
         collection: Uri,

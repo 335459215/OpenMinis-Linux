@@ -4,6 +4,8 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.sandbox.MinisTerminals
+import com.openminis.app.sandbox.SandboxWorkload
+import com.openminis.app.sandbox.SessionAccessPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -24,7 +26,7 @@ object TerminalTools {
 
     const val NAME = "agent_terminal"
 
-    private val ACTIONS = listOf("open", "send", "read", "signal", "close", "list")
+    private val ACTIONS = listOf("open", "send", "read", "signal", "close", "kill", "list")
     private const val TITLE = "agent_terminal"
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
@@ -38,7 +40,11 @@ object TerminalTools {
                 "read (collect NEW output since the last read; waits at most wait_ms, then returns what it " +
                 "has plus a hint — call read again instead of polling in a tight loop), signal (ctrl_c " +
                 "interrupt, ctrl_d EOF, ctrl_z suspend), close (kill the terminal's whole process tree), " +
-                "list (terminals of this session with status). At most 3 live terminals per session; the " +
+                "kill (terminate a background process group by pid), list (terminals of this session with " +
+                "status; set all_sessions=true to see terminals and background process groups owned by " +
+                "every chat — requires the cross-session permission). Close/kill accept session_id to target " +
+                "another chat's terminal or process group; this also requires the cross-session permission. " +
+                "At most 3 live terminals per session; the " +
                 "least recently used one is evicted beyond that. While a full-screen TUI app owns the " +
                 "screen, read returns the visible screen snapshot rather than the scroll stream. " +
                 "Prefer shell_execute for every one-shot command; open a terminal only for genuinely " +
@@ -46,12 +52,21 @@ object TerminalTools {
         parameters = mapOf(
             "action" to AgentToolParam(
                 "string",
-                "One of: open, send, read, signal, close, list.",
+                "One of: open, send, read, signal, close, kill, list.",
                 enumValues = ACTIONS,
             ),
             "terminal_id" to AgentToolParam(
                 "string",
                 "Terminal id from open/list (send, read, signal, close).",
+            ),
+            "session_id" to AgentToolParam(
+                "string",
+                "Target chat/session id for close or kill when cleaning another session's terminal or " +
+                    "process group; defaults to this session (optional; requires the cross-session permission).",
+            ),
+            "pid" to AgentToolParam(
+                "integer",
+                "Root pid of a background process group from list all_sessions (kill).",
             ),
             "command" to AgentToolParam(
                 "string",
@@ -76,11 +91,16 @@ object TerminalTools {
                 "integer",
                 "How long read waits for output before returning, default 500, max 15000 (read, optional).",
             ),
+            "all_sessions" to AgentToolParam(
+                "boolean",
+                "List terminals/process groups from every chat instead of only this session (list, optional; " +
+                    "requires the cross-session permission).",
+            ),
         ),
         required = listOf("action"),
         propertyOrdering = listOf(
-            "action", "terminal_id", "command", "cols", "rows",
-            "text", "press_enter", "signal", "wait_ms",
+            "action", "terminal_id", "session_id", "pid", "command", "cols", "rows",
+            "text", "press_enter", "signal", "wait_ms", "all_sessions",
         ),
     )
 
@@ -108,7 +128,8 @@ object TerminalTools {
             "read" -> readAction(args, sessionId)
             "signal" -> signalAction(args, sessionId)
             "close" -> closeAction(args, sessionId)
-            "list" -> listAction(sessionId)
+            "kill" -> killAction(args, sessionId)
+            "list" -> listAction(args, sessionId)
             else -> error("action must be one of ${ACTIONS.joinToString(", ")}", ToolErrorCode.INVALID_ARGUMENTS)
         }
     }
@@ -211,10 +232,21 @@ object TerminalTools {
     private suspend fun closeAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         val id = args.optString("terminal_id").trim()
         if (id.isEmpty()) return error("terminal_id is required for close", ToolErrorCode.INVALID_ARGUMENTS)
-        val out = MinisTerminals.close(sessionId, id)
+        val target = args.optString("session_id").trim().ifEmpty { sessionId }
+        if (target != sessionId && !SessionAccessPolicy.isCrossSessionGranted(sessionId)) {
+            return error(
+                "closing another session's terminal needs the cross-session permission",
+                ToolErrorCode.PERMISSION_DENIED,
+            )
+        }
+        val out = MinisTerminals.close(target, id)
         return if (out.ok) {
             ToolExecutionResult(
-                JSONObject().put("ok", true).put("closed", id).toString(),
+                JSONObject()
+                    .put("ok", true)
+                    .put("closed", id)
+                    .put("session_id", target)
+                    .toString(),
                 true,
                 toolTitle = TITLE,
             )
@@ -223,31 +255,118 @@ object TerminalTools {
         }
     }
 
-    private fun listAction(sessionId: String): ToolExecutionResult {
+    private suspend fun killAction(args: JSONObject, sessionId: String): ToolExecutionResult {
+        val pid = if (args.has("pid")) args.optInt("pid", -1) else -1
+        if (pid <= 0) return error("pid is required for kill (from list all_sessions)", ToolErrorCode.INVALID_ARGUMENTS)
+        val root = SandboxWorkload.snapshotByLabel().firstOrNull { it.pid == pid }
+            ?: return error("process group $pid is not tracked", ToolErrorCode.NOT_FOUND)
+        val owner = workloadOwner(root.label)
+        val requested = args.optString("session_id").trim()
+        if (requested.isNotEmpty() && owner != null && requested != owner) {
+            return error("process group $pid belongs to session $owner, not $requested", ToolErrorCode.NOT_FOUND)
+        }
+        val target = requested.ifEmpty { owner ?: sessionId }
+        if (target != sessionId && !SessionAccessPolicy.isCrossSessionGranted(sessionId)) {
+            return error(
+                "killing another session's process group needs the cross-session permission",
+                ToolErrorCode.PERMISSION_DENIED,
+            )
+        }
+        SandboxWorkload.releasePid(pid, kill = true, reason = "agent_terminal_kill:$target")
+        return ToolExecutionResult(
+            JSONObject()
+                .put("ok", true)
+                .put("killed_pid", pid)
+                .put("label", root.label)
+                .put("session_id", target)
+                .toString(),
+            true,
+            toolTitle = TITLE,
+        )
+    }
+
+    /** Session owner encoded in terminal:/shell: workload labels, or null for app-wide work. */
+    private fun workloadOwner(label: String): String? {
+        for (prefix in listOf("terminal:", "shell:")) {
+            if (label.startsWith(prefix)) {
+                return label.removePrefix(prefix).substringBefore(':').ifBlank { null }
+            }
+        }
+        return null
+    }
+
+    private suspend fun listAction(args: JSONObject, sessionId: String): ToolExecutionResult {
         // MinisTerminals.list is not suspending (CHM snapshot + lazy prune);
         // the old runBlocking here wrapped a plain call for nothing.
-        val terminals = MinisTerminals.list(sessionId)
-        val arr = JSONArray()
-        for (t in terminals) {
-            arr.put(
+        val allSessions = args.optBoolean("all_sessions", false)
+        if (!allSessions) {
+            val terminals = MinisTerminals.list(sessionId)
+            val arr = JSONArray()
+            for (t in terminals) arr.put(terminalJson(t))
+            val json = JSONObject().apply {
+                put("ok", true)
+                put("scope", "session")
+                put("count", terminals.size)
+                put("terminals", arr)
+            }
+            return ToolExecutionResult(json.toString(), true, toolTitle = TITLE)
+        }
+
+        // Cross-session visibility is a read grant, never implicit: the user
+        // must approve it in the same session-permission flow used by memory
+        // and transcript reads. The decision is audited by SessionAccessPolicy.
+        if (!SessionAccessPolicy.isCrossSessionGranted(sessionId)) {
+            return error(
+                "cross-session process visibility needs the session_read permission; " +
+                    "ask the user to grant it for this session",
+                ToolErrorCode.PERMISSION_DENIED,
+            )
+        }
+
+        val owners = MinisTerminals.listAll()
+        val ownerArr = JSONArray()
+        for (owner in owners) {
+            val terminals = JSONArray()
+            for (t in owner.terminals) terminals.put(terminalJson(t))
+            ownerArr.put(
                 JSONObject().apply {
-                    put("id", t.id)
-                    put("status", t.status.name.lowercase())
-                    put("cols", t.cols)
-                    put("rows", t.rows)
-                    put("created_at_ms", t.createdAtMs)
-                    put("last_activity_ms", t.lastActivityMs)
-                    put("idle_ms", System.currentTimeMillis() - t.lastActivityMs)
+                    put("session_id", owner.owner)
+                    put("terminal_count", owner.terminals.size)
+                    put("terminals", terminals)
+                },
+            )
+        }
+        val processes = JSONArray()
+        for (root in SandboxWorkload.snapshotByLabel()) {
+            processes.put(
+                JSONObject().apply {
+                    put("pid", root.pid)
+                    put("label", root.label)
+                    put("session_id", workloadOwner(root.label) ?: JSONObject.NULL)
                 },
             )
         }
         val json = JSONObject().apply {
             put("ok", true)
-            put("count", terminals.size)
-            put("terminals", arr)
+            put("scope", "all_sessions")
+            put("owner_count", owners.size)
+            put("owners", ownerArr)
+            put("process_count", processes.length())
+            put("process_groups", processes)
         }
         return ToolExecutionResult(json.toString(), true, toolTitle = TITLE)
     }
+
+    private fun terminalJson(t: MinisTerminals.TerminalInfo): JSONObject =
+        JSONObject().apply {
+            put("id", t.id)
+            put("status", t.status.name.lowercase())
+            put("cols", t.cols)
+            put("rows", t.rows)
+            put("created_at_ms", t.createdAtMs)
+            put("last_activity_ms", t.lastActivityMs)
+            put("idle_ms", System.currentTimeMillis() - t.lastActivityMs)
+        }
 
     private fun error(message: String, code: ToolErrorCode): ToolExecutionResult =
         ToolExecutionResult("Error: $message", false, code, toolTitle = TITLE)

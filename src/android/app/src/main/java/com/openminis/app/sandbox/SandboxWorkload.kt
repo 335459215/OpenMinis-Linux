@@ -52,6 +52,14 @@ internal object SandboxWorkload {
 
     fun hasLiveWork(): Boolean = roots.isNotEmpty()
 
+    /** Diagnostic snapshot; labels identify the owning session and workload kind. */
+    data class WorkloadRoot(val pid: Int, val label: String)
+
+    fun snapshotByLabel(): List<WorkloadRoot> =
+        roots.values
+            .map { WorkloadRoot(it.pid, it.label) }
+            .sortedWith(compareBy({ it.label }, { it.pid }))
+
     fun track(process: java.lang.Process, label: String) {
         val pid = pidOf(process) ?: return
         trackPid(pid, label)

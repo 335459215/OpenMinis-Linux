@@ -125,6 +125,9 @@ class A2aSettingsActivity : Activity() {
                 A2aPrefs.setFloatingBubble(this@A2aSettingsActivity, checked)
                 if (checked) {
                     if (canDrawOverlay()) {
+                        // 与 PanelActivity.onStop 共用 A2aBubble.show()；
+                        // 该入口内部按 bubbleAllowed() = !stopRequested && isRunning()
+                        // 拦截，所以网关未运行/已停止时这里不加窗，也不自启。
                         A2aBubble.show(this@A2aSettingsActivity)
                     } else {
                         requestOverlay()

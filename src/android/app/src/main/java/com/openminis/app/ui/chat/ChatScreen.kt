@@ -601,6 +601,13 @@ fun ChatScreen(
     // separate from lastSendTimeMs above — that one also drives the 300ms
     // IME-residue suppression in the composer and must stay UI-send-only.
     var lastUserAppendMs by remember { mutableStateOf(0L) }
+    // When compaction has happened enough times in this session, finish the
+    // handoff and start a fresh chat instead of letting the context balloon.
+    androidx.compose.runtime.LaunchedEffect(viewModel) {
+        viewModel.autoNewSessionEvent.collect {
+            onNewChat()
+        }
+    }
     androidx.compose.runtime.LaunchedEffect(viewModel) {
         // Collect instead of keying on the value: the key would re-launch per keystroke.
         viewModel.inputText.collect { text ->

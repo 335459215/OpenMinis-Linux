@@ -46,6 +46,10 @@ object A2aBubble {
 
     /** 显示；已存在则直接返回 true。 */
     fun show(context: Context): Boolean {
+        if (!A2aGateway.bubbleAllowed()) {
+            hide()
+            return false
+        }
         if (view != null) return true
         if (!canDraw(context)) {
             A2aLog.write(context, "bubble: cannotDrawOverlay")

@@ -18,20 +18,18 @@ import kotlinx.coroutines.runBlocking
 internal object LaunchPhaseProbes {
 
     /**
-     * [T-perf-launch-scan-async] Completes once the launch scan has fully
-     * landed (safe-mode flag, CrashFrequencyDetector.pendingShareFiles and
-     * the force-home pref all written). Starts out already completed so an
-     * [awaitLaunchScan] with no scan running is a no-op rather than a hang.
+      * [T-perf-launch-scan-async] Completes once the launch scan has fully
+      * landed (safe-mode flag, the force-home pref and the burst checkpoint
+      * all written). Starts out already completed so an [awaitLaunchScan]
+      * with no scan running is a no-op rather than a hang.
      */
     @Volatile
     private var launchScanDone: CompletableDeferred<Unit> =
         CompletableDeferred<Unit>().apply { complete(Unit) }
 
     /**
-     * [T-perf-launch-scan-async] T-android-crash-freq-share: scan
-     * filesDir/logs/ for crash-*.log + native-crash-*.log files touched in
-     * the last hour; THRESHOLD+ stashes a share list for MainActivity and
-     * flips safe-mode. Dispatched to IO from the very top of onCreate so
+     * [T-perf-launch-scan-async] Scan filesDir/logs/ for crash and native
+     * crash files touched within the last hour; THRESHOLD+ flips safe-mode. Dispatched to IO from the very top of onCreate so
      * the directory walk hides behind the prime/probe work below; the
      * safe-mode branch awaits the scan before reading the flag, so the
      * short-circuit still decides on a final result, never an in-flight one.
@@ -41,8 +39,8 @@ internal object LaunchPhaseProbes {
      * that makes this safe: the synchronous safe-mode consumer in
      * MinisApp.onCreate must call [awaitLaunchScan] before reading
      * CrashFrequencyDetector.isSafeMode — that blocking hand-off, not this
-     * call, is what sequences the flag, the share list and the force-home
-     * pref ahead of every downstream reader.
+     * call, is what sequences the flag and force-home pref ahead of every
+     * downstream reader.
      */
     fun startLaunchScan(app: Application, scope: CoroutineScope) {
         val done = CompletableDeferred<Unit>()
@@ -60,8 +58,7 @@ internal object LaunchPhaseProbes {
      * [T-perf-launch-scan-async] Block the caller until the background scan
      * has landed. Bounded by the same disk work the inline scan used to block
      * on, and guarantees every reader after Application.onCreate returns —
-     * MainActivity's pendingShareFiles check, the onResume share prompt,
-     * AppNavigation's force-home pref read — sees the final state.
+     * including AppNavigation's force-home pref read — sees the final state.
      */
     fun awaitLaunchScan() {
         val done = launchScanDone

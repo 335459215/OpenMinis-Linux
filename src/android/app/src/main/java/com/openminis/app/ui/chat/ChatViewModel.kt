@@ -1334,6 +1334,20 @@ class ChatViewModel(
     internal val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
 
+    init {
+        // [T-android-auto-new-session] A compaction-triggered handoff leaves
+        // its summary here. Pre-fill the fresh draft so the task continues
+        // without the user having to reconstruct the previous context.
+        if (isDraft) {
+            com.openminis.app.data.AutoCompactPrefs.consumeHandoffSummary()?.let { summary ->
+                _inputText.value = buildString {
+                    append("继续上一会话未完成的任务。以下是上一会话的压缩摘要，请直接接着做，不要重复已完成的工作：\n\n")
+                    append(summary)
+                }
+            }
+        }
+    }
+
     /**
      * [T-android-slash-menu-align-ios-prepend] One-shot caret position the
      * composer should apply on the NEXT inputText emission, mirroring iOS
@@ -1914,6 +1928,10 @@ class ChatViewModel(
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)
     override val isCompacting: StateFlow<Boolean> = _isCompacting.asStateFlow()
+
+    /** Emits once when this session reaches its configured compaction limit. */
+    internal val _autoNewSessionEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val autoNewSessionEvent: SharedFlow<Unit> = _autoNewSessionEvent
 
     /**
      * [T-android-compact-progress] Live progress of the in-flight compaction.

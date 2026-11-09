@@ -84,7 +84,7 @@ object SecretPathGuard {
         appendLine("Error: blocked by SecretPathGuard — '$path' may contain credentials.")
         appendLine("Its contents were NOT read and are not in your context.")
         appendLine("If the value is needed, reference it through its environment variable")
-        appendLine("(e.g. use $VAR inside the command) instead of reading the file.")
+        appendLine("(e.g. use \$VAR inside the command) instead of reading the file.")
         append("If the user explicitly authorised this path in Settings, retry after that grant.")
     }
 }

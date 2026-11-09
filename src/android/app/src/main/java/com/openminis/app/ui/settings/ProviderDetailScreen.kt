@@ -561,7 +561,7 @@ fun ProviderDetailScreen(
                         isRefreshing = true
                         scope.launch {
                             try {
-                                val result = providerRepository.refreshModels(instance, forceRefresh = true, clearFirst = true)
+                                val result = providerRepository.refreshModels(instance, forceRefresh = true)
                                 ProviderRefreshMarks.record(exportContext, instance.id, result)
                                 refreshNote = ProviderRefreshMarks.get(exportContext, instance.id)
                                 AppLogger.info(TAG, "Refreshed models for ${instance.id}: $result")

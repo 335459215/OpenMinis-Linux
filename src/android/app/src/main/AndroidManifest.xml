@@ -170,15 +170,6 @@
         <!-- [T-android-privileged-backend] AXManager — same package-visibility
              need so PrivilegedBackend can detect/launch it under Android 11+. -->
         <package android:name="frb.axeron.manager" />
-        <!-- Crash-share dialog: ACTION_SENDTO mailto: needs explicit
-             visibility under Android 11+ before resolveActivity / startActivity
-             will return a real email-app candidate. Without it the
-             pre-flight resolveActivity always returns null and we fall
-             through to the generic share chooser. -->
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="mailto" />
-        </intent>
     </queries>
 
     <!-- [T-android-tablet-split] enableOnBackInvokedCallback (on <application>):

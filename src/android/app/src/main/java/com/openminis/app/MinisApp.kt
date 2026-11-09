@@ -549,8 +549,6 @@ class MinisApp : Application(), ImageLoaderFactory {
                 }
             }
             override fun onActivityResumed(activity: Activity) {
-                // T-android-crash-freq-share: one-shot share-logs dialog on first resume after a crash burst.
-                com.openminis.app.crash.CrashFrequencyDetector.maybeShowOnActivity(activity)
                 // T219-1: re-probe mounted-folder writability on resume so OS revocations propagate.
                 appCoroutineScopes.io.launch {
                     runCatching { mountedFoldersStore.refreshWritability() }

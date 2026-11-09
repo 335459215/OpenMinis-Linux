@@ -115,17 +115,6 @@ class MainActivity : ComponentActivity() {
      */
     private lateinit var settingsLauncher: ActivityResultLauncher<Intent>
 
-    /**
-     * State shuttled between the "Save to..." path of the safe-mode
-     * crash-share dialog and the `crashSaveLauncher` registered in
-     * [onCreate]. The lambda fires after the launcher's result callback
-     * completes so the caller (which passes `finish()` for safe-mode)
-     * can tear down the Activity once the file is on disk and the
-     * follow-on ACTION_VIEW has been dispatched.
-     */
-    private var pendingCrashZip: java.io.File? = null
-    private var pendingCrashSaveOnClosed: (() -> Unit)? = null
-
     // T-n01-andmenu-l10n: on Android 12 and below `LocaleManager.applicationLocales`
     // does not exist, so the saved language pick has no effect on framework
     // strings — including the labels of the system text-selection ActionMode
@@ -175,53 +164,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.openminis.app.ui.HighRefreshRate.apply(this)
 
-        // Register the crash-share "Save to..." launcher BEFORE the
-        // safe-mode early-return below — ActivityResultLauncher must be
-        // registered before STARTED, and the safe-mode path needs it.
-        // The launcher pairs with `pendingCrashZip` to copy the zip into
-        // whatever URI the user picked in the system file picker, then
-        // opens that URI with ACTION_VIEW so they see it land.
-        val crashSaveLauncher = registerForActivityResult(
-            ActivityResultContracts.StartActivityForResult()
-        ) { result ->
-            val targetUri = result.data?.data
-            val zip = pendingCrashZip
-            pendingCrashZip = null
-            if (result.resultCode != android.app.Activity.RESULT_OK || targetUri == null || zip == null) {
-                pendingCrashSaveOnClosed?.invoke()
-                pendingCrashSaveOnClosed = null
-                return@registerForActivityResult
-            }
-            try {
-                // Verify before opening: a provider that accepts the write but
-                // keeps the document empty must not look like success.
-                val saved = com.openminis.app.io.VerifiedCopy.copyFileToDocument(contentResolver, zip, targetUri)
-                if (!saved.ok) throw java.io.IOException(saved.reason.ifBlank { "save not verified" })
-                try {
-                    val view = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(targetUri, "application/zip")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(view)
-                } catch (t: Throwable) {
-                    android.util.Log.w("MainActivity", "ACTION_VIEW after save failed: ${t.message}")
-                }
-            } catch (t: Throwable) {
-                android.util.Log.w("MainActivity", "crash zip save failed: ${t.message}")
-            } finally {
-                pendingCrashSaveOnClosed?.invoke()
-                pendingCrashSaveOnClosed = null
-            }
-        }
-
         // Safe-mode short-circuit: if CrashFrequencyDetector tripped in MinisApp.onCreate (≥THRESHOLD recent crash files), the Application skipped all heavy init — no DB, no repos, no
-        // offload server. We must NOT call setContent() / ChatViewModel / any code that touches MinisApp's lateinit deps; doing so would throw UninitializedPropertyAccessException and overwrite the
-        // very crash logs we're trying to ship.
+        // offload server. We must NOT call setContent() / ChatViewModel / any code that touches MinisApp's lateinit deps; doing so would throw UninitializedPropertyAccessException.
         //
-        // Pop the share/dismiss dialog directly and finish() on close so the user's next launch starts fresh. The dialog UI uses AlertDialog (system-level) which doesn't touch MinisApp state.
+        // The recovery screen is shown in-process: it is safe to compose because it touches none of MinisApp's lateinit state, and restarting there clears the safe-mode flag so the following
+        // launch scans clean and boots normally.
         // T-android-safemode-lateinit-crash: gate on the Application's own "did init actually run" flag, NOT on isSafeMode(). The two are not equivalent, and the difference was a hard crash loop:
-        // finishClose() sets safe-mode back to false as soon as the user dismisses the share dialog, but MinisApp.onCreate already early-returned and never re-runs for the life of the process.
+        // Clearing safe mode must not make compose safe until MinisApp has finished initialization for this process.
         // Any MainActivity created after that dismissal (launcher icon — including the MainActivityIconDark alias — notification tap, or MIUI restoring the task) therefore sailed past the old
         // isSafeMode() check and hit `app.chatRepository` inside setContent(), throwing UninitializedPropertyAccessException on the first Compose frame (onAttachedToWindow →
         // setOnViewTreeOwnersAvailable). That crash wrote another crash-*.log, which re-tripped the burst detector on the next launch — a self-sustaining loop the user could not escape.
@@ -234,9 +183,7 @@ class MainActivity : ComponentActivity() {
         // [T-android-downgrade-compat] A database written by a NEWER build is
         // not a crash — it is a recoverable state with a specific remedy, and
         // the file has deliberately been left untouched. Handle it before the
-        // generic crash-share path below, which would otherwise ask the user to
-        // send a bug report for something that is not a bug and offer no way
-        // out.
+        // generic recovery path below.
         if (minisApp != null &&
             minisApp.dbVersionDecision ==
             com.openminis.app.data.db.DatabaseVersionGuard.Decision.SHOW_NEWER_DB_GUIDANCE
@@ -254,55 +201,29 @@ class MainActivity : ComponentActivity() {
                     "${com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()}" +
                     ", cause=$initFailure) — showing recovery UI",
             )
-            // [T-android-startup-splash-hang] Read BEFORE maybeShowOnActivity, which consumes and clears it.
+            // [T-android-startup-splash-hang] This branch always sets content.
             //
-            // An init failure is caught and logged, never written as a crash file, so pendingShareFiles is essentially always null on this
-            // path — and maybeShowOnActivity invokes onClosed *synchronously* when there is nothing to share. onClosed is finishAndRestartProcess(): a 1.2s Toast, finish(), killProcess.
-            // Since this branch also `return`s without setContent, the Activity had no content at all: white system splash, then a content-less
-            // window going black, then the process gone. Application.onCreate never re-runs and the cause is usually deterministic, so every
-            // tap repeated it — "stuck on the splash, then a black screen", with no reason shown and no in-app way out.
-            //
-            // When there IS a crash burst the existing dialog is strictly better
-            // (it ships logs), so that path is unchanged.
-            if (com.openminis.app.crash.CrashFrequencyDetector.pendingShareFiles == null) {
-                setContent {
-                    com.openminis.app.ui.StartupFailureScreen(
-                        reason = initFailure,
-                        onRestart = { finishAndRestartProcess() },
-                    )
-                }
-                return
+            // The previous flow returned without content here, which produced a
+            // white system splash, then a content-less black window, then a
+            // dead process. Application.onCreate never re-runs and the cause
+            // is usually deterministic, so every tap repeated it — "stuck on
+            // the splash, then a black screen", with no reason shown and no
+            // in-app way out. Now there is exactly one exit: the recovery
+            // screen, which names the cause and restarts on demand.
+            setContent {
+                com.openminis.app.ui.StartupFailureScreen(
+                    reason = initFailure,
+                    onRestart = {
+                        // Clear the safe-mode flag first: this process died
+                        // before subsystem init, and a fresh boot re-runs
+                        // checkAtLaunch, which now scans against the
+                        // checkpointed burst timestamp — without an explicit
+                        // clear the recovery screen would appear forever.
+                        com.openminis.app.crash.CrashFrequencyDetector.clearSafeMode()
+                        finishAndRestartProcess()
+                    },
+                )
             }
-            com.openminis.app.crash.CrashFrequencyDetector.maybeShowOnActivity(
-                activity = this,
-                // T-android-safemode-lateinit-crash: plain finish() here is a
-                // dead end on the second launch. maybeShowOnActivity invokes
-                // onClosed immediately when pendingShareFiles is null, which
-                // is exactly the state after the user dismissed the dialog on
-                // the previous launch — the app would close the instant it was
-                // tapped, reading as "Minis won't open at all". The process
-                // still holds a permanently uninitialized Application, so the
-                // only real recovery is a fresh process: tell the user, then
-                // exit hard so the next tap gets a clean init.
-                onClosed = { finishAndRestartProcess() },
-                saveLauncher = { zip, onSaveDone ->
-                    pendingCrashZip = zip
-                    pendingCrashSaveOnClosed = onSaveDone
-                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "application/zip"
-                        putExtra(Intent.EXTRA_TITLE, zip.name)
-                    }
-                    try {
-                        crashSaveLauncher.launch(intent)
-                    } catch (t: Throwable) {
-                        android.util.Log.w("MainActivity", "CREATE_DOCUMENT launch failed: ${t.message}")
-                        pendingCrashZip = null
-                        pendingCrashSaveOnClosed = null
-                        onSaveDone()
-                    }
-                },
-            )
             return
         }
 
