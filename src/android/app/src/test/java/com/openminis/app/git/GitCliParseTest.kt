@@ -497,6 +497,18 @@ class GitCliParseTest {
     }
 
     @Test
+    fun `branches drop symbolic refs like origin HEAD aliases`() {
+        val out = "abc1234\u001fmain\u001fFix parser bug\u001f\n" +
+            "def5678\u001forigin\u001fwhatever\u001frefs/remotes/origin/main\n" +
+            "987fedc\u001forigin/main\u001fFix parser bug\u001f\n"
+        val list = GitCli.parseBranches(out, current = "main")
+        // The `origin` symbolic-ref row is skipped; plain rows survive.
+        assertEquals(2, list.size)
+        assertEquals("main", list[0].name)
+        assertEquals("origin/main", list[1].name)
+    }
+
+    @Test
     fun `branches empty output and blank current yield empty list`() {
         assertTrue(GitCli.parseBranches("", "").isEmpty())
         assertTrue(GitCli.parseBranches("fatal: not a repo\n", "main").isEmpty())
