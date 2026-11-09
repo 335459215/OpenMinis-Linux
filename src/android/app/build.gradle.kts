@@ -125,7 +125,7 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = 26
         targetSdk = 35
-        versionCode = 290
+        versionCode = 291
         // [T-rolling-version] Rolling builds (push to main) carry the merge PR
         // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
         // be traced back to the change that produced it. Tag/release builds keep
@@ -386,6 +386,51 @@ val copyBashismRules by tasks.registering(Copy::class) {
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
     .configureEach { dependsOn(copyBashismRules) }
 tasks.named("preBuild") { dependsOn(copyBashismRules) }
+
+// [T-jnilibs-proot-guard] deps/build_proot.sh writes the PRoot executable to
+// jniLibs/arm64-v8a/libproot.so, and nativeLibraryDir is the ONLY location
+// Android will exec from — untrusted_app W^X rejects filesDir even after
+// chmod +x. RootfsManager.installProotIfNeeded() only *verifies* the file; it
+// has no extraction fallback, so an APK built without it installs cleanly and
+// then every shell command dies with "PRoot binary not found" (2.0.90-test
+// shipped exactly like that, and the failure took the whole sandbox down:
+// shell_execute, su_exec, ui_read, agent_terminal, background_job and every
+// MCP server all route through PRoot). Fail the build instead of shipping it.
+val verifyProotJniLibs by tasks.registering {
+    group = "verification"
+    description = "Fails the build when the PRoot jniLibs triplet is missing."
+    val libsDir = layout.projectDirectory.dir("src/main/jniLibs/arm64-v8a")
+    inputs.dir(libsDir).optional()
+    outputs.upToDateWhen { false }
+    doLast {
+        val required = listOf(
+            "libproot.so",
+            "libproot-loader.so",
+            "libproot-loader32.so",
+        )
+        val missing = required.map { libsDir.file(it).asFile }
+            .filter { !it.isFile || it.length() == 0L }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("PRoot jniLibs incomplete — refusing to package a brick.")
+                    missing.forEach { appendLine("  missing: ${it.path}") }
+                    appendLine("Run deps/build_proot.sh (NDK r29) and rebuild.")
+                },
+            )
+        }
+    }
+}
+// The guard hangs off the merge*JniLibFolders tasks only — those run for every
+// assembling/bundling variant, which is exactly when a missing binary would end
+// up inside an APK. Earlier it also hung off `preBuild`, which made every task
+// in the build graph require the file: pr-check.yml compiles Kotlin without
+// packaging, and libproot.so is deliberately NOT committed (deps/build_proot.sh
+// or the native-deps artifact supplies it), so that job could never pass. The
+// brick protection is unchanged: nothing can reach an APK without crossing a
+// merge*JniLibFolders task.
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }
+    .configureEach { dependsOn(verifyProotJniLibs) }
 
 dependencies {
     implementation(project(":core:model"))

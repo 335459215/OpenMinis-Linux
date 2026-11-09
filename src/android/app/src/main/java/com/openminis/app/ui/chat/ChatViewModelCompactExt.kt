@@ -182,6 +182,7 @@ private inline fun ChatViewModel.compactAllImpl(
         // the queued-prompt drain below; failure/cancel/empty-summary paths
         // keep today's behavior (queued bubbles stay pending + cancellable).
         var compactSucceeded = false
+        var lastSummary = ""
         // Distinguishes "we gave up on time" from other failures so the
         // user-facing message can say so and invite a retry.
         var timedOut = false
@@ -193,6 +194,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 stages = stages,
                 timeoutMs = timeoutMs,
             )
+            lastSummary = summary
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -472,6 +474,15 @@ private inline fun ChatViewModel.compactAllImpl(
         if (compactSucceeded && _promptQueue.value.isNotEmpty()) {
             AppLogger.info(ChatViewModel.TAG, "[Compact] success with ${_promptQueue.value.size} queued prompt(s) — kicking drain")
             resumeQueueAfterCancel()
+        }
+        if (compactSucceeded &&
+            com.openminis.app.data.AutoCompactPrefs.recordCompaction(sessionId)
+        ) {
+            AppLogger.info(ChatViewModel.TAG, "[Compact] session reached auto-new-session threshold")
+            if (lastSummary.isNotBlank()) {
+                com.openminis.app.data.AutoCompactPrefs.saveHandoffSummary(lastSummary)
+            }
+            _autoNewSessionEvent.tryEmit(Unit)
         }
     }
 }

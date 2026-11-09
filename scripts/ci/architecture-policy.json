@@ -108,7 +108,6 @@
     "src/android/app/src/main/java"
   ],
   "baseline": {
-    "src/android/app/src/main/java/com/openminis/app/MainActivity.kt": 849,
     "src/android/app/src/main/java/com/openminis/app/agent/PersonaPromptLibrary.kt": 858,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupExporter.kt": 815,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1166,
@@ -118,7 +117,7 @@
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 1212,
     "src/android/app/src/main/java/com/openminis/app/crash/CrashFrequencyDetector.kt": 916,
     "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1368,
-    "src/android/app/src/main/java/com/openminis/app/data/repository/ProviderRepository.kt": 1522,
+    "src/android/app/src/main/java/com/openminis/app/data/repository/ProviderRepository.kt": 1521,
     "src/android/app/src/main/java/com/openminis/app/data/repository/SkillRepository.kt": 2321,
     "src/android/app/src/main/java/com/openminis/app/debug/DebugMethodRegistry.kt": 878,
     "src/android/app/src/main/java/com/openminis/app/debug/DebugRPCHandler.kt": 1423,
@@ -141,9 +140,9 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 1225,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatMiscViews.kt": 883,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": 822,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 5599,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatScreen.kt": 5566,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatToolDetailUI.kt": 1474,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6210,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 6201,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelAgentLoopExt.kt": 1991,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelGroupChatExt.kt": 813,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelSubAgentExt.kt": 1047,

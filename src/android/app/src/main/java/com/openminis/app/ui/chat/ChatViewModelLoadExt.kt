@@ -148,12 +148,10 @@ internal fun ChatViewModel.loadSession() {
     // detection must not re-show the banner over the fresh turn.
     val loadResumeEpoch = snapshotResumeEpoch()
     // T-android-crash-detected-halt: when CrashFrequencyDetector
-    // tripped (#459, ≥3 crashes in last hour), skip the heavy
+    // tripped (THRESHOLD+ crashes in the last hour), skip the heavy
     // session-restore path entirely. Re-running the same persisted
     // state is exactly what produced the burst, so we'd just feed
-    // a re-crash loop while the user is staring at the share dialog.
-    // The flag clears the moment the dialog closes (share / dismiss /
-    // cancel) — see CrashFrequencyDetector.maybeShowOnActivity.
+    // a re-crash loop while safe-mode recovery remains active.
     if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
         android.util.Log.w(ChatViewModel.TAG, "loadSession: safe-mode active, skipping session restore")
         // [T-android-perf-logging] Surface the skip on the Perf timeline

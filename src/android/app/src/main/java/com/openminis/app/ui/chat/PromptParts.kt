@@ -30,6 +30,7 @@ internal object PromptParts {
         "runtime/in_flight",
         "runtime/jobs",
         "runtime/plan_board",
+        "runtime/hook",
         "runtime/recall",
     )
 
@@ -45,6 +46,7 @@ internal object PromptParts {
         PromptPart("runtime/in_flight", PromptLevel.TOOL_ENFORCED) { vm.inFlightLanesPrompt() },
         PromptPart("runtime/jobs", PromptLevel.TOOL_ENFORCED) { vm.backgroundJobsPrompt() },
         PromptPart("runtime/plan_board", PromptLevel.TOOL_ENFORCED) { vm.planBoardPrompt() },
+        PromptPart("runtime/hook", PromptLevel.EXTERNAL) { vm.externalHookPrompt() },
         PromptPart("runtime/recall", PromptLevel.EXTERNAL) { vm.liveRecallPrompt() },
     )
 

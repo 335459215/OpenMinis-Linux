@@ -48,6 +48,9 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
  */
 internal fun ChatViewModel.liveRecallPrompt(): String? {
     if (!_memoryEnabled.value) return null
+    // [T-runtime-hook] A local before_prompt hook may already provide a
+    // richer memory block. Do not duplicate it with the built-in recall.
+    if (!externalHookPromptCache.isNullOrBlank()) return null
     val recentUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
     val recentAssistant = _messages.value
         .lastOrNull { it.role == "assistant" }

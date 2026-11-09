@@ -170,15 +170,6 @@
         <!-- [T-android-privileged-backend] AXManager — same package-visibility
              need so PrivilegedBackend can detect/launch it under Android 11+. -->
         <package android:name="frb.axeron.manager" />
-        <!-- Crash-share dialog: ACTION_SENDTO mailto: needs explicit
-             visibility under Android 11+ before resolveActivity / startActivity
-             will return a real email-app candidate. Without it the
-             pre-flight resolveActivity always returns null and we fall
-             through to the generic share chooser. -->
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="mailto" />
-        </intent>
     </queries>
 
     <!-- [T-android-tablet-split] enableOnBackInvokedCallback (on <application>):
@@ -730,6 +721,54 @@
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
+
+        <!-- [A2A] Local Agent2API gateway panel. The service binary is
+             liba2a_server.so in jniLibs; this activity is the only UI shell. -->
+        <activity
+            android:name=".a2a.A2aPanelActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true"
+            android:theme="@style/Theme.Minis">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="a2a"
+                    android:scheme="minis" />
+            </intent-filter>
+        </activity>
+
+        <!-- [A2A] 网关保活 + 悬浮小球。前台服务挂在 app 进程上：
+             Minis 活着，网关与插件子进程就不会被当成后台空闲回收。 -->
+        <service
+            android:name=".a2a.A2aKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local Agent2API gateway keep-alive: keeps a loopback-only HTTP gateway and its provider plugin processes reachable for the on-device agent while the user has it enabled." />
+        </service>
+
+        <!-- [A2A] 隔离登录容器：每次登录都是全新 Cookie/Storage 环境 + 桌面 UA。
+             横屏是刻意的 —— 授权页（Google/微软/各家发卡方）的桌面版排版
+             在竖屏窄屏下会横向溢出，横屏才有可用的表单宽度。
+             resizeableActivity=false：不让系统把横屏页面塞进分屏/自由窗口，
+             否则版面又会被压回竖屏宽度。 -->
+        <activity
+            android:name=".a2a.A2aLoginActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:exported="false"
+            android:label="Agent2API 登录"
+            android:resizeableActivity="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Minis"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".a2a.A2aSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Minis" />
 
     </application>
 </manifest>

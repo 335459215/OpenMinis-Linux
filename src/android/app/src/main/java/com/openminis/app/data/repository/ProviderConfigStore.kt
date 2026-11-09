@@ -406,10 +406,16 @@ internal class ProviderConfigStore(
      * has to be kept in sync with reality.
      */
     private fun purgeRetiredBuiltInLaneFiles() {
-        runCatching { File(context.filesDir, "builtin-plugins/a2a").deleteRecursively() }
+        // [A2A-data-guard] 这一版重新内置了 Agent2API 网关（见 app/a2a/），
+        // 所以 `builtin-plugins/a2a` 不再是「退役 lane 的残留」。
+        // 原来这里无条件 deleteRecursively()，会在每次启动时把网关的
+        // agent2api.db、account.key 和插件包一起删掉 —— 用户加好的账号
+        // 每次重启都归零。目录本身由 a2a 模块自己管理，这里不再动它。
         runCatching {
             val legacy = context.getSharedPreferences("a2a_gateway", Context.MODE_PRIVATE)
-            if (legacy.all.isNotEmpty()) legacy.edit().clear().apply()
+            if (legacy.all.isNotEmpty() && !legacy.getBoolean("keep", false)) {
+                legacy.edit().clear().apply()
+            }
         }
     }
 

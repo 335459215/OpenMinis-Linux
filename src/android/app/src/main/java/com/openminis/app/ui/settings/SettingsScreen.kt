@@ -41,12 +41,15 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.runtime.Composable
@@ -127,6 +131,17 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showFeedbackSheet by remember { mutableStateOf(false) }
+    var showCompactThresholdDialog by remember { mutableStateOf(false) }
+    var compactThreshold by remember {
+        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.thresholdPercent())
+    }
+    var autoNewSessionEnabled by remember {
+        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.autoNewSessionEnabled())
+    }
+    var autoNewSessionThreshold by remember {
+        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.autoNewSessionThreshold())
+    }
+    var showAutoNewSessionDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -165,6 +180,20 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
                     onClick = onUsageClick,
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Tune,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.settings_a2a_gateway),
+                    subtitle = stringResource(R.string.settings_a2a_gateway_subtitle),
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(
+                                context,
+                                com.openminis.app.a2a.A2aSettingsActivity::class.java,
+                            ),
+                        )
+                    },
                     showDivider = false,
                 )
             }
@@ -245,6 +274,42 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.plugin_market_subtitle),
                     onClick = onPluginMarketClick,
                 )
+                SettingsRow(
+                    icon = Icons.Outlined.Tune,
+                    iconColor = IosTeal,
+                    title = stringResource(R.string.settings_compact_threshold),
+                    subtitle = stringResource(R.string.settings_compact_threshold_subtitle),
+                    trailing = { Text("$compactThreshold%") },
+                    onClick = { showCompactThresholdDialog = true },
+                )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_auto_new_session),
+                    subtitle = stringResource(R.string.settings_auto_new_session_subtitle),
+                    checked = autoNewSessionEnabled,
+                    onCheckedChange = { enabled ->
+                        autoNewSessionEnabled = enabled
+                        com.openminis.app.data.AutoCompactPrefs.setAutoNewSessionEnabled(context, enabled)
+                    },
+                    icon = Icons.Outlined.Refresh,
+                    iconColor = IosTeal,
+                )
+                if (autoNewSessionEnabled) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Repeat,
+                        iconColor = IosTeal,
+                        title = stringResource(R.string.settings_auto_new_session_threshold),
+                        subtitle = stringResource(R.string.settings_auto_new_session_threshold_subtitle),
+                        trailing = {
+                            Text(
+                                stringResource(
+                                    R.string.settings_auto_new_session_times,
+                                    autoNewSessionThreshold,
+                                ),
+                            )
+                        },
+                        onClick = { showAutoNewSessionDialog = true },
+                    )
+                }
                 SettingsRow(
                     icon = Icons.Outlined.Terminal,
                     iconColor = IosGreen,
@@ -398,6 +463,82 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (showCompactThresholdDialog) {
+        AlertDialog(
+            onDismissRequest = { showCompactThresholdDialog = false },
+            title = { Text(stringResource(R.string.settings_compact_threshold)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.settings_compact_threshold_dialog_body))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "$compactThreshold%",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Slider(
+                        value = compactThreshold.toFloat(),
+                        onValueChange = { compactThreshold = it.toInt().coerceIn(50, 95) },
+                        valueRange = 50f..95f,
+                        steps = 44,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    com.openminis.app.data.AutoCompactPrefs.setThresholdPercent(context, compactThreshold)
+                    showCompactThresholdDialog = false
+                }) { Text(stringResource(R.string.common_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCompactThresholdDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
+    if (showAutoNewSessionDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoNewSessionDialog = false },
+            title = { Text(stringResource(R.string.settings_auto_new_session_threshold)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.settings_auto_new_session_dialog_body))
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.settings_auto_new_session_times,
+                            autoNewSessionThreshold,
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Slider(
+                        value = autoNewSessionThreshold.toFloat(),
+                        onValueChange = {
+                            autoNewSessionThreshold = it.toInt().coerceIn(1, 3)
+                        },
+                        valueRange = 1f..3f,
+                        steps = 1,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    com.openminis.app.data.AutoCompactPrefs
+                        .setAutoNewSessionThreshold(context, autoNewSessionThreshold)
+                    showAutoNewSessionDialog = false
+                }) { Text(stringResource(R.string.common_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoNewSessionDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 
     if (showFeedbackSheet) {

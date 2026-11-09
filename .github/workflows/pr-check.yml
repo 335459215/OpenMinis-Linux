@@ -89,6 +89,78 @@ jobs:
           /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
             "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
 
+      # setup-java's `cache: gradle` only persists ~/.gradle/caches. The wrapper
+      # distribution lives in ~/.gradle/wrapper/dists and was re-fetched on every
+      # job, which is what actually killed this workflow: the wrapper's own
+      # download has a hard timeout and a single stalled read on a cold runner
+      # aborted with `Downloading gradle-8.11.1-bin.zip failed: timeout (10000ms)`
+      # before Kotlin ever compiled. Two defences, because a cache miss must not
+      # be a build failure:
+      #   1. cache the dists dir keyed on the wrapper properties (URL + timeout),
+      #      so a real version bump misses and nothing stale is restored;
+      #   2. warm the distribution through the wrapper itself with retries, so a
+      #      transient network blip costs a retry instead of the whole run.
+      - name: Restore Gradle wrapper distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: prcheck-gradle-wrapper-${{ runner.os }}-${{ hashFiles('src/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            prcheck-gradle-wrapper-${{ runner.os }}-
+
+      - name: Warm Gradle wrapper
+        working-directory: src/android
+        run: |
+          set -e
+          chmod +x gradlew
+          if ./gradlew --version >/dev/null 2>&1; then
+            echo "wrapper distribution ready (cache hit)"
+            exit 0
+          fi
+
+          # services.gradle.org answers 307 -> github.com/gradle/gradle-distributions/
+          # releases/..., and that GitHub endpoint intermittently answers 504. It is
+          # the same outage that broke plugin resolution for kotlin-compiler-embeddable,
+          # so retrying it three times just burns 30s on a failure that will not clear.
+          # One retry covers ordinary jitter; past that, pull the byte-identical zip
+          # from a mirror instead of hammering GitHub.
+          #
+          # distributionUrl is rewritten in the workspace copy only. The repo keeps the
+          # official URL on purpose (gradle-wrapper.properties: "do not commit a pin"),
+          # so nothing here reaches git.
+          PROPS=gradle/wrapper/gradle-wrapper.properties
+          OFFICIAL=$(sed -n 's/^distributionUrl=//p' "$PROPS" | sed 's/\\:/:/g')
+          DIST=$(basename "${OFFICIAL%%\?*}")
+
+          if ./gradlew --version >/dev/null 2>&1; then
+            echo "wrapper distribution ready (retry)"
+            exit 0
+          fi
+
+          for MIRROR in \
+            "https://mirrors.cloud.tencent.com/gradle" \
+            "https://mirrors.huaweicloud.com/gradle" \
+            "https://mirrors.aliyun.com/macports/distfiles/gradle"
+          do
+            URL="$MIRROR/$DIST"
+            echo "official source unreachable, trying $URL"
+            if ! curl -fsSL -m 60 -o /dev/null "$URL"; then
+              echo "  not available at $MIRROR"
+              continue
+            fi
+            ESCAPED=$(printf '%s' "$URL" | sed 's/:/\\:/g')
+            sed -i "s|^distributionUrl=.*|distributionUrl=$ESCAPED|" "$PROPS"
+            if ./gradlew --version >/dev/null 2>&1; then
+              echo "wrapper distribution ready (mirror $MIRROR)"
+              exit 0
+            fi
+            ESCAPED_OFFICIAL=$(printf '%s' "$OFFICIAL" | sed 's/:/\\:/g')
+            sed -i "s|^distributionUrl=.*|distributionUrl=$ESCAPED_OFFICIAL|" "$PROPS"
+          done
+
+          echo "wrapper distribution could not be fetched from any source" >&2
+          exit 1
+
       - name: Compile Kotlin (release variant)
         working-directory: src/android
         env:

@@ -541,9 +541,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break
                 }
+                val agentHistory = effectiveAgentHistory()
+                refreshExternalHookPrompt(
+                    agentHistory.lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty()
+                )
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     withGoalAndPlanContext(
-                    effectiveAgentHistory(),
+                    agentHistory,
                     goalMount.prompt,
                     appendNewUser = goalExecutionRun && turn == 0,
                 ).let { history ->
@@ -1576,6 +1580,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val persistedId = persistAssistantTurnForRun(
                 checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
             )
+            notifyAfterTurnHooks(
+                effectiveAgentHistory().lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty(),
+                accumulatedText,
+            )
             if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
             // [T-error-persist-android] Empty-response hint: the model ended a
             // turn (finish=stop/end_turn) with no visible text anywhere in the
@@ -1979,13 +1987,5 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     }
     // [T-context-ring] Refresh the live token ring after the turn settles.
     refreshContextUsage()
-    // [T-android-tts-scene-announcements] Loop converged — announce to the
-    // user if they opted in (scene pref, default off). The sink is owned by
-    // the UI layer; every failure mode (no engine bound, engine not yet
-    // initialized, pref off) is swallowed inside the coordinator.
-    runCatching {
-        val sink = announcementSink ?: return@runCatching
-        com.openminis.app.speech.VoiceAnnouncementCoordinator(sink)
-            .onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE)
-    }
+    announceAgentIdle()
 }
