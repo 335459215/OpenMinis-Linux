@@ -89,6 +89,41 @@ jobs:
           /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
             "platforms;${ANDROID_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}"
 
+      # setup-java's `cache: gradle` only persists ~/.gradle/caches. The wrapper
+      # distribution lives in ~/.gradle/wrapper/dists and was re-fetched on every
+      # job, which is what actually killed this workflow: the wrapper's own
+      # download has a hard timeout and a single stalled read on a cold runner
+      # aborted with `Downloading gradle-8.11.1-bin.zip failed: timeout (10000ms)`
+      # before Kotlin ever compiled. Two defences, because a cache miss must not
+      # be a build failure:
+      #   1. cache the dists dir keyed on the wrapper properties (URL + timeout),
+      #      so a real version bump misses and nothing stale is restored;
+      #   2. warm the distribution through the wrapper itself with retries, so a
+      #      transient network blip costs a retry instead of the whole run.
+      - name: Restore Gradle wrapper distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/wrapper/dists
+          key: prcheck-gradle-wrapper-${{ runner.os }}-${{ hashFiles('src/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            prcheck-gradle-wrapper-${{ runner.os }}-
+
+      - name: Warm Gradle wrapper
+        working-directory: src/android
+        run: |
+          set -e
+          chmod +x gradlew
+          for attempt in 1 2 3; do
+            if ./gradlew --version >/dev/null 2>&1; then
+              echo "wrapper distribution ready (attempt $attempt)"
+              exit 0
+            fi
+            echo "wrapper fetch failed (attempt $attempt), retrying in 10s"
+            sleep 10
+          done
+          echo "wrapper distribution could not be fetched after 3 attempts" >&2
+          exit 1
+
       - name: Compile Kotlin (release variant)
         working-directory: src/android
         env:
