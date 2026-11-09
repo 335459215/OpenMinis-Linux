@@ -58,4 +58,34 @@
     <string name="add_provider_oauth_desc_xai">Sign in with xAI (requires SuperGrok or X Premium+)</string>
     <string name="add_provider_oauth_desc_openrouter">Sign in with OpenRouter</string>
     <string name="add_provider_oauth_desc_kimicode">Sign in with your Kimi account (Coding Plan)</string>
+
+    <!-- [FIX-R2-16] Provider list: persistent state banner while the provider
+         configuration cannot be loaded — config-protected mutations are
+         locked until a load succeeds (state in ProviderRepository). -->
+    <string name="provider_list_config_load_failed_banner">Provider configuration failed to load. Changes are locked until the app can read it again — try a provider action to retry.</string>
+
+    <!-- [T-android-vscreen-tier] Read-only tier states on the permissions
+         screen; the reason lines come verbatim from the probes. -->
+    <string name="perm_section_vscreen_tiers">Virtual Screen Tiers</string>
+    <string name="perm_vscreen_tiers_footer">The agent-owned virtual screens pick the best available tier: root (privileged display), Shizuku (public display), or the in-app fallback. Granting a higher tier upgrades new screens automatically; live screens are never migrated.</string>
+    <string name="perm_vscreen_tier_root">Root (SU / KSU)</string>
+    <string name="perm_vscreen_tier_shizuku">Shizuku (public display)</string>
+    <string name="perm_vscreen_tier_native">In-app (fallback)</string>
+    <string name="perm_vscreen_tier_ready">Ready</string>
+    <string name="perm_vscreen_tier_degraded">Temporarily unavailable</string>
+    <string name="perm_vscreen_tier_unknown">Not probed yet — create a virtual screen to probe</string>
+    <!-- [T-export-credential-option] Shown when a shared provider export
+         contained nothing because credentials were stripped and no config
+         remained. -->
+    <string name="provider_share_no_credentials">Nothing to share: credentials are excluded from shared exports. Use the encrypted backup to move keys.</string>
+    <!-- [T-cot-translate] Reasoning-translation UI strings. -->
+    <string name="cot_translate_show_translation">Translate</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Translation unavailable — tap to retry</string>
+    <string name="cot_translate_settings_header">Reasoning translation</string>
+    <string name="cot_translate_settings_enabled">Enable reasoning translation</string>
+    <string name="cot_translate_settings_provider">Provider</string>
+    <string name="cot_translate_settings_language">Target language</string>
+    <string name="cot_translate_privacy_notice">Expanded reasoning is sent to the selected translation service. It may contain private code or conversation details.</string>
+    <string name="cot_translate_anonymous_notice">Bing and Google need no translation login or API key. Their anonymous endpoints may reject or limit requests.</string>
 </resources>

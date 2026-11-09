@@ -2022,4 +2022,46 @@
     <string name="chat_revert_banner_files">%1$d (na) file ang naibalik</string>
     <string name="chat_revert_banner_hint">Magpadala ng mensahe para panatilihin ito, o i-undo ang pag-ibalik.</string>
     <string name="chat_revert_banner_undo">I-undo</string>
+    <string name="model_group_detail_first_token_timeout">Timeout ng unang token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Pinakamataas na segundo ng paghihintay sa unang token bago lumipat sa reserba. Blangko = default (chat 45 s, pangangatwiran 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Default (chat 45 s / pangangatwiran 90 s)</string>
+    <string name="model_group_detail_member_weights">Timbang ng mga miyembro</string>
+    <string name="model_group_detail_member_weights_footer">Kinokontrol ang weighted na pagruruta: mas mataas ang timbang, mas madalas mapili. Neutral ang 1.</string>
+    <string name="model_group_detail_weight_decrease">Bawasan ang timbang</string>
+    <string name="model_group_detail_weight_increase">Dagdagan ang timbang</string>
+    <string name="model_group_detail_quota_window_footer">Nagsisilbi ang pangunahing miyembro hanggang maubos ang mga pagpapadala sa window, pagkatapos ay sasalo ang reserba hanggang mag-reset. Ang pag-edit ng anumang halaga ay agad na nagre-reset ng window.</string>
+    <string name="model_group_detail_quota_total_placeholder">Mga pagpapadala bawat window</string>
+    <string name="model_group_detail_quota_period_placeholder">Haba ng window (oras)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Na-reset ang window ng quota — muling nagsisilbi ang pangunahing miyembro</string>
+    <string name="model_group_detail_quota_window_remaining">Natitira sa window na ito: %1$d pagpapadala</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Isalin</string>
+    <string name="cot_translate_show_original">Orihinal</string>
+    <string name="cot_translate_failed">Hindi available ang pagsasalin — i-tap upang subukan muli</string>
+    <string name="cot_translate_settings_header">Pagsasalin ng pangangatwiran</string>
+    <string name="cot_translate_settings_enabled">Paganahin ang pagsasalin ng pangangatwiran</string>
+    <string name="cot_translate_settings_provider">Provider</string>
+    <string name="cot_translate_settings_language">Target na wika</string>
+    <string name="cot_translate_privacy_notice">Ang pinalawak na pangangatwiran ay ipinapadala sa napiling serbisyo ng pagsasalin. Maaari itong maglaman ng pribadong code o mga detalye ng pag-uusap.</string>
+    <string name="cot_translate_anonymous_notice">Hindi kailangan ng Bing at Google ng pag-login o API key. Maaaring tanggihan o limitahan ng kanilang mga anonymous na endpoint ang mga kahilingan.</string>
+    <string name="git_panel_staged">Naka-stage</string>
+    <string name="git_panel_changes_section">Mga pagbabago</string>
+    <string name="git_panel_stats_files">%1$d na file ang nabago</string>
+    <string name="git_panel_untracked_badge">bago</string>
+    <string name="git_panel_search_history">Maghanap ng mga commit</string>
+    <string name="git_panel_search_no_match">Walang tumutugmang commit</string>
+    <string name="git_panel_no_identity">Hindi naka-configure ang Git identity; gagamitin ng mga commit ang default ng system</string>
+    <string name="git_panel_commit_files">Mga nabagong file (%1$d)</string>
+    <string name="git_panel_copy_hash">Kopyahin ang hash</string>
+    <string name="git_panel_author_label">May-akda</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Nakapag-commit</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Mga stash</string>
+    <string name="git_panel_push">Push</string>
+    <string name="git_panel_pull">Pull</string>
+    <string name="git_panel_no_upstream">Walang upstream — magtatanong ang push</string>
+    <string name="git_panel_no_branches">Walang branches</string>
+    <string name="git_panel_no_stashes">Walang stash</string>
+    <string name="git_panel_switch_branch">Lumipat ng branch</string>
 </resources>

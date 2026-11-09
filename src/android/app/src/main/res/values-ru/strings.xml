@@ -2030,4 +2030,46 @@
     <string name="chat_revert_banner_files">Восстановлено файлов: %1$d</string>
     <string name="chat_revert_banner_hint">Отправьте сообщение, чтобы сохранить, или отмените откат.</string>
     <string name="chat_revert_banner_undo">Отменить</string>
+    <string name="model_group_detail_first_token_timeout">Тайм-аут первого токена</string>
+    <string name="model_group_detail_first_token_timeout_footer">Максимальное время ожидания первого токена в секундах, затем переход на резерв. Пусто = по умолчанию (чат 45 с, рассуждение 90 с).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">По умолчанию (чат 45 с / рассуждение 90 с)</string>
+    <string name="model_group_detail_member_weights">Веса участников</string>
+    <string name="model_group_detail_member_weights_footer">Управляет взвешенной маршрутизацией: чем выше вес, тем чаще выбор. 1 — нейтрально.</string>
+    <string name="model_group_detail_weight_decrease">Уменьшить вес</string>
+    <string name="model_group_detail_weight_increase">Увеличить вес</string>
+    <string name="model_group_detail_quota_window_footer">Основной участник отвечает, пока не исчерпаны отправки окна, затем резерв берёт управление до сброса. Изменение любого значения сбрасывает окно.</string>
+    <string name="model_group_detail_quota_total_placeholder">Отправок за окно</string>
+    <string name="model_group_detail_quota_period_placeholder">Длина окна (часы)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Окно квоты сброшено — основной участник снова отвечает</string>
+    <string name="model_group_detail_quota_window_remaining">Осталось в этом окне: %1$d</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Перевести</string>
+    <string name="cot_translate_show_original">Оригинал</string>
+    <string name="cot_translate_failed">Перевод недоступен — нажмите, чтобы повторить</string>
+    <string name="cot_translate_settings_header">Перевод рассуждений</string>
+    <string name="cot_translate_settings_enabled">Включить перевод рассуждений</string>
+    <string name="cot_translate_settings_provider">Провайдер</string>
+    <string name="cot_translate_settings_language">Целевой язык</string>
+    <string name="cot_translate_privacy_notice">Развёрнутые рассуждения отправляются в выбранный сервис перевода. Они могут содержать частный код или детали разговора.</string>
+    <string name="cot_translate_anonymous_notice">Bing и Google не требуют входа или ключа API. Их анонимные endpoints могут отклонять или ограничивать запросы.</string>
+    <string name="git_panel_staged">Индексировано</string>
+    <string name="git_panel_changes_section">Изменения</string>
+    <string name="git_panel_stats_files">Изменено файлов: %1$d</string>
+    <string name="git_panel_untracked_badge">новый</string>
+    <string name="git_panel_search_history">Поиск коммитов</string>
+    <string name="git_panel_search_no_match">Нет подходящих коммитов</string>
+    <string name="git_panel_no_identity">Идентификация Git не настроена; коммиты будут использовать системные значения по умолчанию</string>
+    <string name="git_panel_commit_files">Изменённые файлы (%1$d)</string>
+    <string name="git_panel_copy_hash">Скопировать хеш</string>
+    <string name="git_panel_author_label">Автор</string>
+    <string name="git_panel_committer">Коммиттер</string>
+    <string name="git_panel_committed_at">Закоммичено</string>
+    <string name="git_panel_hash_label">Хеш</string>
+    <string name="git_panel_section_stashes">Стэши</string>
+    <string name="git_panel_push">Отправить</string>
+    <string name="git_panel_pull">Забрать</string>
+    <string name="git_panel_no_upstream">Нет upstream — push спросит</string>
+    <string name="git_panel_no_branches">Нет веток</string>
+    <string name="git_panel_no_stashes">Нет стэшей</string>
+    <string name="git_panel_switch_branch">Переключить ветку</string>
 </resources>

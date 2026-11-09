@@ -2029,4 +2029,46 @@
     <string name="chat_revert_banner_files">Przywrócono pliki: %1$d</string>
     <string name="chat_revert_banner_hint">Wyślij wiadomość, aby zachować, lub cofnij.</string>
     <string name="chat_revert_banner_undo">Cofnij</string>
+    <string name="model_group_detail_first_token_timeout">Limit czasu pierwszego tokena</string>
+    <string name="model_group_detail_first_token_timeout_footer">Maksymalny czas oczekiwania na pierwszy token w sekundach, po którym przejmuje zapasowy. Puste = domyślne (czat 45 s, rozumowanie 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Domyślne (czat 45 s / rozumowanie 90 s)</string>
+    <string name="model_group_detail_member_weights">Wagi członków</string>
+    <string name="model_group_detail_member_weights_footer">Steruje routingiem ważonym: im wyższa waga, tym częstszy wybór. 1 jest neutralna.</string>
+    <string name="model_group_detail_weight_decrease">Zmniejsz wagę</string>
+    <string name="model_group_detail_weight_increase">Zwiększ wagę</string>
+    <string name="model_group_detail_quota_window_footer">Członek główny obsługuje do wyczerpania wysyłek w oknie, potem zapasowy przejmuje do resetu. Edycja dowolnej wartości natychmiast resetuje okno.</string>
+    <string name="model_group_detail_quota_total_placeholder">Wysyłki na okno</string>
+    <string name="model_group_detail_quota_period_placeholder">Długość okna (godziny)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Zresetowano okno limitu — członek główny znowu obsługuje</string>
+    <string name="model_group_detail_quota_window_remaining">Pozostało w tym oknie: %1$d wysyłek</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Tłumacz</string>
+    <string name="cot_translate_show_original">Oryginał</string>
+    <string name="cot_translate_failed">Tłumaczenie niedostępne — dotknij, aby ponowić</string>
+    <string name="cot_translate_settings_header">Tłumaczenie rozumowania</string>
+    <string name="cot_translate_settings_enabled">Włącz tłumaczenie rozumowania</string>
+    <string name="cot_translate_settings_provider">Dostawca</string>
+    <string name="cot_translate_settings_language">Język docelowy</string>
+    <string name="cot_translate_privacy_notice">Rozwinięte rozumowanie jest wysyłane do wybranej usługi tłumaczenia. Może zawierać prywatny kod lub szczegóły rozmowy.</string>
+    <string name="cot_translate_anonymous_notice">Bing i Google nie wymagają logowania ani klucza API. Ich anonimowe punkty końcowe mogą odrzucać lub ograniczać żądania.</string>
+    <string name="git_panel_staged">Zaindeksowane</string>
+    <string name="git_panel_changes_section">Zmiany</string>
+    <string name="git_panel_stats_files">Zmieniono plików: %1$d</string>
+    <string name="git_panel_untracked_badge">nowy</string>
+    <string name="git_panel_search_history">Szukaj commitów</string>
+    <string name="git_panel_search_no_match">Brak pasujących commitów</string>
+    <string name="git_panel_no_identity">Tożsamość Git nie jest skonfigurowana; commity użyją domyślnych ustawień systemowych</string>
+    <string name="git_panel_commit_files">Zmienione pliki (%1$d)</string>
+    <string name="git_panel_copy_hash">Kopiuj hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Zatwierdzono</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Skrytki</string>
+    <string name="git_panel_push">Wypchnij</string>
+    <string name="git_panel_pull">Pobierz</string>
+    <string name="git_panel_no_upstream">Brak upstream — push zapyta</string>
+    <string name="git_panel_no_branches">Brak gałęzi</string>
+    <string name="git_panel_no_stashes">Brak skrytek</string>
+    <string name="git_panel_switch_branch">Zmień gałąź</string>
 </resources>

@@ -1,7 +1,9 @@
 package com.openminis.app.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,12 +17,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,11 +34,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,7 +86,7 @@ import com.openminis.app.speech.VoiceOutputState
  * Selection semantics (unchanged): tap = select + dismiss; selecting the
  * bound group row clears the override (null = follow the group).
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun UnifiedModelPickerSheet(
     providerRepository: ProviderRepository,
@@ -121,6 +129,17 @@ fun UnifiedModelPickerSheet(
     // seedCollapse note: multi-voice vendors would fold all-but-one voice).
     var collapsedInstanceIds by remember { mutableStateOf(setOf<String>()) }
 
+    // [T-model-picker-locate] Hoisted so the locate button can translate the
+    // selected entry id into a LazyColumn item index and drive [listState].
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    // [T-model-picker-longpress-delete] Menu target + pending deletion.
+    var menuEntryId by remember { mutableStateOf<String?>(null) }
+    var entryToDelete by remember { mutableStateOf<ModelEntry?>(null) }
+    var hiddenExpanded by remember { mutableStateOf(false) }
+    // [port-upstream-1.16][T-provider-quota P2] Provider header badge tap → quota sheet.
+    var quotaSheetInstanceId by remember { mutableStateOf<String?>(null) }
+
     fun select(id: String?) {
         onSelect(id)
         onDismiss()
@@ -128,6 +147,41 @@ fun UnifiedModelPickerSheet(
 
     fun matches(text: String): Boolean =
         searchText.isBlank() || text.contains(searchText.trim(), ignoreCase = true)
+
+    // Section data, hoisted so the locate walk sees the rendered shapes.
+    val entriesByInstance = config.instances
+        .filter { it.isEnabled }
+        .mapNotNull { inst ->
+            val entries = config.modelEntries.filter { e ->
+                e.providerInstanceId == inst.id && !e.isHidden &&
+                    modalityFilter.matches(e.model) &&
+                    (matches(e.model.displayName) || matches(e.model.id))
+            }
+            if (entries.isEmpty()) null else inst to entries
+        }
+    // [T-model-picker-hidden-section] Reachable only via the collapsed section.
+    val hiddenEntries = config.modelEntries.filter { e ->
+        e.isHidden && modalityFilter.matches(e.model) &&
+            (matches(e.model.displayName) || matches(e.model.id))
+    }
+
+    // [T-model-picker-locate] Item-index walk mirroring the content below:
+    // the SECTION HEADER containing the selected entry, or null when it is
+    // not currently rendered. The locate button (item 0) adds +1 downstream.
+    fun locateCurrentIndex(): Int? {
+        val target = selectedId ?: return null
+        var idx = 0
+        if (boundGroup != null && matches(boundGroupName ?: "")) idx += 2 // group_card + group_footer
+        val sysEntries = modalityFilter.systemEntries().filter { matches(it.model.displayName) }
+        if (sysEntries.any { it.id == target }) return idx
+        if (sysEntries.isNotEmpty()) idx += 1
+        for ((_, entries) in entriesByInstance) {
+            if (entries.any { it.id == target }) return idx
+            idx += 1 + entries.size // header + rows (collapsed emits header only)
+        }
+        return if (hiddenEntries.any { it.id == target }) idx else null
+    }
+    val locateTarget = remember(selectedId, config, searchText, collapsedInstanceIds, hiddenExpanded) { locateCurrentIndex() }
 
     // [T-android-voice-picker-active] Which group member actually serves the
     // next request — recomputed whenever the config changes so the badge can't
@@ -147,7 +201,33 @@ fun UnifiedModelPickerSheet(
         searchText = searchText,
         onSearchTextChange = { searchText = it },
         onDismiss = onDismiss,
+        listState = listState,
     ) {
+        // [T-model-picker-locate] Scrolls the selected model's section header
+        // into view; rendered only when the selection itself is (+1: item 0).
+        if (locateTarget != null) {
+            item(key = "locate_current") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { listState.animateScrollToItem(locateTarget + 1) }
+                        }
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.model_picker_locate_current),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
+
         // ── Model Groups card ──
         if (boundGroup != null && matches(boundGroupName ?: "")) {
             item("group_card") {
@@ -178,17 +258,6 @@ fun UnifiedModelPickerSheet(
                         // (ChatModelPickerSheet group card): GREEN check,
                         // blue Layers glyph, icon+text strategy badge,
                         // bodySmall member count, 24dp circled chevron.
-                        //
-                        // The group stays CHECKED while the effective
-                        // choice is one of its own members — group
-                        // membership and entry selection are separate
-                        // axes, exactly as iOS models them
-                        // (isGroupSelected == currentGroupId, tested
-                        // independently of the entry's isActive). Keying
-                        // this on `selectedId == null` alone made
-                        // pinning a member look like leaving the group,
-                        // even though the group is still what's bound
-                        // and still what the override falls back to.
                         val groupSelected =
                             selectedId == null ||
                                 boundGroup.memberEntryIds.contains(selectedId)
@@ -242,10 +311,6 @@ fun UnifiedModelPickerSheet(
                                 }
                             }
                             // Count what the expansion can actually
-                            // RENDER, not the raw member-id count —
-                            // otherwise a member that no longer
-                            // resolves still inflates the number and
-                            // the row promises rows it can't show.
                             Text(
                                 stringResource(
                                     R.string.voice_input_picker_group_models,
@@ -266,13 +331,6 @@ fun UnifiedModelPickerSheet(
                     if (groupExpanded) {
                         // Fall back to the VIRTUAL system entries: the
                         // default voice groups are seeded with
-                        // "__builtin_system_speech__/…" member ids,
-                        // which are synthesized on demand and never
-                        // live in config.modelEntries. Resolving only
-                        // against modelEntries dropped every member of
-                        // those groups, so "2 models" expanded to an
-                        // empty list. Same fallback ModelGroupDetail
-                        // already uses.
                         val members = boundGroup.memberEntryIds.mapNotNull { id ->
                             config.modelEntries.find { it.id == id }
                                 ?: SystemVoiceEntries.resolve(id)
@@ -289,13 +347,6 @@ fun UnifiedModelPickerSheet(
                             // serves the next request, from EITHER
                             // source: an explicit override pointing at
                             // it, or (group-follow) the member the
-                            // group routes to. iOS fills the member
-                            // checkmark from exactly this
-                            // (UnifiedModelPicker expandedEntryRow's
-                            // isActive), not from the override alone —
-                            // a filled circle here means "this is the
-                            // one", which is the question the
-                            // expansion exists to answer.
                             val isActive = if (selectedId != null) {
                                 selectedId == entry.id
                             } else {
@@ -420,18 +471,12 @@ fun UnifiedModelPickerSheet(
                     // [T-android-system-voice-catalog] Every device TTS
                     // voice as its own selectable row — what makes the
                     // iOS System section list "Tingting (Chinese)…,
-                    // Anna (German)…" individually. The voice choice is
-                    // a system-engine detail (VoiceOutputState pref),
-                    // layered under the entry-level selection: tapping a
-                    // voice both records it and selects the system
-                    // engine. Auto (the plain row above) clears it.
                     if (modalityFilter == PickerModalityFilter.AUDIO_OUTPUT) {
                         systemVoices
                             .filter { matches(it.label) }
                             .forEach { v ->
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(start = 52.dp, end = 16.dp),
-                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(start = 52.dp, end = 16.dp), thickness = 0.5.dp,
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                                 )
                                 val sysId = systemEntries.firstOrNull()?.id
@@ -470,27 +515,11 @@ fun UnifiedModelPickerSheet(
         }
 
         // ── Per-provider cards ──
-        val entriesByInstance = config.instances
-            .filter { it.isEnabled }
-            .mapNotNull { inst ->
-                val entries = config.modelEntries.filter { e ->
-                    e.providerInstanceId == inst.id && !e.isHidden &&
-                        modalityFilter.matches(e.model) &&
-                        (matches(e.model.displayName) || matches(e.model.id))
-                }
-                if (entries.isEmpty()) null else inst to entries
-            }
         entriesByInstance.forEach { (inst, entries) ->
             val collapsed = collapsedInstanceIds.contains(inst.id)
             // [T-android-picker-per-row-items] (#6) One LazyColumn item per
             // provider card SEGMENT: the header, then one item per ENTRY row.
             // The old single-item card composed header + every model row of
-            // the provider in one frame (same defect as
-            // modelEntryPickerItems — hundreds of rows composed on sheet
-            // open, none skippable during scroll). Each segment paints its
-            // own slice of the section card (surfaceContainerHigh, 14dp
-            // corners, first/last shaping) via [PickerCardSegment]; stacked
-            // segments read as the same card the old PickerSectionCard drew.
             item(key = "ph_${inst.id}") {
                 PickerCardSegment(isFirst = true, isLast = collapsed) {
                     // Provider header — main picker's embedded header:
@@ -504,6 +533,13 @@ fun UnifiedModelPickerSheet(
                                 if (collapsed) collapsedInstanceIds - inst.id
                                 else collapsedInstanceIds + inst.id
                         },
+                        // [port-upstream-1.16][T-provider-quota P2] The account's
+                        // balance / quota right after the name; tap opens the sheet.
+                        trailing = {
+                            com.openminis.app.ui.quota.QuotaSectionHeaderBadge(inst.id) {
+                                quotaSheetInstanceId = inst.id
+                            }
+                        },
                     )
                 }
             }
@@ -513,78 +549,88 @@ fun UnifiedModelPickerSheet(
                         PickerCardSegment(isFirst = false, isLast = i == entries.lastIndex) {
                             if (i > 0) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(start = 52.dp, end = 16.dp),
-                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(start = 52.dp, end = 16.dp), thickness = 0.5.dp,
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
                                 )
                             }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { select(entry.id) }
-                                    .padding(
-                                        start = 16.dp,
-                                        end = 8.dp,
-                                        top = 11.dp,
-                                        bottom = 11.dp,
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                PickerSelectionMark(selected = selectedId == entry.id)
-                                Spacer(Modifier.width(10.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .background(
-                                            providerDotColor(inst.providerType),
-                                            CircleShape,
-                                        ),
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        entry.model.displayName.ifBlank { entry.model.id },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    // FlowRow, NOT Row: with 3-4 chips
-                                    // next to a long model id an
-                                    // overflowing Row squeezes each
-                                    // Text into a vertical letter
-                                    // column; here whole chips wrap to
-                                    // the next line instead.
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        itemVerticalAlignment = Alignment.CenterVertically,
+                            // [T-model-picker-longpress-delete] shared row; bolt rides trailing.
+                            PickerEntryRow(
+                                entry = entry,
+                                selected = selectedId == entry.id,
+                                dotColor = providerDotColor(inst.providerType),
+                                showBadges = true,
+                                menuExpanded = menuEntryId == entry.id,
+                                onSelect = { select(entry.id) },
+                                onLongPress = { menuEntryId = entry.id },
+                                onMenuDismiss = { menuEntryId = null },
+                                onDelete = { menuEntryId = null; entryToDelete = entry },
+                                trailing = {
+                                    IconButton(
+                                        onClick = { quickTestEntry = entry },
+                                        modifier = Modifier.size(32.dp),
                                     ) {
-                                        Text(
-                                            entry.baseModel.id,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                        modalityBadges(entry.model).forEach { badge ->
-                                            ModalityBadge(badge)
-                                        }
+                                        Icon(Icons.Outlined.Bolt,
+                                            contentDescription = stringResource(R.string.quicktest_button),
+                                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                     }
-                                }
-                                IconButton(
-                                    onClick = { quickTestEntry = entry },
-                                    modifier = Modifier.size(32.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Bolt,
-                                        contentDescription = stringResource(R.string.quicktest_button),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            }
+                                },
+                            )
                             // The last member's 10dp row padding alone left it
                             // crowding the card's bottom edge — keep the old
                             // trailing spacer on the final segment.
                             if (i == entries.lastIndex) {
                                 Spacer(Modifier.height(4.dp))
                             }
+                        }
+                    }
+                }
+            }
+        }
+        // [T-model-picker-hidden-section] isHidden entries, collapsed section.
+        if (hiddenEntries.isNotEmpty()) {
+            item(key = "hidden_header") {
+                PickerCardSegment(isFirst = true, isLast = !hiddenExpanded) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { hiddenExpanded = !hiddenExpanded }
+                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.model_picker_hidden_section, hiddenEntries.size),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        PickerCollapseChevron(expanded = hiddenExpanded, onToggle = { hiddenExpanded = !hiddenExpanded })
+                    }
+                }
+            }
+            if (hiddenExpanded) {
+                hiddenEntries.forEachIndexed { i, entry ->
+                    item(key = "hidden_${entry.id}") {
+                        PickerCardSegment(isFirst = false, isLast = i == hiddenEntries.lastIndex) {
+                            if (i > 0) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 52.dp, end = 16.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                                )
+                            }
+                            PickerEntryRow(
+                                entry = entry,
+                                selected = selectedId == entry.id,
+                                dotColor = providerDotColor(config.instances
+                                    .find { it.id == entry.providerInstanceId }?.providerType),
+                                showBadges = false,
+                                menuExpanded = menuEntryId == entry.id,
+                                onSelect = { select(entry.id) },
+                                onLongPress = { menuEntryId = entry.id },
+                                onMenuDismiss = { menuEntryId = null },
+                                onDelete = { menuEntryId = null; entryToDelete = entry },
+                            )
                         }
                     }
                 }
@@ -599,6 +645,103 @@ fun UnifiedModelPickerSheet(
             providerRepository = providerRepository,
             onDismiss = { quickTestEntry = null },
         )
+    }
+
+    // [port-upstream-1.16][T-provider-quota P2] The header badge's detail sheet.
+    quotaSheetInstanceId?.let { instanceId ->
+        com.openminis.app.ui.quota.QuotaDetailSheet(
+            instanceId = instanceId,
+            onDismiss = { quotaSheetInstanceId = null },
+        )
+    }
+
+    // [T-model-picker-longpress-delete] removeEntry cascades groups/pins and
+    // is unrecoverable here — confirm first.
+    entryToDelete?.let { entry ->
+        MinisAlertDialog(
+            onDismissRequest = { entryToDelete = null },
+            title = stringResource(R.string.model_picker_delete_confirm_title),
+            text = stringResource(R.string.model_picker_delete_confirm_text,
+                entry.model.displayName.ifBlank { entry.model.id }),
+            confirmText = stringResource(R.string.common_delete),
+            isDestructive = true,
+            onConfirm = {
+                providerRepository.removeEntry(entry.id)
+                entryToDelete = null
+            },
+        )
+    }
+}
+
+/**
+ * [T-model-picker-longpress-delete] One selectable model row + its long-press
+ * delete menu, shared by the per-provider rows and the hidden-models section.
+ * [showBadges] swaps the chip FlowRow for a plain id subtitle; [trailing] is
+ * the Quick Test bolt slot (hidden rows pass nothing).
+ */
+@Composable
+private fun PickerEntryRow(
+    entry: ModelEntry,
+    selected: Boolean,
+    dotColor: Color,
+    showBadges: Boolean,
+    menuExpanded: Boolean,
+    onSelect: () -> Unit,
+    onLongPress: () -> Unit,
+    onMenuDismiss: () -> Unit,
+    onDelete: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onSelect, onLongClick = onLongPress)
+                .padding(start = 16.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PickerSelectionMark(selected = selected)
+            Spacer(Modifier.width(10.dp))
+            Box(Modifier.size(6.dp).background(dotColor, CircleShape))
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    entry.model.displayName.ifBlank { entry.model.id },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (showBadges) FontWeight.SemiBold else null,
+                )
+                // FlowRow, NOT Row: an overflowing Row squeezes chips into
+                // vertical letter columns; FlowRow wraps whole chips instead.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+                    // [port-upstream-1.16][T-provider-quota P2] Only a warning
+                    // on a pool bound to THIS model; the account is on the header.
+                    if (showBadges) {
+                        com.openminis.app.ui.quota.ModelQuotaHintView(
+                            instanceId = entry.providerInstanceId,
+                            modelId = entry.model.id,
+                        )
+                    }
+                    Text(
+                        if (showBadges) entry.baseModel.id else entry.model.id,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            .copy(alpha = if (showBadges) 1f else 0.5f),
+                    )
+                    if (showBadges) {
+                        modalityBadges(entry.model).forEach { badge ->
+                            ModalityBadge(badge)
+                        }
+                    }
+                }
+            }
+            trailing?.invoke()
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = onMenuDismiss) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.model_picker_entry_menu_delete)) },
+                onClick = onDelete,
+            )
+        }
     }
 }
 

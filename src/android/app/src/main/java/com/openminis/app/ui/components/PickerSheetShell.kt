@@ -79,6 +79,11 @@ internal fun PickerSheetShell(
     searchText: String,
     onSearchTextChange: (String) -> Unit,
     onDismiss: () -> Unit,
+    // [T-model-picker-locate] Hoisted so a caller can drive the list (e.g.
+    // "locate current model" animateScrollToItem). Defaults to the shell's own
+    // state, so existing callers keep their behaviour.
+    listState: androidx.compose.foundation.lazy.LazyListState =
+        androidx.compose.foundation.lazy.rememberLazyListState(),
     content: LazyListScope.() -> Unit,
 ) {
     ModalBottomSheet(
@@ -207,6 +212,7 @@ internal fun PickerSheetShell(
             )
 
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false),
@@ -337,6 +343,8 @@ internal fun PickerProviderCardHeader(
     label: String,
     expanded: Boolean,
     onToggle: () -> Unit,
+    /** [port-upstream-1.16][T-provider-quota P2] Badge slot left of the chevron. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -353,6 +361,7 @@ internal fun PickerProviderCardHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
+        trailing?.invoke()
         PickerCollapseChevron(expanded = expanded, onToggle = onToggle)
     }
     HorizontalDivider(

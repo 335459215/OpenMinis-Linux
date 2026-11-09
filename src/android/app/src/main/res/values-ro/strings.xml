@@ -2026,4 +2026,46 @@
     <string name="chat_revert_banner_files">%1$d fișier(e) restaurate</string>
     <string name="chat_revert_banner_hint">Trimite un mesaj pentru a păstra, sau anulează.</string>
     <string name="chat_revert_banner_undo">Anulează</string>
+    <string name="model_group_detail_first_token_timeout">Timeout primul token</string>
+    <string name="model_group_detail_first_token_timeout_footer">Secunde maxime de așteptare a primului token înainte de trecerea la rezervă. Gol = implicit (chat 45 s, raționament 90 s).</string>
+    <string name="model_group_detail_first_token_timeout_placeholder">Implicit (chat 45 s / raționament 90 s)</string>
+    <string name="model_group_detail_member_weights">Ponderi membri</string>
+    <string name="model_group_detail_member_weights_footer">Controlează rutarea ponderată: cu cât ponderea e mai mare, cu atât membrul e ales mai des. 1 este neutru.</string>
+    <string name="model_group_detail_weight_decrease">Scade ponderea</string>
+    <string name="model_group_detail_weight_increase">Crește ponderea</string>
+    <string name="model_group_detail_quota_window_footer">Membrul principal deservește până se epuizează trimiterile ferestrei, apoi rezerva preia până la resetare. Editarea oricărei valori resetează imediat fereastra.</string>
+    <string name="model_group_detail_quota_total_placeholder">Trimiteri pe fereastră</string>
+    <string name="model_group_detail_quota_period_placeholder">Durata ferestrei (ore)</string>
+    <string name="model_group_detail_quota_window_reset_snackbar">Fereastra de cotă a fost resetată — membrul principal deservește din nou</string>
+    <string name="model_group_detail_quota_window_remaining">Rămase în această fereastră: %1$d trimiteri</string>
+    <!-- [T-cot-translate] Reasoning translation -->
+    <string name="cot_translate_show_translation">Tradu</string>
+    <string name="cot_translate_show_original">Original</string>
+    <string name="cot_translate_failed">Traducere indisponibilă — atingeți pentru a reîncerca</string>
+    <string name="cot_translate_settings_header">Traducerea raționamentului</string>
+    <string name="cot_translate_settings_enabled">Activează traducerea raționamentului</string>
+    <string name="cot_translate_settings_provider">Furnizor</string>
+    <string name="cot_translate_settings_language">Limbă țintă</string>
+    <string name="cot_translate_privacy_notice">Raționamentul extins este trimis serviciului de traducere selectat. Poate conține cod privat sau detalii ale conversației.</string>
+    <string name="cot_translate_anonymous_notice">Bing și Google nu necesită autentificare sau cheie API. Punctele lor finale anonime pot respinge sau limita cererile.</string>
+    <string name="git_panel_staged">În staging</string>
+    <string name="git_panel_changes_section">Modificări</string>
+    <string name="git_panel_stats_files">%1$d fișiere modificate</string>
+    <string name="git_panel_untracked_badge">nou</string>
+    <string name="git_panel_search_history">Caută commituri</string>
+    <string name="git_panel_search_no_match">Niciun commit corespunzător</string>
+    <string name="git_panel_no_identity">Identitatea Git nu este configurată; commiturile vor folosi valorile implicite de sistem</string>
+    <string name="git_panel_commit_files">Fișiere modificate (%1$d)</string>
+    <string name="git_panel_copy_hash">Copiază hash</string>
+    <string name="git_panel_author_label">Autor</string>
+    <string name="git_panel_committer">Committer</string>
+    <string name="git_panel_committed_at">Comitat</string>
+    <string name="git_panel_hash_label">Hash</string>
+    <string name="git_panel_section_stashes">Stash-uri</string>
+    <string name="git_panel_push">Împinge</string>
+    <string name="git_panel_pull">Trage</string>
+    <string name="git_panel_no_upstream">Fără upstream — push va întreba</string>
+    <string name="git_panel_no_branches">Fără branch-uri</string>
+    <string name="git_panel_no_stashes">Fără stash-uri</string>
+    <string name="git_panel_switch_branch">Schimbă branch-ul</string>
 </resources>

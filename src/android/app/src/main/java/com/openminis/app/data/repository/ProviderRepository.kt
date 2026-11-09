@@ -95,13 +95,7 @@ class ProviderRepository(
     // Model-catalog TTL bookkeeping (mark/stale/invalidate) moved to
     // [ModelCatalogCache]; public invalidation stays reachable via the facade.
 
-    /**
-     * Clear the stored `lastFetchAt` for [instanceId] so the next
-     * background-refresh sweep refreshes it immediately. Called when instance
-     * config changes in ways that could alter the set of available models
-     * (e.g. base URL rewrite, credential swap). Mirrors iOS's implicit
-     * invalidation on `updateInstance` / `removeInstance`.
-     */
+    /** Clear `lastFetchAt` for [instanceId] so the next background refresh sweeps it immediately (config changes that alter the model set). */
     fun invalidateModelCache(instanceId: String) =
         catalogCache.invalidateModelCache(instanceId)
 
@@ -121,12 +115,7 @@ class ProviderRepository(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
     )
 
-    /**
-     * Completes once the initial off-thread load has emitted (or determined
-     * there's nothing persisted). Lets startup consumers that genuinely need
-     * the config (e.g. the daily model refresh) wait instead of racing the
-     * empty placeholder.
-     */
+    /** Completes once the initial off-thread load has emitted; lets startup consumers wait instead of racing the empty placeholder. */
     // internal (was private): ProviderConfigStore.ensureConfigLoaded completes it.
     internal val configLoadComplete = kotlinx.coroutines.CompletableDeferred<Unit>()
 
@@ -191,45 +180,38 @@ class ProviderRepository(
     /**
      * Lock guarding all mutate-and-save sequences against concurrent writers
      * (notably the `for instance in enabled { scope.launch { autoRefreshModels(...) } }`
-     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]).
-     *
-     * Without this lock, two parallel `replaceEntries(instanceA, …)` and
-     * `replaceEntries(instanceB, …)` calls share the same `_config.value`
-     * reference (its inner ArrayLists are the same objects across reads),
-     * so one's `removeAll` / `addAll` runs while the other's `saveConfig`
-     * is mid-`Json.encodeToString` — that's the
-     * `ConcurrentModificationException → ArrayList.next` crash captured on
-     * Pixel 6 / 4a.
+     * fan-out in [refreshAllModelsIfNeeded] / [triggerBackgroundRefreshIfStale]):
+     * without it two parallel mutators share one `_config.value` reference and
+     * one's list mutation runs while the other's saveConfig is mid-encode —
+     * the ConcurrentModificationException crash captured on Pixel 6 / 4a.
      */
     internal val configLock = Any()
 
-    // ── [T-android-save-off-main-thread] Persistence pipeline (queue, worker
-    // scope, generation counter) lives in [ProviderConfigStore]; the facade
-    // below keeps the internal surface the save-path extensions rely on. ──
-    internal val persistRequests get() = configStore.persistRequests
-    internal val writeScope get() = configStore.writeScope
-    internal val saveGeneration get() = configStore.saveGeneration
-
-    /** Starts the persistence worker on the first save. Idempotent. */
-    internal fun ensurePersistWorker() = configStore.ensurePersistWorker()
-
-    /**
-     * Suspends until every save queued before this call has reached the store.
-     * Backup/restore and any other "durability before returning" path should
-     * await it — the fire-and-forget `saveConfig` no longer implies the write
-     * landed.
-     */
-    internal suspend fun awaitPersisted() = configStore.awaitPersisted()
+    // The persistence-pipeline facade (persistRequests / writeScope /
+    // saveGeneration / ensurePersistWorker / awaitPersisted) moved to
+    // ProviderRepositoryPersist.kt as extensions — pure one-line forwards to
+    // [configStore]; see the note there. [hashJsonMirror] stays a member: it
+    // is taken as a bound callable reference (::hashJsonMirror) in
+    // ProviderRepositoryLoad.kt, which resolves for members, not for
+    // package-level extensions.
 
     /** Stable SHA-256 hash of the JSON mirror string; implementation in [ProviderConfigStore]. */
     internal fun hashJsonMirror(str: String): String = configStore.hashJsonMirror(str)
 
     // internal (was private): the debug server's read-only provider.* handlers
-    // read `config.value` directly and must be able to force the lazy load —
-    // on a cold process they otherwise report an EMPTY config, which reads as
-    // "all your providers are gone" rather than "not loaded yet".
-    // Implementation (and the full caller-audit KDoc) in [ProviderConfigStore].
-    internal fun ensureConfigLoaded() = configStore.ensureConfigLoaded()
+    // force the lazy load — a cold process must read "not loaded yet", not
+    // "all your providers are gone". Implementation + caller-audit KDoc in
+    // [ProviderConfigStore].
+    // [FIX-R2-16, review §三 失败处理] While the config is unreadable the 12
+    // mutation guards below must no-op WITHOUT throwing into the Compose click
+    // handler that triggered them. Semantics (real failure latches
+    // [configLoadFailed] and returns false; success clears; the benign
+    // main-thread refusal must not latch) live in [ProviderConfigLoadGuard] —
+    // the provider list surfaces [configLoadFailed] as a banner.
+    private val configLoadGuard = ProviderConfigLoadGuard()
+    val configLoadFailed: StateFlow<Boolean> get() = configLoadGuard.failed
+
+    internal fun ensureConfigLoaded(): Boolean = configLoadGuard.ensure(configStore)
 
     // [T-android-provider-mutator-lock] Snapshot, not the live list. The
     // declared type is List, but the backing object is the MutableList that
@@ -248,12 +230,7 @@ class ProviderRepository(
      * not take it: `_config.value` is the object collectors are iterating, and
      * mutating its lists in place throws ConcurrentModificationException *in
      * the reader's* frame — reproduced on Pixel 6 as a crash inside
-     * UnifiedModelPickerSheet's LazyColumn while three imports ran
-     * concurrently:
-     *
-     *   ArrayList$Itr.checkForComodification → UnifiedModelPickerSheet
-     *     → LazyListIntervalContent.<init> → Snapshot.observe
-     *
+     * UnifiedModelPickerSheet's LazyColumn while three imports ran concurrently.
      * saveConfig already EMITS defensive copies; the gap was that the next
      * mutator read that emitted object back and mutated it. Copy-on-write here
      * closes the loop: a mutator never touches a published object, so whatever
@@ -329,8 +306,7 @@ class ProviderRepository(
             )
         }
         saveConfig(config)
-        // Stale from the start so the next background sweep (or an explicit
-        // triggerBackgroundRefreshIfStale call) will fetch it.
+        // Stale from the start so the next sweep/SWR fetches it.
         invalidateModelCache(instance.id)
     }
     /** Voice-template seed reconciliation; implementation in [ProviderConfigStore]. */
@@ -1482,8 +1458,12 @@ class ProviderRepository(
         catalogCache.refreshAllModelsIfNeeded(scope)
 
     // API Key management — implementations in [ProviderConfigStore].
-    fun saveApiKey(instanceId: String, key: String) =
+    fun saveApiKey(instanceId: String, key: String) {
         configStore.saveApiKey(instanceId, key)
+        // [T-models-credential-swap] Clear the watermark: re-fetch on next sweep.
+        invalidateModelCache(instanceId)
+            com.openminis.app.quota.QuotaStore.credentialsChanged() // [T-provider-quota]
+    }
 
     fun loadApiKey(instanceId: String): String? =
         configStore.loadApiKey(instanceId)
@@ -1498,8 +1478,11 @@ class ProviderRepository(
     fun usableApiKey(instance: ProviderInstance): String? =
         configStore.usableApiKey(instance)
 
-    fun deleteApiKey(instanceId: String) =
+    fun deleteApiKey(instanceId: String) {
         configStore.deleteApiKey(instanceId)
+        invalidateModelCache(instanceId) // [T-models-credential-swap]
+        com.openminis.app.quota.QuotaStore.credentialsChanged() // [T-provider-quota]
+    }
 
     private val backupCoordinator by lazy {
         ProviderBackupCoordinator(context, ProviderBackupHost())
@@ -1516,13 +1499,15 @@ class ProviderRepository(
         override val configLock get() = this@ProviderRepository.configLock
         override val providerDao get() = this@ProviderRepository.providerDao
         override fun loadApiKey(instanceId: String): String? = this@ProviderRepository.loadApiKey(instanceId)
+        override fun poolKeys(instanceId: String): List<String> = configStore.poolKeys(instanceId)
+        override fun setPoolKeys(instanceId: String, keys: List<String>) = configStore.setPoolKeys(instanceId, keys)
         override fun saveApiKey(instanceId: String, key: String) =
             this@ProviderRepository.saveApiKey(instanceId, key)
         override fun loadAllThinkingRulesIntoCache() =
             this@ProviderRepository.loadAllThinkingRulesIntoCache()
     }
-    fun exportInstanceJSON(instanceId: String): String? =
-        backupCoordinator.exportInstanceJSON(instanceId)
+    fun exportInstanceJSON(instanceId: String, includeCredentials: Boolean = true): String? =
+        backupCoordinator.exportInstanceJSON(instanceId, includeCredentials)
     fun collectBackupProviderSecret(instance: ProviderInstance): BackupSecrets.ProviderSecret? =
         backupCoordinator.collectBackupProviderSecret(instance)
     fun restoreBackupProviderSecret(secret: BackupSecrets.ProviderSecret): Boolean =

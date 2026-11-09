@@ -60,8 +60,8 @@ class AgentForegroundService : Service() {
         private const val NOTIFICATION_ID = 9001
 
         // [T-bg-overlay phase 2 fix] Separate channel/id for the SYSTEM_ALERT_WINDOW nudge (higher importance than the LOW FGS row).
-        private const val OVERLAY_NUDGE_CHANNEL_ID = "overlay_permission_nudge"
-        private const val OVERLAY_NUDGE_NOTIFICATION_ID = 9002
+        internal const val OVERLAY_NUDGE_CHANNEL_ID = "overlay_permission_nudge"
+        internal const val OVERLAY_NUDGE_NOTIFICATION_ID = 9002
 
         // [T-android-dynamic-island] Framework extras key for isRequestPromotedOngoing() (Android 16), not an exported SDK constant.
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
@@ -373,7 +373,7 @@ class AgentForegroundService : Service() {
                 SessionActivityTracker.lastReplyExcerpt,
                 SessionActivityTracker.currentSessionId,
                 SessionActivityTracker.currentToolTitle,
-                SessionActivityTracker.cameraSuppressActive,
+                SessionActivityTracker.externalPickerSuppressActive,
                 SessionActivityTracker.lastToolName,
                 SessionActivityTracker.lastToolTitle,
                 SessionActivityTracker.lastToolStatus,
@@ -395,7 +395,7 @@ class AgentForegroundService : Service() {
                     lastReplyExcerpt = values[6] as String?,
                     currentSessionId = values[7] as String?,
                     toolTitle = values[8] as String?,
-                    cameraSuppress = values[9] as Boolean,
+                    externalPickerSuppress = values[9] as Boolean,
                     lastToolName = values[10] as String?,
                     lastToolTitle = values[11] as String?,
                     lastToolStatus = values[12] as String?,
@@ -430,7 +430,7 @@ class AgentForegroundService : Service() {
         val lastReplyExcerpt: String?,
         val currentSessionId: String?,
         val toolTitle: String?,
-        val cameraSuppress: Boolean,
+        val externalPickerSuppress: Boolean,
         val lastToolName: String?,
         val lastToolTitle: String?,
         val lastToolStatus: String?,
@@ -522,13 +522,13 @@ class AgentForegroundService : Service() {
         // home-screen visit.
         val isBusy = state.hasActiveStream || state.isRunning
         if (wasBusy && !isBusy && !state.isForeground && state.enabled &&
-            hasPerm && !state.cameraSuppress
+            hasPerm && !state.externalPickerSuppress
         ) {
             hasCompletionPending = true
         }
         wasBusy = isBusy
         val shouldShow = state.enabled && hasPerm && !state.isForeground &&
-            !state.cameraSuppress &&
+            !state.externalPickerSuppress &&
             (isBusy || hasCompletionPending)
         // [Wave3 #15] Muted-category debug gate — was an ungated Log.d per
         // flow emission (every token / tool-status tick).
@@ -536,7 +536,7 @@ class AgentForegroundService : Service() {
             "OverlayState",
             "applyOverlayState fg=${state.isForeground} enabled=${state.enabled} " +
                 "perm=$hasPerm streaming=${state.hasActiveStream} toolRunning=${state.isRunning} " +
-                "cameraSuppress=${state.cameraSuppress} completionPending=$hasCompletionPending " +
+                "externalPickerSuppress=${state.externalPickerSuppress} completionPending=$hasCompletionPending " +
                 "toolName=${state.toolName} toolTitle=${state.toolTitle} shouldShow=$shouldShow shown=${controller.isShown}",
         )
         // [T-bg-overlay phase 2 fix] Permission nudge — the user opted in
@@ -556,7 +556,7 @@ class AgentForegroundService : Service() {
         // `onDismissByUser` → `dismissOverlay()`), the capsule should
         // reappear. Toggle-off / no-perm also leave tracker state alone
         // so a subsequent re-enable picks up where we left off.
-        if (state.isForeground || !state.enabled || !hasPerm || state.cameraSuppress) {
+        if (state.isForeground || !state.enabled || !hasPerm || state.externalPickerSuppress) {
             // [T-android-overlay-completion-pending] Foreground means the
             // user saw the reply in-app — drop the pending linger so a
             // later backgrounding doesn't re-pop a stale completion.
@@ -853,53 +853,11 @@ class AgentForegroundService : Service() {
             .setOngoing(true)
             .build()
 
-    /**
-     * [T-bg-overlay phase 2 fix] Throttle for the SAW permission nudge.
-     * `true` after the first emission this service lifetime so a single
-     * agent loop that calls 10 tools doesn't post 10 identical
-     * heads-up notifications. Reset on service destroy so a fresh
-     * launch after the user has had a chance to think about it can
-     * remind them again.
-     */
-    private var overlayNudgePosted: Boolean = false
 
     /** Last observed Live-Updates-active flag, for edge-triggered notify. */
     private var lastDynamicIslandActive: Boolean? = null
 
-    private fun maybePostOverlayPermissionNudge() {
-        if (overlayNudgePosted) return
-        overlayNudgePosted = true
-        try {
-            val mgrIntent = Intent(
-                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                android.net.Uri.parse("package:$packageName"),
-            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-            val pi = PendingIntent.getActivity(
-                this,
-                2,
-                mgrIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            val notif = NotificationCompat.Builder(this, OVERLAY_NUDGE_CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(getString(R.string.bg_overlay_nudge_title))
-                .setContentText(getString(R.string.bg_overlay_nudge_body))
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(getString(R.string.bg_overlay_nudge_body)),
-                )
-                .setContentIntent(pi)
-                .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
-                .build()
-            val mgr = getSystemService(NotificationManager::class.java)
-            mgr?.notify(OVERLAY_NUDGE_NOTIFICATION_ID, notif)
-            Log.d(TAG, "overlay permission nudge posted (SAW not granted but toggle is ON)")
-        } catch (e: Throwable) {
-            Log.w(TAG, "overlay permission nudge failed: ${e.message}", e)
-        }
-    }
+    private fun maybePostOverlayPermissionNudge() = OverlayPermissionNudge.maybePost(this)
 
     private fun buildNotification(state: ForegroundNotificationState): Notification {
         val sessionCount = state.activeCount
@@ -975,7 +933,13 @@ class AgentForegroundService : Service() {
             (SystemClock.elapsedRealtime() - state.startedAtMs).coerceAtLeast(0L)
 
         // Static chip label + system-managed chronometer: no per-second posts.
-        val shortCritical = "Minis"
+        // [T-live-status-model] The chip's words were the literal "Minis" on
+        // every device in every state. Leave the chip to the system while the
+        // run clock counts up (Android already renders that clock, and a word
+        // beside it is what overflows the ~7 characters it shows).
+        val live = liveStatusOf(this, state, sessionLabel)
+
+        val shortCritical = live.chipWords()
 
         // Promotion is selected once from the exact state submitted to the
         // policy. Presence-only/completed notifications always remain plain.
@@ -1058,7 +1022,7 @@ class AgentForegroundService : Service() {
     private fun buildPromotedNotification(
         titleText: String,
         collapsedText: String,
-        shortCritical: String,
+        shortCritical: String?,
         smallIcon: Int,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
@@ -1100,7 +1064,11 @@ class AgentForegroundService : Service() {
             // Explicitly NOT colorized and NOT a group summary — both would
             // disqualify the notification from promotion.
             .setColorized(false)
-            .setShortCriticalText(shortCritical)
+
+        // [T-live-status-model] Null while the run clock counts up: the chip
+        // already renders that clock, and words beside it overflow the ~7
+        // characters Android shows.
+        if (shortCritical != null) builder.setShortCriticalText(shortCritical)
 
         builder.addAction(
             Notification.Action.Builder(
@@ -1208,15 +1176,21 @@ class AgentForegroundService : Service() {
         // degrades to small font then clips. The tool display label and
         // "Task completed" are the short forms; the subtitle ("1 task
         // running") is the trailing small word.
+        // [T-live-status-model] Ticker/AOD/big-island text come from the shared
+        // model, not from literals and not from the long shade title: the
+        // template guide caps the big island at ~4 CJK chars, and handing it
+        // "Minis is using Shell" degraded to a smaller font and then clipped.
+        val live = liveStatusOf(this, state, sessionLabel)
+
         val content = HyperOsIsland.IslandContent(
             business = "agent",
-            ticker = "Minis",
-            aodTitle = "Minis",
-            bigTitle = titleText,
-            bigContent = state.subtitle,
+            ticker = live.ticker(),
+            aodTitle = live.ticker(),
+            bigTitle = live.islandHeadline(),
+            bigContent = live.islandCaption(),
             baseTitle = titleText,
             baseContent = collapsedText,
-            hintTitle = state.subtitle,
+            hintTitle = live.islandCaption(),
         )
         val focusJson = HyperOsIsland.buildFocusParamJson(content)
 

@@ -26,6 +26,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +103,10 @@ fun ProviderListScreen(
 ) {
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val credentialRevision by providerRepository.credentialRevision.collectAsStateWithLifecycle()
+    // [FIX-R2-16] True while the provider configuration cannot be loaded —
+    // mutations no-op, so the banner tells the user WHY the screen ignores
+    // taps. Clears (and the banner disappears) on the first successful load.
+    val configLoadFailed by providerRepository.configLoadFailed.collectAsStateWithLifecycle()
     val configRevision = config.revision
     val instances = config.instances.toList()
     val groupedInstances = instances.groupBy { it.providerType }
@@ -125,6 +131,13 @@ fun ProviderListScreen(
         value = withContext(Dispatchers.Default) {
             providerRepository.shadowVoiceSnapshot()
         }
+    }
+
+    // [T-swr-provider-page] Entering the page is the designed SWR trigger:
+    // instances stale for >24h refresh silently in the background; fresh ones
+    // are left untouched. (The helper existed but was never called.)
+    LaunchedEffect(Unit) {
+        providerRepository.triggerBackgroundRefreshIfStale(this)
     }
 
     var showMenu by remember { mutableStateOf(false) }
@@ -274,6 +287,37 @@ fun ProviderListScreen(
             }
         },
     ) {
+        // [FIX-R2-16] Persistent state banner (not dismissible — it tracks a
+        // condition, not an event) shown while the provider configuration is
+        // unreadable. Every config-protected mutation no-ops until a load
+        // succeeds, and the same state also clears it, so a banner that lingers
+        // past recovery is impossible by construction.
+        if (configLoadFailed) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    m3Icon(Icons.Outlined.Warning),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = stringResource(R.string.provider_list_config_load_failed_banner),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         if (instances.isEmpty()) {
             Column(
                 modifier = Modifier

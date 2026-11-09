@@ -156,6 +156,10 @@ internal fun ChatViewModel.sendMessage(
     // inside the send button's tap closure).
     if (!internalGoalRun && _hasInjectedShareContent.value) _hasInjectedShareContent.value = false
 
+    // [port-upstream-1.16][T-android-provider-edit-mid-session] A provider
+    // edited (key / base URL / API type) since the last turn is rebuilt here,
+    // so the change applies to THIS turn, not after a re-entry.
+    rebuildProviderIfEdited()
     val initialProvider = currentProvider
     if (initialProvider == null) {
         _error.value = "No provider configured"
@@ -186,8 +190,10 @@ internal fun ChatViewModel.sendMessage(
         // any attachment counts as complex and goes to the strong (first)
         // member; a short plain-text turn rides the budget (last) member.
         // Cheap on purpose — no tokenizer, just the user-visible text.
-        val complexTurn = trimmed.length >= GroupRoutingState.SMART_COMPLEX_CHARS ||
-            currentAttachments.isNotEmpty()
+        val complexTurn = GroupRoutingState.isComplexRequest(
+            messageChars = trimmed.length,
+            attachmentCount = currentAttachments.size,
+        )
         resolveGroupTargetEntry(
             groupIdForCaps,
             _activeEntryId.value,

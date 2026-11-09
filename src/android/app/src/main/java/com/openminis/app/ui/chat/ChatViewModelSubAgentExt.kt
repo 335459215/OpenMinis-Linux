@@ -205,13 +205,9 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         if (!multiAgentSettings.enabled.value) {
             return ToolExecutionResult("Multi-agent dispatch is disabled in Settings → Multi-agent.", false)
         }
-        // [T-android-subagent-depth-leak] The authoritative "am I a sub-agent?"
-        // test is the lane marker carried in the coroutine context: it is scoped
-        // to the coroutine, so it cannot leak, and it repairs itself by
-        // construction. The depth counter is kept only as a stale-state
-        // detector - an interrupted dispatch used to leave it above zero for the
-        // rest of the session, and gating on it turned one stopped dispatch into
-        // a session that could never dispatch again until the app was killed.
+        // [T-android-subagent-depth-leak] The authoritative test is the coroutine-scoped
+        // lane marker (cannot leak, self-repairs). The depth counter is only a stale-state
+        // detector — gating on it once bricked the session until app kill after a stopped dispatch.
         if (kotlin.coroutines.coroutineContext[SubAgentLane] != null) {
             return ToolExecutionResult("Error: sub-agents cannot spawn further sub-agents.", false)
         }
@@ -262,7 +258,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // board here instead of relying on the model to remember. A failed
         // add() must not abort the dispatch: runCatching, board stays
         // best-effort, the wave is the deliverable.
-        val ownerSession = realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
+        val ownerSession = subAgentOwnerSid("", realSessionId, sessionId, activeSessionId)
         val autoPlan = spawns.size > 1 || detached
         val planIds: List<String?> = if (autoPlan) {
             spawns.mapIndexed { i, s ->
@@ -491,9 +487,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
         batchId: String? = null,
         batchSession: String = "",
     ): ToolExecutionResult {
-        val ownerSession = batchSession.ifBlank {
-            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
-        }
+        val ownerSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
         val outcome = try {
             runOneSubAgentInner(
                 spawn = spawn,
@@ -662,9 +656,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         // "sub-agents cannot spawn further sub-agents" until the app was killed.
         subAgentDepth.incrementAndGet()
         return try {
-        val parentSession = batchSession.ifBlank {
-            realSessionId.ifBlank { sessionId }.ifBlank { activeSessionId }
-        }
+        val parentSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
         val laneId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id
             ?: SubAgentLane.idFor(parentSession, System.nanoTime())
         val trackerId = com.openminis.app.service.SubAgentActivityTracker.start(
@@ -680,6 +672,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         )
         val subAgentJob = kotlinx.coroutines.SupervisorJob(kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job])
         com.openminis.app.service.SubAgentActivityTracker.attachJob(trackerId, subAgentJob)
+        val steerChannel = com.openminis.app.service.SubAgentActivityTracker.openSteer(trackerId)
         return try {
             withContext(subAgentJob) {
             // [T-subagent-429-selfheal] Fan-out used to fire every lane in the
@@ -863,7 +856,10 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else {
                             grepSourceToolResult(name, json)
-                                ?: executeTool(name, json, "")
+                                // [T-subagent-owner-sid] The lane must carry the parent's
+                                // session id into the gate: a blank caller degrades to ASK
+                                // and prompts on every write/execute even in YOLO sessions.
+                                ?: executeTool(name, json, parentSession)
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },
@@ -873,6 +869,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     maxTurns = maxTurns,
                     tokenBudget = tokenBudget,
                     thinkingLevel = requestedThinking,
+                    steers = steerChannel,
                 )
             }
             com.openminis.app.service.SubAgentActivityTracker.appendLog(
@@ -995,6 +992,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                 runCatching { ExecutionCoordinator.sessionDidTerminate(laneId) }
                 subAgentJob.cancel()
             }
+            com.openminis.app.service.SubAgentActivityTracker.closeSteer(trackerId, steerChannel)
         }
         } finally {
             subAgentDepth.decrementAndGet()

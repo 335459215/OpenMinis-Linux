@@ -75,8 +75,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import com.openminis.app.util.IsoTime
-// [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt /
-// ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
+// [T-android-split-chat] StreamingDelta / ChatMessage / QueuedPrompt / ToolBlockStatus / SlashCommand / AssistantBlock moved verbatim to ChatModels.kt.
 class ChatViewModel(
     internal val sessionId: String,
     internal val chatRepository: ChatRepository,
@@ -120,17 +119,8 @@ class ChatViewModel(
         internal val HTTP_5XX_STATUS_RE = Regex("""\[5\d{2}\]""")
         // ── [T-android-compact-runaway] Compaction budgets ──────────────
         //
-        // Compaction had no ceiling of any kind. Its only time bound was the
-        // provider's OkHttp readTimeout (10 minutes on every provider), and
-        // the split-retry path could issue up to 1+2+4+8 = 15 SEQUENTIAL leaf
-        // calls before depth 3 stopped it. Slow-but-not-timing-out calls (a
-        // rate-limited or queued model at ~80s each) therefore added up to
-        // roughly 20 minutes of apparent hang — which matches the report.
-        //
-        // Three independent ceilings now bound it, because each catches a case
-        // the others miss: the call budget stops fan-out, the wall-clock
-        // timeout stops slow-but-few calls, and the existing depth cap stops
-        // recursion.
+        // Compaction had no ceiling: only the provider readTimeout (10m) and a 1+2+4+8=15
+        // sequential-leaf retry. Three ceilings now bound it — call budget, wall-clock, depth.
 
         /** Leaf LLM calls one compaction may issue in total; the depth-3 cap alone permits 15, this cuts the worst case to 6 while allowing a full first split plus one rescue. */
         internal const val MAX_COMPACT_LLM_CALLS = 6
@@ -850,20 +840,20 @@ class ChatViewModel(
      * without a second cut. A takeLast here used to hide the middle while
      * both ends still looked present.
      */
-    val uiMessages: StateFlow<List<ChatMessage>> =
-        _messages.map { raw ->
-            // [T-bridge-message-ui-leak-android] Single UI-collection sink for
-            // EVERY path that pushes messages to the list (loadSession, live
-            // stream append, compact rebuild, snapshot reload, sync refresh…).
-            // Filter the internal role-alternation bridge here so it can never
-            // surface as a chat bubble regardless of which path produced it.
-            // Only allocate a new list when a bridge is actually present.
-            if (raw.any { it.isInternalBridge }) raw.filterNot { it.isInternalBridge } else raw
+    val uiMessages: StateFlow<List<ChatMessage>> by lazy {
+        combine(_messages, _isStreaming) { raw, streaming ->
+            // [T-bridge-message-ui-leak-android] Single UI sink for EVERY path
+            // that pushes messages to the list; the role-alternation bridge must
+            // never surface as a chat bubble. Allocate only when one is present.
+            val visible = if (raw.any { it.isInternalBridge }) raw.filterNot { it.isInternalBridge } else raw
+            // [T-android-thinking-row-follows-run] The same sink settles every "still running" claim once the run is over.
+            if (streaming) visible else settleIdleRows(visible)
         }.stateIn(
             viewModelScope,
             kotlinx.coroutines.flow.SharingStarted.Eagerly,
             emptyList(),
         )
+    }
 
     /**
      * Whether the current session has older messages above the window.
@@ -1276,6 +1266,12 @@ class ChatViewModel(
     private fun clearAllStreamFlushStates() = streamSession.clearAllStreamFlushStates()
     internal fun retainStreamFlushStates(keptIds: Set<String>) =
         streamSession.retainStreamFlushStates(keptIds)
+
+    /** [T-perf-background-session] Foreground publishes the stream; background parks deltas (no recomposition). */
+    internal fun onForegroundChanged(isForeground: Boolean) {
+        if (isForeground) streamSession.resumePublishing()
+        else streamSession.publishPaused = true
+    }
 
     /**
      * Composer draft. Owned by VM so it survives navigation (e.g. push EnvVars
@@ -1952,6 +1948,12 @@ class ChatViewModel(
     internal var currentProvider: LLMProvider? = null
     internal var currentModel: LLMModel? = null
 
+    // [port-upstream-1.16][T-android-provider-edit-mid-session] Watch state
+    // for ChatViewModelProviderEditExt: instances edited since the last diff
+    // snapshot, and the snapshot itself. See rebuildProviderIfEdited().
+    @Volatile internal var pendingProviderEdits: Set<String> = emptySet()
+    internal var providerInstancesSeen: Map<String, com.openminis.app.data.model.ProviderInstance>? = null
+
     /**
      * Does the CURRENTLY RESOLVED main model natively consume image pixels?
      *
@@ -2136,12 +2138,12 @@ class ChatViewModel(
     val browserTabPool: BrowserTabPool by lazy {
         BrowserTabPool(context).also {
             it.setSession(activeSessionId)
-            // Surface download start/finish/failure as system-info notices in
-            // this chat. May fire from the pool's IO scope — hop to Main since
-            // appendSystemInfo does a read-modify-write on _messages.
+            // Surface download start/finish/failure as browser_download tool
+            // cards in this chat. May fire from the pool's IO scope — hop to
+            // Main since the card executor does a read-modify-write on _messages.
             it.onDownloadEvent = { text ->
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    appendSystemInfo(text, "info")
+                    onBrowserDownloadEventCard(text)
                 }
             }
             _browserTabPoolRef = it
@@ -3591,12 +3593,11 @@ class ChatViewModel(
             }
         }
 
-    // T203 part 2: these MUST be declared before `init { loadSession() }` below. viewModelScope.launch defaults to Dispatchers.Main.immediate, which runs
-    // the launch body synchronously up to the first suspend point — and the launch body reads `isDraft` before its first suspend. If `isDraft` is
-    // declared further down the class, its property initializer hasn't run yet, so the read returns the JVM default (`false`), routing every draft
-    // session through the load-from-DB branch. The DB lookup misses (no row for `__new__…` keys), the function returns early, and no model name /
-    // group name is ever set on the draft chat — exactly the bug T203 was
-    // chasing through the wrong layer.
+    // T203 part 2: these MUST be declared before `init { loadSession() }` below —
+    // launch defaults to Main.immediate and runs the body to its first suspend,
+    // which reads `isDraft`; a later declaration would read the JVM default
+    // `false` and route every draft through load-from-DB, so no model/group
+    // name was ever set on the draft chat (bug T203 chased through the wrong layer).
     /** Model group ID from long-press FAB, encoded in the draft session ID.
      *  substringBefore strips the folder marker in case both are present. */
     internal val initialGroupId: String? =
@@ -3622,13 +3623,12 @@ class ChatViewModel(
                 }
             }
         }
+        // [port-upstream-1.16] Provider-edit watch — see ChatViewModelProviderEditExt.
+        startProviderEditWatch()
         loadSession()
         // [T-session-paused-badge-active-false-positive] Drive the session-list PAUSED badge directly off canResume — the authoritative "this session
-        // is interrupted (tap Resume)" flag. This is the single chokepoint over every _canResume setter (background-suspend cleanup, cancel cleanup,
-        // loadSession DB detection, …): canResume true → badge on; false (resumed / new send / completed) → badge off. Replaces both the old
-        // foreground heuristic AND clear-on-open, so a session the user merely
-        // glanced at but didn't resume keeps its badge, and a running/resolved
-        // session never shows one.
+        // is interrupted (tap Resume)" flag. Single chokepoint over every _canResume setter: canResume true → badge on; false → badge off. Replaces
+        // both the old foreground heuristic AND clear-on-open, so a session the user merely glanced at keeps its badge and a running one never shows one.
         viewModelScope.launch {
             com.openminis.app.service.OverlayComposeBus.pending.collect { req ->
                 val sid = realSessionId.ifBlank { sessionId }
@@ -3650,11 +3650,9 @@ class ChatViewModel(
             canResume.collect { interrupted ->
                 if (interrupted) {
                     // [T-android-group-pause-badge-restamp] Only a REAL interruption re-stamps the badge's entry time. This collector is the single chokepoint over every
-                    // `_canResume` setter, so it ALSO fires when loadSession merely RE-DETECTS an old interrupted tail — that is not a new entry into the paused state, and re-stamping it
-                    // there is what let a days-old pause keep looking "fresh" to the group card's 24h window forever (the more often the user opened the chat, the less able it was to
-                    // expire). The detecting site raises a sticky generation
-                    // mark before its assignment; we consume it here, once the
-                    // annotated emission has actually been observed.
+                    // `_canResume` setter, so it ALSO fires when loadSession merely RE-DETECTS an old interrupted tail — re-stamping THAT let a days-old pause look
+                    // "fresh" to the 24h window forever. The detecting site raises a sticky generation mark before its assignment; consume it here,
+                    // once the annotated emission has actually been observed.
                     val pendingGen = redetectingInterruptedTailGen
                     val isRedetection = pendingGen != consumedRedetectGen
                     if (isRedetection) consumedRedetectGen = pendingGen
@@ -4391,6 +4389,7 @@ class ChatViewModel(
             return true
         }
 
+        rebuildProviderIfEdited()
         val initialProvider = currentProvider
         if (initialProvider == null) {
             _error.value = "No provider configured"
@@ -4400,11 +4399,8 @@ class ChatViewModel(
         _error.value = null
 
         // T149 parity: revoke memory_writes in the parts we're about to drop
-        // so the on-disk daily log doesn't keep entries the user rewound past.
-        // The dropped range is: the target turn's blocks FROM the target
-        // onward (the target tool_use itself + any later same-turn blocks) +
-        // every later message. The surviving earlier blocks of the target turn
-        // are kept, so they're excluded.
+        // so the on-disk log doesn't keep entries the user rewound past.
+        // Dropped: the target turn FROM the target onward + every later message.
         val droppedTargetTail = asstMsg.copy(
             toolBlocks = asstMsg.toolBlocks.drop(blockIdx),
         )
@@ -4551,10 +4547,10 @@ class ChatViewModel(
         // [T-delete-anchor-by-id] A VISIBLE user turn, not merely one with
         // text — same predicate deleteFromMessage anchors with. A pure-image
         // prompt has blank `content` but is a real user bubble the model was
-        // answering; refusing it left the only way to re-ask a photo turn to
-        // deleting and re-typing it.
+        // answering; refusing it left re-asking a photo turn impossible.
         if (!message.isRenderedUserBubble) return
 
+        rebuildProviderIfEdited()
         val initialProvider = currentProvider
         if (initialProvider == null) {
             _error.value = "No provider configured"
@@ -4564,8 +4560,8 @@ class ChatViewModel(
         _error.value = null
 
         // T149: snapshot messages about to be truncated so we can revoke any
-        // memory_write tool blocks they contain. Without this, a retry leaves
-        // the on-disk daily log with entries the user has just rewound past.
+        // memory_write tool blocks they contain — else a retry leaves the
+        // on-disk daily log with entries the user just rewound past.
         val deletedMessages = messages.subList(index + 1, messages.size).toList()
 
         // Truncate UI messages: keep up to and including this user message.
@@ -5163,8 +5159,6 @@ class ChatViewModel(
     ) {
         streamSession.updateAssistantMessage(id, content, isStreaming, toolBlocks, isAwaitingModelResponse)
     }
-
-    internal fun effectiveContent(id: String): String? = streamSession.effectiveContent(id)
 
     internal fun flushStreamingDelta(id: String) = streamSession.flushStreamingDelta(id)
 

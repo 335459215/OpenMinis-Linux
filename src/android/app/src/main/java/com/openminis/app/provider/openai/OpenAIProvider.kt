@@ -56,7 +56,7 @@ class OpenAIProvider private constructor(
      * heuristic incorrectly drags an OAuth bearer onto the Codex
      * Responses backend at chatgpt.com, where it 404s.
      */
-    private val forceChatCompletions: Boolean = false,
+    internal val forceChatCompletions: Boolean = false,
     /**
      * [T-provider-custom-user-agent] Per-provider User-Agent override.
      * null/blank → default UA; non-blank → replaces User-Agent on every
@@ -97,6 +97,13 @@ class OpenAIProvider private constructor(
      * cache. Null → no custom rules (identical to Phase-1 built-in-only behaviour).
      */
     var thinkingRuleInstanceId: String? = null
+
+    /**
+     * [port-upstream-1.16][T-quota-codex-subscription] Instance tag set by
+     * ProviderFactory for Codex OAuth instances, so replies' x-codex-* headers
+     * reach the quota store. Null = not quota-tracked.
+     */
+    var quotaInstanceId: String? = null
 
     /**
      * [T-android-xai-priority] Whether this provider speaks xAI's Priority
@@ -172,8 +179,12 @@ class OpenAIProvider private constructor(
          * in the Version / User-Agent headers. Bumped 0.142.3 → 0.144.1 to
          * match the CLIProxyAPI/sub2api upstream (fixes a gpt-5.6-luna 404 seen
          * on the older client). Shared constant so future bumps touch one place.
+         *
+         * [port-upstream-1.16] Non-private: the quota store's Codex usage query
+         * (quota/QuotaStore.extraHeaders) must send the same client version the
+         * chat path advertises, or the usage endpoint sees a different client.
          */
-        private const val CODEX_CLIENT_VERSION = "0.144.1"
+        const val CODEX_CLIENT_VERSION = "0.144.1"
 
         /**
          * Factory for OAuth-bearer OpenAI-compatible providers that aren't
@@ -327,10 +338,8 @@ class OpenAIProvider private constructor(
      */
     private fun Request.Builder.applyKeyAuth(token: String): Request.Builder =
         // [T-empty-key-compat-endpoints] A keyless third-party endpoint
-        // (ollama, LM Studio, LiteLLM, private relays) is a supported
-        // configuration. Send NO auth header rather than a malformed
-        // `Authorization: Bearer ` / empty `api-key:` — strict gateways
-        // reject the empty form, an absent header is universally fine.
+        // (ollama, LM Studio, private relays) is supported: send NO auth
+        // header — the empty form is rejected, absent is universally fine.
         if (token.isEmpty()) this
         else if (isAzure) header("api-key", token)
         else header("Authorization", "Bearer $token")
@@ -473,31 +482,21 @@ class OpenAIProvider private constructor(
     /**
      * [T-unified-reasoning-effort] Whether this endpoint applies OpenAI's
      * `reasoning_effort` (Chat) / `reasoning.effort` (Responses) uniformly to
-     * EVERY model it hosts — including third-party families (GLM / Kimi /
-     * DeepSeek / MiniMax) that, at their vendor-native endpoint, would instead
-     * use a `thinking:{}` object or self-reason with no toggle.
-     *
-     * Three known such gateways (mirrors iOS OpenAIProvider.usesUnifiedReasoningEffort):
-     *   • Volcengine Ark (`ark.` / `volces` in the base URL) — re-exposes
-     *     doubao/deepseek/glm/kimi through a single OpenAI-compatible surface
-     *     where thinking is controlled ONLY by `reasoning_effort` (min tier
-     *     `minimal`); the vendor-native `thinking:{}` shape is not honored.
-     *   • Azure OpenAI ([isAzure]) — reasoning is `reasoning_effort` for every
-     *     model surfaced through the deployment.
-     *   • Venice.ai (`api.venice.ai`) — [OpenMinis#86] resells deepseek / claude /
-     *     aion behind one OpenAI-compatible surface. Its ChatCompletionRequest
-     *     schema is `additionalProperties: false`, so an unknown root key is
-     *     rejected at validation time — BEFORE model dispatch — with
-     *     `400 Unrecognized key(s) in object: 'thinking'`. That is why every
-     *     model failed and why turning thinking OFF did not help: the
-     *     `{"type":"disabled"}` branch still sends the key. Venice natively
-     *     accepts root `reasoning_effort`, a superset of the tiers the generic
-     *     path emits, so no value mapping is needed.
+     * EVERY model it hosts — including third-party families that, at their
+     * vendor-native endpoint, would use a `thinking:{}` object or self-reason
+     * with no toggle. Three known gateways (mirrors iOS
+     * OpenAIProvider.usesUnifiedReasoningEffort):
+     *   • Volcengine Ark (`ark.` / `volces`) — thinking controlled ONLY by
+     *     `reasoning_effort`; the vendor-native `thinking:{}` shape is not honored.
+     *   • Azure OpenAI ([isAzure]) — `reasoning_effort` for every deployment.
+     *   • Venice.ai ([OpenMinis#86]) — `additionalProperties: false` schema
+     *     rejects an unknown root key BEFORE dispatch (`400 Unrecognized
+     *     key(s): 'thinking'`), and natively accepts root `reasoning_effort`.
      *
      * Gated tightly so official direct endpoints (DeepSeek/GLM/Kimi native,
      * which DO want their own thinking shape) are never mis-routed. Caveat (same
-     * class as [isMistral]): a relay or vanity domain that does not carry these
-     * hosts in its URL is still exposed.
+     * class as [isMistral]): a relay that does not carry these hosts in its URL
+     * is still exposed.
      */
     private val usesUnifiedReasoningEffort: Boolean =
         isAzure || basePath.lowercase().let {
@@ -823,7 +822,7 @@ class OpenAIProvider private constructor(
             if (statusCode !in 200..299) {
                 com.openminis.app.logging.AppLogger.warning(
                     "OpenAIProvider",
-                    "[ModelUseRoute] images/generations HTTP $statusCode body=${responseBody.take(300)}",
+                    "[ModelUseRoute] images/generations HTTP $statusCode body=${maskSecrets(responseBody.take(300))}",
                 )
                 throw mapHttpError(statusCode, responseBody)
             }
@@ -947,7 +946,7 @@ class OpenAIProvider private constructor(
             if (statusCode !in 200..299) {
                 com.openminis.app.logging.AppLogger.warning(
                     "OpenAIProvider",
-                    "[ModelUseRoute] images/edits HTTP $statusCode body=${responseBody.take(300)}",
+                    "[ModelUseRoute] images/edits HTTP $statusCode body=${maskSecrets(responseBody.take(300))}",
                 )
                 throw mapHttpError(statusCode, responseBody)
             }
@@ -1089,17 +1088,12 @@ class OpenAIProvider private constructor(
             } catch (_: Exception) {
                 throw LLMError.ProviderError("Video create: not JSON (${contentType.take(40)})")
             }
-            // [T-video-poll-url-from-create] Poll under the mount point that ACTUALLY
-            // answered 2xx, not under basePath. The candidate list above deliberately
-            // tries host-root URLs (`https://host/videos`, the absolute override) for
-            // relays that do not mount the videos API under `/v1`; rebuilding the poll
-            // URL from `basePath` then asked `https://host/v1/videos/<id>` for a job
-            // created at `https://host/videos` — a 404 on exactly the relays that had
-            // required the host-root create, and only AFTER the user had spent the
-            // quota. Stripping the create path off the create URL is the identity
-            // mapping for every candidate shape (`$basePath$path` and `hostRootURL$path`
-            // both end in `path`); an override that does not end in it falls back to
-            // basePath, which is the historical behaviour.
+            // [T-video-poll-url-from-create] Poll under the mount point that
+            // ACTUALLY answered 2xx, not basePath: relays that need the host-root
+            // create 404 the `basePath/v1/videos/<id>` poll — after the user had
+            // already spent the quota. Stripping the create path off its URL is
+            // the identity mapping for every candidate shape; a non-matching
+            // override falls back to basePath (historical behaviour).
             val pollBase = url.removeSuffix(path).let { if (it == url) basePath else it }
             return resolveVideoJob(json, token, path, pollBase)
             }

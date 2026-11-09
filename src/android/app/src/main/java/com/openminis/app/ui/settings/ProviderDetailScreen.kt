@@ -211,6 +211,14 @@ fun ProviderDetailScreen(
                                 // re-reading the async-written prefs on recomposition.
                                 storedKey = editKeyValue
                                 AppLogger.info(TAG, "Saved API key for ${instance.id}")
+                                // [T-models-credential-swap] A different key may see
+                                // a different model set — re-fetch now (non-force:
+                                // the new key's disk cache misses and goes to the
+                                // network; a failure keeps the current list).
+                                scope.launch {
+                                    val inst = providerRepository.instance(instanceId) ?: return@launch
+                                    providerRepository.refreshModels(inst)
+                                }
                             }
                             isEditingKey = false
                             editKeyValue = ""
@@ -267,12 +275,7 @@ fun ProviderDetailScreen(
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )
-                // Auto-append /v1 switch row — inline Row with heightIn=44dp
-                // so the row matches the URL-input row above and the save
-                // action below. SettingsSwitchRow's intrinsic 12dp padding
-                // around the 32dp Switch over-reported the height (~60dp),
-                // breaking the three-row rhythm in the Custom API base card
-                // (T231).
+                // Auto-append /v1 switch — heightIn=44dp matches the URL row; SettingsSwitchRow's padding over-reported height (T231).
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -295,14 +298,10 @@ fun ProviderDetailScreen(
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )
-                // [T-provider-custom-user-agent] Custom User-Agent input —
-                // only for OpenAI-/Anthropic-compat (relay) protocols. Some
-                // gateways reject Minis' default UA and only allow official
-                // clients (e.g. Claude Code). Blank → default UA. Official
-                // direct OpenAI/Anthropic instances still see the field because
-                // protocol == openAI/anthropic; it's harmless there (the value
-                // is only injected when this instance has a custom base, and on
-                // the official path customUserAgent stays at its default null
+                // [T-provider-custom-user-agent] Custom UA for relay protocols only — some
+                // gateways reject Minis' default UA and allow official clients only.
+                // Blank → default UA; harmless on official direct paths (only injected
+                // with a custom base, and customUserAgent stays null there.
                 // unless the user typed one — applied verbatim if they do).
                 val showUserAgentField = instance.providerType == ProviderType.openAI ||
                     instance.providerType == ProviderType.anthropic
@@ -502,6 +501,12 @@ fun ProviderDetailScreen(
             )
         }
 
+        // [port-upstream-1.16][FEAT-261021-04, iOS ProviderNetworkRouteSection] this provider's route override.
+        ProviderNetworkRouteSection(instanceId = instance.id)
+        // ─── Quota [port-upstream-1.16] ─── after Status (upstream/iOS placement);
+        // hidden for disabled / no-credential instances, failures never block chat.
+        com.openminis.app.ui.quota.ProviderQuotaSection(instance = instance)
+
         // ─── Voice Service (dual visibility) ────────────────────────
         // [T-android-provider-voice] When this instance owns audio-modality
         // models, link to its shadow Voice Service detail — the only path back
@@ -541,6 +546,11 @@ fun ProviderDetailScreen(
             SettingsRow(
                 title = stringResource(if (isRefreshing) R.string.provider_detail_refreshing else R.string.provider_detail_refresh_models),
                 subtitle = refreshNote?.let { note ->
+                    // [port-upstream-1.16] Distinct wording per outcome: a
+                    // vendor success says SYNCED (was: the same "unchanged"
+                    // mark as PRESERVED, so a real refresh read as a no-op);
+                    // a failed/empty vendor list that reseeded built-ins says
+                    // BUILTIN — the list came back, not from the endpoint.
                     stringResource(when (note) {
                         ModelRefreshResult.NO_KEY -> R.string.provider_sync_mark_nokey
                         ModelRefreshResult.PRESERVED -> R.string.provider_sync_mark_unchanged
@@ -548,7 +558,8 @@ fun ProviderDetailScreen(
                         ModelRefreshResult.NOT_FOUND -> R.string.provider_sync_mark_not_found
                         ModelRefreshResult.CONNECTION_FAILED -> R.string.provider_sync_mark_connection
                         ModelRefreshResult.INVALID_RESPONSE -> R.string.provider_sync_mark_invalid
-                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_unchanged
+                        ModelRefreshResult.SUCCESS_API -> R.string.provider_sync_mark_synced
+                        ModelRefreshResult.SUCCESS_BUILTIN -> R.string.provider_sync_mark_builtin
                     })
                 },
                 onClick = if (isRefreshing) {
@@ -597,12 +608,9 @@ fun ProviderDetailScreen(
                             // [T-android-model-row-hide-action] Long-press opens a
                             // menu (hide/delete) instead of straight delete:
                             // hiding was reachable only via the detail screen
-                            // (five steps vs iOS's one tap on an eye button).
-                            // A menu, not a trailing icon — the trailing slot
-                            // is a fixed 72dp badge area keeping the chevron
-                            // column aligned; a button there would rag it.
-                            // Built-ins can't be deleted (repo re-creates
-                            // them) but hiding works.
+                            // (five steps vs iOS's one tap). A menu, not a
+                            // trailing icon — that slot is a fixed 72dp badge
+                            // area keeping the chevron column aligned.
                             onLongClick = { menuEntryId = entry.id },
                         ),
                 ) {
@@ -820,14 +828,11 @@ private fun OAuthCredentialBlock(
     val scope = rememberCoroutineScope()
 
     // [T-android-openai-oauth-signout-signin-stuck] Drive the Sign In / Sign Out
-    // toggle off LOCAL Compose state instead of the `storedKey` parameter, which
-    // is read once per parent composition (a plain val) and never updates after
-    // a sign-out/sign-in. Without this the screen kept showing "Sign Out" after a
-    // logout (UI never refreshed) AND the Sign In branch was never reached
-    // because its gate was the same stale `storedKey.isNotEmpty()` — so a failed
-    // sign-out left Sign In dead too. `displayedKey` mirrors the live credential
-    // so the masked token / connected dot refresh together. Mirrors iOS
-    // ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
+    // toggle off LOCAL Compose state instead of the `storedKey` parameter (read
+    // once per composition, never updates): the stale gate showed "Sign Out"
+    // after logout and left Sign In dead. `displayedKey` mirrors the live
+    // credential so the masked token / connected dot refresh together. Mirrors
+    // iOS ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
     var displayedKey by remember(instance.id) { mutableStateOf(storedKey) }
     // [T-oauth-keep-credentials] Rejected refresh → red dot + hint instead of
     // the green one; cleared automatically when a fresh bundle lands.
@@ -1052,31 +1057,6 @@ private fun ApiKeyCredentialBlock(
 private fun maskedKey(key: String): String {
     if (key.length <= 10) return key.replace(Regex("."), "•")
     return key.take(6) + "..." + key.takeLast(4)
-}
-
-/**
- * Export the provider instance as JSON and hand it to the system share sheet
- * via FileProvider. Mirrors iOS `ProviderShareSheet` — writes a <label>.json
- * file to app-scoped cache and emits ACTION_SEND with a content:// URI.
- */
-private fun exportProviderInstance(
-    context: android.content.Context,
-    providerRepository: ProviderRepository,
-    instance: com.openminis.app.data.model.ProviderInstance,
-) {
-    val json = providerRepository.exportInstanceJSON(instance.id) ?: return
-    val safeLabel = instance.label.ifBlank { "provider" }
-        .replace(Regex("[^A-Za-z0-9._-]"), "_")
-    val dir = java.io.File(context.cacheDir, "shared").apply { mkdirs() }
-    val file = java.io.File(dir, "$safeLabel.json")
-    runCatching { file.writeText(json) }.onFailure { return }
-
-    // [T-share-fileprovider-unify] Shared FileProvider helper (clip + double
-    // grant hardening, previously missing on this variant).
-    shareViaFileProvider(
-        context, file, "application/json",
-        context.getString(R.string.provider_share_chooser_title),
-    )
 }
 
 /**

@@ -41,11 +41,12 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.BrightnessAuto
-import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Keyboard
@@ -97,23 +98,20 @@ const val KEY_SHOW_COMPLETED_TOOL_CARDS = "chat.showCompletedToolCards"  // Bool
 const val KEY_SHOW_SUBAGENT_BAR = "chat.showSubAgentBar"
 // [T-composer-mic-toggle] Single source for the sub-agent bar default.
 const val DEFAULT_SHOW_SUB_AGENT_BAR = true
-// Whether the composer requests focus when a reply finishes. Default ON (iOS parity).
 const val KEY_AUTO_FOCUS_AFTER_REPLY = "chat.autoFocusAfterReply"  // Boolean, default true
 // T-chat-title-pill: sticky session-title pill above the chat list while scrolling back through history.
 const val KEY_SHOW_CHAT_TITLE = "appearance.show_chat_title"  // Boolean, default true
 // [T-thinking-auto-expand-toggle] A new streaming thinking block auto-expands while the model reasons (default); read at block-mount time.
 const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, default true
-// Collapse thinking + tool process into a summary after the turn finishes (streaming stays expanded). Default ON.
+
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
 // [T-composer-mic-toggle] Show the composer's mic button. Default OFF; voice mode re-shows it so hiding never strands the user.
 const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
 const val DEFAULT_SHOW_MIC_BUTTON = false
-// [T-android-message-usage-footer] Small token-usage line under each reply. Default ON.
 const val KEY_SHOW_MESSAGE_TOKEN_USAGE = "chat.showMessageTokenUsage"  // Boolean, default true
 // [T-android-composer-context-glow] Rotating composer-edge glow near the model window. Default ON.
 const val KEY_COMPOSER_CONTEXT_GLOW = "chat.composerContextGlow"  // Boolean, default true
-// Material You wallpaper dynamic color. Default OFF (iOS-parity palette).
 const val KEY_DYNAMIC_COLOR = "chat.dynamicColor"  // Boolean, default false
 // [T-android-auto-grouping] File a chat into a matching EXISTING group on first title generation (no extra round-trip). Default ON; only files into user-created groups, once per chat.
 const val KEY_AUTO_GROUPING = "autoGroupingEnabled"  // Boolean, default true
@@ -212,6 +210,7 @@ fun AppearanceScreen(
     var composerContextGlow by remember { mutableStateOf(true) }
     var autoFocusAfterReply by remember { mutableStateOf(true) }
     var autoExpandThinking by remember { mutableStateOf(true) }
+    var showFullThinking by remember { mutableStateOf(false) }
     var foldAiProcess by remember { mutableStateOf(DEFAULT_FOLD_AI_PROCESS) }
     // Material You is Android 12+; the row renders disabled below S.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -240,6 +239,7 @@ fun AppearanceScreen(
             composerContextGlow = p.getBoolean(KEY_COMPOSER_CONTEXT_GLOW, true)
             autoFocusAfterReply = p.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)
             autoExpandThinking = p.getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+            showFullThinking = p.getBoolean(KEY_SHOW_FULL_THINKING, false)
             foldAiProcess = p.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
             dynamicColor = p.getBoolean(KEY_DYNAMIC_COLOR, false)
             showChatTitle = p.getBoolean(KEY_SHOW_CHAT_TITLE, true)
@@ -372,8 +372,7 @@ fun AppearanceScreen(
             }
         }
 
-        // -- Keep Screen Awake --
-        // Holds FLAG_KEEP_SCREEN_ON while a session has an active task (mirrors iOS). Default off.
+        CotTranslationSection()
         SettingsSection(
             header = stringResource(R.string.appearance_section_keep_awake),
             footer = stringResource(R.string.appearance_keep_awake_footer),
@@ -503,6 +502,7 @@ fun AppearanceScreen(
                 },
                 showDivider = true,
             )
+            ShowFullThinkingRow(showFullThinking) { showFullThinking = it; prefs.value.edit().putBoolean(KEY_SHOW_FULL_THINKING, it).apply() }
             SettingsSwitchRow(
                 icon = Icons.Outlined.ViewAgenda,
                 iconColor = tilePurple,
