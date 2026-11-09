@@ -5691,90 +5691,12 @@ class ChatViewModel(
         _error.value = null
     }
 
-    internal fun escapeJson(text: String): String {
-        val sb = StringBuilder("\"")
-        for (c in text) {
-            when (c) {
-                '"' -> sb.append("\\\"")
-                '\\' -> sb.append("\\\\")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                else -> {
-                    if (c.code < 0x20) sb.append("\\u%04x".format(c.code))
-                    else sb.append(c)
-                }
-            }
-        }
-        sb.append("\"")
-        return sb.toString()
-    }
 
     /**
      * Convert a flat list of MessageEntity into ChatMessages, merging toolResult
      * data from user-role messages back into their corresponding AssistantBlocks.
      * This mirrors iOS's toChatMessage() which reads both toolUse and toolResult parts.
      */
-    /**
-     * Matches a `<system-reminder>...</system-reminder>` block, including any
-     * surrounding whitespace / newlines, so a part that is *only* a reminder
-     * collapses to empty text instead of leaving a blank gap. DOTALL so `.`
-     * spans newlines (reminders run multi-line in the cancel/resume paths).
-     *
-     * Only applied at the UI-render transform — agentHistory + DB rows keep
-     * the raw text so the LLM continues to see the reminder on subsequent
-     * turns (matches iOS, where system-reminder text is appended to
-     * agentHistory/AgentMessage parts but never to the chat-list ChatMessage).
-     */
-    private val systemReminderRegex =
-        Regex("\\s*<system-reminder>.*?</system-reminder>\\s*", RegexOption.DOT_MATCHES_ALL)
-
-    private fun stripSystemReminders(text: String): String =
-        if (!text.contains("<system-reminder>")) text
-        else systemReminderRegex.replace(text, "")
-
-    /**
-     * [T-android-retry-attachment-loss] Remove the `<user-attached-files>` XML
-     * inventory from a persisted text part for DISPLAY only. The XML is now
-     * persisted (iOS parity) so the model keeps the file paths across retry /
-     * reload, but it must never render in the user bubble — the file chips are
-     * rebuilt from the mediaRef parts instead. Mirrors the index-based strip
-     * already used by editMessage / the title-fallback path.
-     */
-    private fun stripAttachedFilesXml(text: String): String {
-        val startIdx = text.indexOf("<user-attached-files>")
-        if (startIdx < 0) return text
-        val endTag = "</user-attached-files>"
-        val endIdx = text.indexOf(endTag, startIdx)
-        return if (endIdx >= 0) {
-            text.substring(0, startIdx) + text.substring(endIdx + endTag.length)
-        } else {
-            text.substring(0, startIdx)
-        }
-    }
-
-    private fun buildToolResultMap(entities: List<MessageEntity>): Map<String, ToolResultData> {
-        val result = mutableMapOf<String, ToolResultData>()
-        for (entity in entities) {
-            if (entity.role != "user") continue
-            runCatching {
-                val array = org.json.JSONArray(entity.partsJson)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    if (obj.optString("type") != "toolResult") continue
-                    val value = obj.getJSONObject("value")
-                    val toolUseId = value.optString("toolUseId", "")
-                    if (toolUseId.isNotEmpty()) {
-                        result[toolUseId] = ToolResultData(
-                            output = value.optString("output", ""),
-                            success = value.optBoolean("success", true),
-                        )
-                    }
-                }
-            }
-        }
-        return result
-    }
 
     internal fun List<MessageEntity>.toChatMessages(
         toolResultContext: List<MessageEntity> = emptyList(),
@@ -5784,7 +5706,7 @@ class ChatViewModel(
         // commonly land on opposite sides of a page boundary; decoding the
         // context without emitting it prevents the middle row from being
         // filtered or merged away.
-        val toolResultMap = buildToolResultMap(this + toolResultContext)
+        val toolResultMap = buildToolResultMap((this + toolResultContext).map { it.role to it.partsJson })
 
         // Second pass: convert messages, merging tool results into blocks
         // Filter out user messages that only contain toolResult parts (no visible text)
@@ -6133,7 +6055,6 @@ class ChatViewModel(
      */
     internal fun trimLoadedWindow(messages: List<ChatMessage>): List<ChatMessage> = messages
 
-    private data class ToolResultData(val output: String, val success: Boolean)
 
     internal fun MessageEntity.toLLMMessage(): LLMMessage {
         val r = if (role == "user") LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT
