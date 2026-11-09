@@ -272,41 +272,8 @@ object GitCli {
 
     // --------------------------------------------------------------- parsers
 
-    /**
-     * Shell-wrapper noise that must never reach the user-facing error text:
-     * the persistent-shell watchdog prints `Killed` / `( sleep …; kill … )`
-     * job lines onto stderr, and the probe's own `cfg` printf runs even when
-     * cwd is not a repo.
-     */
-    private val NOISE_LINE = Regex(
-        "(?i)\\bkilled\\b|/bin/bash: line \\d+|^\\(\\s*sleep|sleep \\d+; kill|^cfg\\t",
-    )
-
-    fun parseProbe(output: String, exitCode: Int): GitRepoInfo {
-        val lines = output.lines()
-        val inside = lines.firstOrNull()?.trim()
-        if (inside != "true") {
-            val clean = lines.filter { !NOISE_LINE.containsMatchIn(it) }
-                .joinToString("\n").trim()
-            return GitRepoInfo(
-                isRepo = false,
-                error = if (clean.isBlank()) "exit=$exitCode" else clean.take(500),
-            )
-        }
-        val root = lines.getOrNull(1)?.trim().orEmpty()
-        val branch = lines.getOrNull(2)?.trim().orEmpty()
-        val cfg = lines.firstOrNull { it.startsWith("cfg\t") }
-        val parts = cfg?.split('\t')
-        val name = parts?.getOrNull(1)?.takeIf { it.isNotBlank() }
-        val email = parts?.getOrNull(2)?.takeIf { it.isNotBlank() }
-        return GitRepoInfo(
-            isRepo = true,
-            root = root,
-            branch = branch.ifEmpty { "HEAD" },
-            userName = name,
-            userEmail = email,
-        )
-    }
+    /** Shell-wrapper noise; lives beside the parsers that read it ([GitCliParse]). */
+    private val NOISE_LINE = GitCliParse.NOISE_LINE
 
     fun parseStatus(output: String): GitStatus {
         var ahead = 0
@@ -442,117 +409,21 @@ object GitCli {
         return map
     }
 
-    /**
-     * Rename rows spell the two paths as `old => new` or collapsed as
-     * `prefix/{old => new}`; both resolve to `(oldPath, newPath)`. Returns
-     * null when the row is not a rename (no ` => ` marker).
-     */
-    fun splitRename(path: String): Pair<String, String>? {
-        val arrow = path.indexOf(" => ")
-        if (arrow < 0) return null
-        val lhs = path.substring(0, arrow)
-        val rhs = path.substring(arrow + 4)
-        if ("{" in lhs && rhs.endsWith("}")) {
-            val prefix = lhs.substringBeforeLast('{')
-            val oldName = lhs.substringAfterLast('{')
-            val newName = rhs.substringBeforeLast('}')
-            return prefix + oldName to prefix + newName
-        }
-        return lhs to rhs
-    }
+    /** Delegates to [GitCliParse] — kept so every existing `GitCli.X` call site compiles. */
+    fun splitRename(path: String): Pair<String, String>? =
+        GitCliParse.splitRename(path)
 
-    /**
-     * First push URL from `git remote -v`, or null when no remote exists.
-     * The push entry wins over the fetch entry when their URLs differ;
-     * with equal URLs the first line is returned.
-     */
-    fun parseRemote(output: String): String? {
-        var fallback: String? = null
-        for (raw in output.lines()) {
-            val line = raw.trimEnd('\r')
-            if (line.isBlank()) continue
-            val f = line.split('\t')
-            if (f.size < 2) continue
-            val url = f[1].substringBefore(" (").trim()
-            if (url.isEmpty()) continue
-            if ("(push)" in f[1]) return url
-            if (fallback == null) fallback = url
-        }
-        return fallback
-    }
+    /** Delegates to [GitCliParse] — kept so every existing `GitCli.X` call site compiles. */
+    fun parseRemote(output: String): String? =
+        GitCliParse.parseRemote(output)
 
-    /**
-     * Record line = 9 `\x1f` fields ending with subject+body; the body's own
-     * newlines spill into trailing lines and are reassembled verbatim.
-     * Shell noise is skipped before the record and inside the body.
-     */
-    fun parseCommitDetail(output: String): GitCommitDetail? {
-        val lines = output.lines()
-        val start = lines.indexOfFirst { l ->
-            !NOISE_LINE.containsMatchIn(l) &&
-                l.substringBefore('\u001f').length == 40 &&
-                l.split('\u001f').size >= 9
-        }
-        if (start < 0) return null
-        val f = lines[start].split('\u001f')
-        val bodyParts = mutableListOf<String>()
-        f.drop(8).joinToString("\u001f").trim().takeIf { it.isNotEmpty() }?.let { bodyParts += it }
-        for (l in lines.drop(start + 1)) {
-            val line = l.trimEnd('\r')
-            if (NOISE_LINE.containsMatchIn(line)) continue
-            if (line.isBlank()) break
-            bodyParts += line
-        }
-        return GitCommitDetail(
-            hash = f[0],
-            author = f[1],
-            authorEmail = f[2],
-            authorEpoch = f[3].toLongOrNull() ?: 0L,
-            committer = f[4],
-            committerEmail = f[5],
-            committerEpoch = f[6].toLongOrNull() ?: 0L,
-            subject = f[7],
-            body = bodyParts.joinToString("\n").trim(),
-        )
-    }
+    /** Delegates to [GitCliParse] — kept so every existing `GitCli.X` call site compiles. */
+    fun parseCommitDetail(output: String): GitCommitDetail? =
+        GitCliParse.parseCommitDetail(output)
 
-    /**
-     * Per-file stats of one commit. `-\t-` rows are binary files or pure
-     * renames; rename rows resolve via [splitRename] into renameFrom/new
-     * path (both the `old => new` and `prefix/{old => new}` spellings).
-     */
-    fun parseCommitNumstat(output: String): List<CommitFileStat> {
-        val out = mutableListOf<CommitFileStat>()
-        for (raw in output.lines()) {
-            val line = raw.trimEnd('\r')
-            if (line.isBlank()) continue
-            val f = line.split('\t')
-            if (f.size < 3) continue
-            val path = f.drop(2).joinToString("\t")
-            if (f[0] == "-" && f[1] == "-") {
-                val rename = splitRename(path)
-                out += if (rename != null) {
-                    CommitFileStat(
-                        path = rename.second,
-                        added = 0,
-                        deleted = 0,
-                        binary = true,
-                        renameFrom = rename.first,
-                    )
-                } else {
-                    CommitFileStat(path, 0, 0, binary = true)
-                }
-                continue
-            }
-            out += CommitFileStat(
-                path = path,
-                added = f[0].toIntOrNull() ?: 0,
-                deleted = f[1].toIntOrNull() ?: 0,
-                binary = false,
-            )
-        }
-        return out
-    }
+    /** Delegates to [GitCliParse] — kept so every existing `GitCli.X` call site compiles. */
+    fun parseCommitNumstat(output: String): List<CommitFileStat> =
+        GitCliParse.parseCommitNumstat(output)
 
     /**
      * Commit via a base64-relayed message file: the message never touches
