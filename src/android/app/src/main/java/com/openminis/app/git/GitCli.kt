@@ -92,10 +92,18 @@ object GitCli {
     fun statusCmd(root: String? = null) =
         "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b"
 
-    /** Local + remote refs for the branch switcher, newest commits first. */
+    /**
+     * Local + remote refs for the branch switcher, newest commits first.
+     * `--format` is single-quoted for the shell (`%(` is a bare subshell
+     * opener otherwise) and separators use for-each-ref's `%NN` hex escapes
+     * (`%1f` = 0x1f; the pretty-only `%xNN` stays literal here). The extra
+     * `%(symref)` column is non-empty only for symbolic refs like
+     * origin/HEAD, which [parseBranches] drops — they are aliases, not
+     * switchable branches.
+     */
     fun branchesCmd(root: String? = null) =
         "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
-            "--format=%(objectname:short)%x1f%(refname:short)%x1f%(contents:subject) | head -40"
+            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)' | head -40"
 
     /** Stash list: `stash@{n}<x1f>subject`, newest first. */
     fun stashCmd(root: String? = null) =
@@ -124,6 +132,21 @@ object GitCli {
     fun graphLogCmd(offset: Int, limit: Int, root: String? = null) =
         "${gitPrefix(root)} -c core.quotepath=false log -n $limit --skip $offset " +
             "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
+
+    /**
+     * History fallback for repos whose HEAD cannot be resolved (`git log`
+     * fails with bad/missing HEAD, and `--all` fails too because git still
+     * parses HEAD first). Walking the concrete shas of every local+remote
+     * ref sidesteps HEAD entirely — verified live in gitpanel_verify.py.
+     * Same record shape as [graphLogCmd] so [parseGraphLog] is shared.
+     */
+    fun graphLogCmdFallback(offset: Int, limit: Int, root: String? = null): String {
+        val p = gitPrefix(root)
+        return "$p -c core.quotepath=false log \$($p for-each-ref " +
+            "--format='%(objectname)' refs/heads refs/remotes | sort -u) " +
+            "-n $limit --skip $offset --date=unix " +
+            "--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
+    }
 
     /**
      * Commit-detail sheet: identity + dates + subject + body, no diff.
@@ -332,12 +355,18 @@ object GitCli {
         return GitStatus(ahead, behind, upstream, entries)
     }
 
-    /** `hash<x1f>name<x1f>subject` rows → switcher entries; garbage rows drop. */
+    /**
+     * `hash<x1f>name<x1f>subject<x1f>symref` rows → switcher entries;
+     * garbage rows drop. The optional 4th column carries `%(symref)` from
+     * [branchesCmd]: symbolic refs (origin/HEAD) are non-empty there and
+     * are skipped — listing them would offer an unswitchable alias row.
+     */
     fun parseBranches(output: String, current: String): List<GitBranchRef> =
         output.lines().mapNotNull { raw ->
             val parts = raw.trim().split('\u001f')
             if (parts.size < 2) return@mapNotNull null
             val name = parts[1].takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            if (parts.getOrNull(3)?.isNotBlank() == true) return@mapNotNull null
             GitBranchRef(
                 name = name,
                 isCurrent = name == current,
@@ -604,7 +633,12 @@ object GitCli {
     ): List<GitCommit> {
         val r = runCatching { run(sessionId, graphLogCmd(offset, limit, root)) }
             .getOrElse { return emptyList() }
-        return if (r.exitCode == 0) parseGraphLog(r.output) else emptyList()
+        if (r.exitCode == 0) return parseGraphLog(r.output)
+        // HEAD unresolvable (bad/missing object): `git log` and `--all` both
+        // fail — walk every ref's concrete sha instead, HEAD parsing bypassed.
+        val all = runCatching { run(sessionId, graphLogCmdFallback(offset, limit, root)) }
+            .getOrElse { return emptyList() }
+        return if (all.exitCode == 0) parseGraphLog(all.output) else emptyList()
     }
 
     suspend fun numstat(
