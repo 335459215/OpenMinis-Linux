@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     tags:
       - "v*"
       - "*-linux"
@@ -301,7 +301,7 @@ jobs:
       # Tag builds skip this step, so a versioned release keeps the plain
       # three-component version the updater compares against.
       - name: Compute rolling version suffix
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/dev'
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
@@ -400,7 +400,7 @@ jobs:
           echo "app versionName=$NAME versionCode=$CODE"
 
       - name: Publish rolling pre-release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/dev'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-latest
