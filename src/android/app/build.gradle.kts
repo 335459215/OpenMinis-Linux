@@ -421,7 +421,14 @@ val verifyProotJniLibs by tasks.registering {
         }
     }
 }
-tasks.named("preBuild") { dependsOn(verifyProotJniLibs) }
+// The guard hangs off the merge*JniLibFolders tasks only — those run for every
+// assembling/bundling variant, which is exactly when a missing binary would end
+// up inside an APK. Earlier it also hung off `preBuild`, which made every task
+// in the build graph require the file: pr-check.yml compiles Kotlin without
+// packaging, and libproot.so is deliberately NOT committed (deps/build_proot.sh
+// or the native-deps artifact supplies it), so that job could never pass. The
+// brick protection is unchanged: nothing can reach an APK without crossing a
+// merge*JniLibFolders task.
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }
     .configureEach { dependsOn(verifyProotJniLibs) }
 
