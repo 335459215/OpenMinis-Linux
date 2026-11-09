@@ -93,9 +93,11 @@ class InLoopContextPolicyTest {
     }
 
     @Test
-    fun `default 90 percent matches historic 200k and 100k headroom`() {
-        assertEquals(180_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
-        assertEquals(90_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
+    fun `default percent matches the 200k and 100k headroom`() {
+        // 862362d2 lowered the default from 90 to 75 on purpose ("compact while
+        // there is still headroom") but left these assertions on the old number.
+        assertEquals(150_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
+        assertEquals(75_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
     }
 
     @Test
@@ -145,9 +147,9 @@ class InLoopContextPolicyTest {
 
     @Test
     fun `a null buffer keeps every tier's existing threshold`() {
-        assertEquals(180_000, ContextPolicy.forContextWindow(200_000, bufferTokens = null).compactThreshold)
-        assertEquals(180_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
-        assertEquals(90_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
+        assertEquals(150_000, ContextPolicy.forContextWindow(200_000, bufferTokens = null).compactThreshold)
+        assertEquals(150_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
+        assertEquals(75_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
     }
 
     @Test
