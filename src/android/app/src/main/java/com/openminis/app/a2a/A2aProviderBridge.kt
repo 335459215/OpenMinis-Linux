@@ -79,7 +79,7 @@ object A2aProviderBridge {
         scope.launch {
             try {
                 if (!gatewayReady()) {
-                    Log.i(TAG, "网关未就绪，跳过服务商注册")
+                    Log.i(TAG, "gateway not ready, skipping provider registration")
                     return@launch
                 }
                 val existing = synchronized(lock) {
@@ -97,18 +97,18 @@ object A2aProviderBridge {
                         isEnabled = true,
                     )
                     synchronized(lock) { repository.addInstance(instance) }
-                    Log.i(TAG, "已注册内置服务商「$LABEL」 → ${baseUrl()}")
+                    Log.i(TAG, "registered builtin provider '$LABEL' -> ${baseUrl()}")
                 }
                 // 无论新建还是已存在，都拉一次模型：网关侧的模型集合会变
                 val instance = synchronized(lock) { repository.instances.find { it.id == INSTANCE_ID } }
                 if (instance != null) {
                     val result = repository.refreshModels(instance)
-                    Log.i(TAG, "模型刷新结果: $result")
+                    Log.i(TAG, "model refresh result: $result")
                 }
                 A2aPrefs.setProviderSynced(context, System.currentTimeMillis())
             } catch (error: Throwable) {
                 // 注册失败绝不能影响网关本身 —— 用户还能手动添加
-                Log.w(TAG, "服务商同步失败", error)
+                Log.w(TAG, "provider sync failed", error)
             }
         }
     }
@@ -133,7 +133,7 @@ object A2aProviderBridge {
         }
         ids
     } catch (error: Throwable) {
-        Log.w(TAG, "读取网关模型列表失败", error)
+        Log.w(TAG, "failed to read gateway model list", error)
         emptyList()
     }
 }

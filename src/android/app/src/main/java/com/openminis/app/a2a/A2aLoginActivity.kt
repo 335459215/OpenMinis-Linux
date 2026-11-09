@@ -1,5 +1,6 @@
 package com.openminis.app.a2a
 
+import com.openminis.app.R
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
@@ -84,7 +85,7 @@ class A2aLoginActivity : Activity() {
         }
         bar.addView(
             TextView(this).apply {
-                text = "关闭"
+                text = getString(R.string.a2a_action_close)
                 textSize = 15f
                 setTextColor(Color.parseColor("#0A84FF"))
                 setPadding(0, 0, dp(24), 0)
@@ -93,7 +94,7 @@ class A2aLoginActivity : Activity() {
         )
         bar.addView(
             TextView(this).apply {
-                text = "隔离登录环境 · 桌面版"
+                text = getString(R.string.a2a_isolated_login_title)
                 textSize = 14f
                 setTextColor(Color.parseColor("#333333"))
             },

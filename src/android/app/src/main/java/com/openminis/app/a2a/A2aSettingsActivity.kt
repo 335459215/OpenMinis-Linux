@@ -1,5 +1,6 @@
 package com.openminis.app.a2a
 
+import com.openminis.app.R
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
@@ -47,19 +48,19 @@ class A2aSettingsActivity : Activity() {
         scroll.addView(root)
 
         root.addView(TextView(this).apply {
-            text = "← 返回"
+            text = getString(R.string.a2a_action_back)
             textSize = 15f
             setTextColor(Color.parseColor("#0A84FF"))
             setPadding(0, 0, 0, 24)
             setOnClickListener { finish() }
         })
         root.addView(TextView(this).apply {
-            text = "Agent2API 网关"
+            text = getString(R.string.a2a_gateway_title)
             textSize = 22f
             setTextColor(Color.parseColor("#222222"))
         })
         root.addView(TextView(this).apply {
-            text = "本地 OpenAI 兼容网关，供 Minis Ultra 与其它客户端共用登录态"
+            text = getString(R.string.a2a_gateway_subtitle)
             textSize = 13f
             setTextColor(Color.GRAY)
             setPadding(0, 8, 0, 0)
@@ -76,28 +77,28 @@ class A2aSettingsActivity : Activity() {
         busy = ProgressBar(this).apply { visibility = ProgressBar.GONE }
         root.addView(busy)
 
-        root.addView(button("打开面板") {
+        root.addView(button(getString(R.string.a2a_action_open_panel)) {
             startActivity(Intent(this, A2aPanelActivity::class.java))
         })
-        root.addView(button("启动网关") { action { A2aGateway.ensureStarted(applicationContext) } })
-        root.addView(button("停止网关") {
+        root.addView(button(getString(R.string.a2a_action_start)) { action { A2aGateway.ensureStarted(applicationContext) } })
+        root.addView(button(getString(R.string.a2a_action_stop)) {
             A2aGateway.stop()
             A2aKeepAliveService.stop(this)
-            Toast.makeText(this, "网关已停止", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.a2a_toast_stopped), Toast.LENGTH_SHORT).show()
             refresh()
         })
-        root.addView(button("重启网关") { action { A2aGateway.restart(applicationContext) } })
+        root.addView(button(getString(R.string.a2a_action_restart)) { action { A2aGateway.restart(applicationContext) } })
 
         // ── 保活 / 悬浮球 ──────────────────────────────────
         root.addView(TextView(this).apply {
-            text = "后台运行"
+            text = getString(R.string.a2a_section_background)
             textSize = 13f
             setTextColor(Color.parseColor("#888888"))
             setPadding(0, 32, 0, 4)
         })
 
         keepAliveSwitch = Switch(this).apply {
-            text = "跟随 Minis Ultra 保活"
+            text = getString(R.string.a2a_keepalive_title)
             textSize = 15f
             isChecked = A2aPrefs.keepAlive(this@A2aSettingsActivity)
             setOnCheckedChangeListener { _, checked ->
@@ -111,14 +112,14 @@ class A2aSettingsActivity : Activity() {
         }
         root.addView(keepAliveSwitch)
         root.addView(TextView(this).apply {
-            text = "用前台服务托管网关：Minis 不被杀，网关与插件进程就不会被系统回收。"
+            text = getString(R.string.a2a_keepalive_desc)
             textSize = 12f
             setTextColor(Color.GRAY)
             setPadding(0, 0, 0, 16)
         })
 
         bubbleSwitch = Switch(this).apply {
-            text = "离开页面后显示悬浮小图标"
+            text = getString(R.string.a2a_overlay_title)
             textSize = 15f
             isChecked = A2aPrefs.floatingBubble(this@A2aSettingsActivity)
             setOnCheckedChangeListener { _, checked ->
@@ -139,19 +140,18 @@ class A2aSettingsActivity : Activity() {
         }
         root.addView(bubbleSwitch)
         root.addView(TextView(this).apply {
-            text = "面板离开即冻结（暂停 JS 与渲染），点小图标瞬间解冻回到原页面。"
+            text = getString(R.string.a2a_overlay_desc)
             textSize = 12f
             setTextColor(Color.GRAY)
             setPadding(0, 0, 0, 16)
         })
 
-        root.addView(button("授权「显示在其他应用上层」") { requestOverlay() })
-        root.addView(button("清理面板 Cookie") { clearCookies() })
-        root.addView(button("查看网关日志") { showLog() })
+        root.addView(button(getString(R.string.a2a_action_grant_overlay)) { requestOverlay() })
+        root.addView(button(getString(R.string.a2a_action_clear_cookies)) { clearCookies() })
+        root.addView(button(getString(R.string.a2a_action_view_log)) { showLog() })
 
         root.addView(TextView(this).apply {
-            text = "接口地址：http://127.0.0.1:18901/v1\n" +
-                "面板地址：http://127.0.0.1:18901/m"
+            text = getString(R.string.a2a_endpoints)
             textSize = 13f
             setPadding(0, 28, 0, 0)
             setTextColor(Color.GRAY)
@@ -190,7 +190,7 @@ class A2aSettingsActivity : Activity() {
                 ),
             )
         } else {
-            Toast.makeText(this, "已获得悬浮窗权限", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.a2a_toast_overlay_granted), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -203,12 +203,12 @@ class A2aSettingsActivity : Activity() {
                 if (result.isFailure) {
                     Toast.makeText(
                         this,
-                        result.exceptionOrNull()?.message ?: "操作失败",
+                        result.exceptionOrNull()?.message ?: getString(R.string.a2a_error_action_failed),
                         Toast.LENGTH_LONG,
                     ).show()
                 } else {
                     if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
-                    Toast.makeText(this, "网关已就绪", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.a2a_toast_ready), Toast.LENGTH_SHORT).show()
                 }
                 refresh()
             }
@@ -219,7 +219,10 @@ class A2aSettingsActivity : Activity() {
         thread(name = "a2a-refresh") {
             val running = A2aGateway.isRunning()
             val summary = StringBuilder()
-            summary.append(if (running) "状态：运行中" else "状态：已停止")
+            summary.append(
+                if (running) getString(R.string.a2a_status_running)
+                else getString(R.string.a2a_status_stopped),
+            )
             if (running) {
                 runCatching {
                     val connection =
@@ -232,13 +235,18 @@ class A2aSettingsActivity : Activity() {
                     val models = json.optInt("models", 0)
                     val login = json.optJSONObject("login")
                     val loggedIn = login?.optBoolean("loggedIn", false) ?: false
-                    summary.append("\n模型数量：").append(models)
-                    summary.append("\n上游登录：").append(if (loggedIn) "已登录" else "未登录")
+                    summary.append(getString(R.string.a2a_summary_models)).append(models)
+                    summary.append(getString(R.string.a2a_summary_login))
+                        .append(
+                            if (loggedIn) getString(R.string.a2a_login_signed_in)
+                            else getString(R.string.a2a_login_signed_out),
+                        )
                 }.onFailure {
-                    summary.append("\n健康检查失败：").append(it.message ?: "未知")
+                    summary.append(getString(R.string.a2a_summary_health_failed))
+                        .append(it.message ?: getString(R.string.a2a_error_unknown))
                 }
             } else {
-                summary.append("\n点击「启动网关」后即可打开面板")
+                summary.append(getString(R.string.a2a_summary_hint))
             }
             val text = summary.toString()
             handler.post { statusView.text = text }
@@ -247,16 +255,16 @@ class A2aSettingsActivity : Activity() {
 
     private fun clearCookies() {
         CookieManager.getInstance().removeAllCookies {
-            handler.post { Toast.makeText(this, "面板 Cookie 已清理", Toast.LENGTH_SHORT).show() }
+            handler.post { Toast.makeText(this, getString(R.string.a2a_toast_cookies_cleared), Toast.LENGTH_SHORT).show() }
         }
     }
 
     private fun showLog() {
         val file: File = A2aGateway.logFile(this)
         val text = runCatching {
-            if (!file.isFile) "还没有网关日志。" else
+            if (!file.isFile) getString(R.string.a2a_log_empty) else
                 file.readLines().takeLast(300).joinToString("\n")
-        }.getOrElse { "读取日志失败：${it.message}" }
+        }.getOrElse { getString(R.string.a2a_log_read_failed, it.message.orEmpty()) }
         val view = TextView(this).apply {
             this.text = text.takeLast(30_000)
             textSize = 11f
@@ -264,9 +272,9 @@ class A2aSettingsActivity : Activity() {
             setTextIsSelectable(true)
         }
         AlertDialog.Builder(this)
-            .setTitle("网关日志")
+            .setTitle(getString(R.string.a2a_log_title))
             .setView(ScrollView(this).apply { addView(view) })
-            .setPositiveButton("关闭", null)
+            .setPositiveButton(getString(R.string.a2a_action_close), null)
             .show()
     }
 }

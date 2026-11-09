@@ -1,5 +1,7 @@
 package com.openminis.app.a2a
 
+import java.util.Locale
+import com.openminis.app.R
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -75,7 +77,7 @@ class A2aPanelActivity : Activity() {
             }
         })
         titleView = TextView(this).apply {
-            text = "Agent2API 网关"
+            text = getString(R.string.a2a_gateway_title)
             textSize = 16f
             setTextColor(Color.parseColor("#333333"))
         }
@@ -84,7 +86,7 @@ class A2aPanelActivity : Activity() {
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
         )
         header.addView(TextView(this).apply {
-            text = "刷新"
+            text = getString(R.string.a2a_action_refresh)
             textSize = 14f
             setTextColor(Color.parseColor("#0A84FF"))
             setPadding(0, 0, 0, 0)
@@ -183,10 +185,10 @@ class A2aPanelActivity : Activity() {
                     }
                     web.loadUrl("http://127.0.0.1:${A2aGateway.PORT}/m?rev=${A2aGateway.uiRevision()}")
                 } else {
-                    titleView?.text = "网关启动失败"
+                    titleView?.text = getString(R.string.a2a_gateway_start_failed)
                     web.loadDataWithBaseURL(
                         null,
-                        failureHtml(result.exceptionOrNull()?.message ?: "未知错误"),
+                        failureHtml(result.exceptionOrNull()?.message ?: getString(R.string.a2a_error_unknown)),
                         "text/html",
                         "utf-8",
                         null,
@@ -242,7 +244,7 @@ class A2aPanelActivity : Activity() {
             )
             true
         } catch (error: Throwable) {
-            A2aLog.write(this, "隔离登录容器启动失败: ${error.message}")
+            A2aLog.write(this, "isolated login container failed to start: ${error.message}")
             false
         }
     }
@@ -276,7 +278,7 @@ class A2aPanelActivity : Activity() {
         // 立刻 reload 会把这条还在飞的请求打断，登录又回到「等回调」状态。
         // 账号列表由页面自己在这轮登录 wait 结束后刷新（见 add-account-dynamic-sheet）。
         web.evaluateJavascript(script) { result ->
-            A2aLog.write(this, "隔离登录回调已注入: $result")
+            A2aLog.write(this, "isolated login callback injected: $result")
         }
     }
 
@@ -289,7 +291,7 @@ class A2aPanelActivity : Activity() {
             setPadding(28, 0, 28, 0)
         }
         bar.addView(TextView(this).apply {
-            text = "关闭"
+            text = getString(R.string.a2a_action_close)
             textSize = 15f
             setTextColor(Color.parseColor("#0A84FF"))
             setPadding(0, 0, 28, 0)
@@ -297,7 +299,7 @@ class A2aPanelActivity : Activity() {
         })
         bar.addView(
             TextView(this).apply {
-                text = "登录 / 授权"
+                text = getString(R.string.a2a_action_login)
                 textSize = 15f
                 setTextColor(Color.parseColor("#333333"))
             },
@@ -344,7 +346,7 @@ class A2aPanelActivity : Activity() {
     }
 
     private fun failureHtml(reason: String): String = """
-        <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+        <!doctype html><html lang="${Locale.getDefault().toLanguageTag()}"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
           body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:32px;
@@ -353,9 +355,9 @@ class A2aPanelActivity : Activity() {
           code{background:#f3f3f5;padding:2px 6px;border-radius:4px;font-size:13px;word-break:break-all}
           p{font-size:14px;color:#666}
         </style></head><body>
-        <h2>Agent2API 网关未能启动</h2>
-        <p>原因：<code>${reason.replace("<", "&lt;")}</code></p>
-        <p>可以返回设置页，点「查看网关日志」看最后 300 行输出。</p>
+        <h2>${getString(R.string.a2a_fail_title)}</h2>
+        <p>${getString(R.string.a2a_fail_reason)} <code>${reason.replace("<", "&lt;")}</code></p>
+        <p>${getString(R.string.a2a_fail_hint)}</p>
         </body></html>
     """.trimIndent()
 
@@ -461,17 +463,17 @@ class A2aPanelActivity : Activity() {
     }
 
     /** 隔离登录容器回来了：把回调交给页面收尾。 */
-    @Deprecated("Activity Result API 之外的最短路径，面板本身没有 Fragment 宿主")
+    @Deprecated("Shortest path outside the Activity Result API; the panel has no Fragment host")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != A2aLoginActivity.REQUEST_ISOLATED_LOGIN) return
         if (resultCode != RESULT_OK) {
-            A2aLog.write(this, "隔离登录被取消")
+            A2aLog.write(this, "isolated login cancelled")
             return
         }
         val callback = A2aLoginActivity.callbackFrom(data)
         if (callback.isNullOrEmpty()) {
-            A2aLog.write(this, "隔离登录结束但没有回调 URL")
+            A2aLog.write(this, "isolated login finished without a callback URL")
             return
         }
         onIsolatedLoginCallback(callback)

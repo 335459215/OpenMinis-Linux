@@ -1,5 +1,6 @@
 package com.openminis.app.a2a
 
+import com.openminis.app.R
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -72,7 +73,7 @@ class A2aKeepAliveService : Service() {
                 if (!alive) {
                     if (A2aGateway.stopRequested) return@Thread
                     if (A2aGateway.isStartingNow()) return@Thread
-                    log("watchdog: 网关不在线，重新拉起")
+                    log("watchdog: gateway offline, respawning")
                     if (A2aGateway.stopRequested) return@Thread
                     if (A2aGateway.isStartingNow()) return@Thread
                     runCatching { A2aGateway.ensureStarted(applicationContext) }
@@ -128,10 +129,10 @@ class A2aKeepAliveService : Service() {
                 manager.createNotificationChannel(
                     NotificationChannel(
                         channelId,
-                        "Agent2API 网关",
+                        getString(R.string.a2a_gateway_title),
                         NotificationManager.IMPORTANCE_LOW,
                     ).apply {
-                        description = "保持本地网关运行，供客户端调用"
+                        description = getString(R.string.a2a_notif_channel_desc)
                         setShowBadge(false)
                     },
                 )
@@ -152,8 +153,8 @@ class A2aKeepAliveService : Service() {
             Notification.Builder(this)
         }
         val notification = builder
-            .setContentTitle("Agent2API 网关")
-            .setContentText("运行中 · 127.0.0.1:${A2aGateway.PORT}")
+            .setContentTitle(getString(R.string.a2a_gateway_title))
+            .setContentText(getString(R.string.a2a_notif_text_running, A2aGateway.PORT.toString()))
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
             .setOngoing(true)
             .setContentIntent(open)
