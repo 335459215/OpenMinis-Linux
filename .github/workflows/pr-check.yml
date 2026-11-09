@@ -113,15 +113,52 @@ jobs:
         run: |
           set -e
           chmod +x gradlew
-          for attempt in 1 2 3; do
+          if ./gradlew --version >/dev/null 2>&1; then
+            echo "wrapper distribution ready (cache hit)"
+            exit 0
+          fi
+
+          # services.gradle.org answers 307 -> github.com/gradle/gradle-distributions/
+          # releases/..., and that GitHub endpoint intermittently answers 504. It is
+          # the same outage that broke plugin resolution for kotlin-compiler-embeddable,
+          # so retrying it three times just burns 30s on a failure that will not clear.
+          # One retry covers ordinary jitter; past that, pull the byte-identical zip
+          # from a mirror instead of hammering GitHub.
+          #
+          # distributionUrl is rewritten in the workspace copy only. The repo keeps the
+          # official URL on purpose (gradle-wrapper.properties: "do not commit a pin"),
+          # so nothing here reaches git.
+          PROPS=gradle/wrapper/gradle-wrapper.properties
+          OFFICIAL=$(sed -n 's/^distributionUrl=//p' "$PROPS" | sed 's/\\:/:/g')
+          DIST=$(basename "${OFFICIAL%%\?*}")
+
+          if ./gradlew --version >/dev/null 2>&1; then
+            echo "wrapper distribution ready (retry)"
+            exit 0
+          fi
+
+          for MIRROR in \
+            "https://mirrors.cloud.tencent.com/gradle" \
+            "https://mirrors.huaweicloud.com/gradle" \
+            "https://mirrors.aliyun.com/macports/distfiles/gradle"
+          do
+            URL="$MIRROR/$DIST"
+            echo "official source unreachable, trying $URL"
+            if ! curl -fsSL -m 60 -o /dev/null "$URL"; then
+              echo "  not available at $MIRROR"
+              continue
+            fi
+            ESCAPED=$(printf '%s' "$URL" | sed 's/:/\\:/g')
+            sed -i "s|^distributionUrl=.*|distributionUrl=$ESCAPED|" "$PROPS"
             if ./gradlew --version >/dev/null 2>&1; then
-              echo "wrapper distribution ready (attempt $attempt)"
+              echo "wrapper distribution ready (mirror $MIRROR)"
               exit 0
             fi
-            echo "wrapper fetch failed (attempt $attempt), retrying in 10s"
-            sleep 10
+            ESCAPED_OFFICIAL=$(printf '%s' "$OFFICIAL" | sed 's/:/\\:/g')
+            sed -i "s|^distributionUrl=.*|distributionUrl=$ESCAPED_OFFICIAL|" "$PROPS"
           done
-          echo "wrapper distribution could not be fetched after 3 attempts" >&2
+
+          echo "wrapper distribution could not be fetched from any source" >&2
           exit 1
 
       - name: Compile Kotlin (release variant)
