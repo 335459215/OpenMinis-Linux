@@ -275,6 +275,32 @@ object GitCli {
     /** Shell-wrapper noise; lives beside the parsers that read it ([GitCliParse]). */
     private val NOISE_LINE = GitCliParse.NOISE_LINE
 
+    fun parseProbe(output: String, exitCode: Int): GitRepoInfo {
+        val lines = output.lines()
+        val inside = lines.firstOrNull()?.trim()
+        if (inside != "true") {
+            val clean = lines.filter { !NOISE_LINE.containsMatchIn(it) }
+                .joinToString("\n").trim()
+            return GitRepoInfo(
+                isRepo = false,
+                error = if (clean.isBlank()) "exit=$exitCode" else clean.take(500),
+            )
+        }
+        val root = lines.getOrNull(1)?.trim().orEmpty()
+        val branch = lines.getOrNull(2)?.trim().orEmpty()
+        val cfg = lines.firstOrNull { it.startsWith("cfg\t") }
+        val parts = cfg?.split('\t')
+        val name = parts?.getOrNull(1)?.takeIf { it.isNotBlank() }
+        val email = parts?.getOrNull(2)?.takeIf { it.isNotBlank() }
+        return GitRepoInfo(
+            isRepo = true,
+            root = root,
+            branch = branch.ifEmpty { "HEAD" },
+            userName = name,
+            userEmail = email,
+        )
+    }
+
     fun parseStatus(output: String): GitStatus {
         var ahead = 0
         var behind = 0
