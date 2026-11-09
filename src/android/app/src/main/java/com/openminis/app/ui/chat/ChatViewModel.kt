@@ -1341,7 +1341,7 @@ class ChatViewModel(
         if (isDraft) {
             com.openminis.app.data.AutoCompactPrefs.consumeHandoffSummary()?.let { summary ->
                 _inputText.value = buildString {
-                    append("继续上一会话未完成的任务。以下是上一会话的压缩摘要，请直接接着做，不要重复已完成的工作：\n\n")
+                    append(context.getString(R.string.chat_handoff_resume_prefix))
                     append(summary)
                 }
             }

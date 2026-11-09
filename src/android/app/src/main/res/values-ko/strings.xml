@@ -1572,6 +1572,7 @@
     <string name="chat_message_large_export_ok">내보냈습니다</string>
     <string name="chat_stream_degraded_notice">성능 보호: 스트리밍 중에는 간단한 방식으로 표시합니다</string>
     <string name="chat_resume_crash_warning">지난번에 스트리밍 도중 이 앱이 응답하지 않았습니다. 그래도 계속하려면 한 번 더 탭하세요.</string>
+    <string name="chat_handoff_resume_prefix">이전 세션에서 끝나지 않은 작업을 이어서 진행하세요. 아래는 해당 세션의 압축 요약입니다. 중단된 지점부터 바로 이어서 하고, 이미 끝난 작업은 반복하지 마세요:\n\n</string>
     <string name="chat_message_large_export_fail">내보내기에 실패했습니다</string>
     <string name="update_error_network_unreachable">업데이트 서버에 연결할 수 없습니다. 네트워크를 확인해주세요.</string>
     <string name="update_error_forbidden_with_link">업데이트 서버에 접근할 수 없습니다. 네트워크 제한일 수 있습니다. GitHub Releases 에서 수동으로 다운로드할 수 있습니다.</string>

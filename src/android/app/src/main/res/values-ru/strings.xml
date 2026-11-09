@@ -1583,6 +1583,7 @@
     <string name="chat_message_large_export_ok">Экспортировано</string>
     <string name="chat_stream_degraded_notice">Защита производительности: упрощённая отрисовка во время потока</string>
     <string name="chat_resume_crash_warning">В прошлый раз приложение перестало отвечать во время потока. Нажмите ещё раз, чтобы всё равно продолжить.</string>
+    <string name="chat_handoff_resume_prefix">Продолжи незавершённую задачу из предыдущей сессии. Ниже приведено сжатое резюме той сессии — продолжай ровно с того места, где она остановилась, и не повторяй уже выполненную работу:\n\n</string>
     <string name="chat_message_large_export_fail">Не удалось экспортировать</string>
     <string name="update_error_network_unreachable">Не удалось подключиться к серверу обновлений. Проверьте сеть и повторите попытку.</string>
     <string name="update_error_forbidden_with_link">Не удалось получить доступ к серверу обновлений — возможно, он заблокирован вашей сетью. Откройте GitHub Releases для ручной загрузки.</string>

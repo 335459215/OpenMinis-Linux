@@ -1575,6 +1575,7 @@
     <string name="chat_message_large_export_ok">ส่งออกแล้ว</string>
     <string name="chat_stream_degraded_notice">การป้องกันประสิทธิภาพ: ลดความซับซ้อนของการแสดงผลขณะรับคำตอบ</string>
     <string name="chat_resume_crash_warning">ครั้งที่แล้วแอปนี้ไม่ตอบสนองขณะรับคำตอบ แตะอีกครั้งเพื่อดำเนินการต่อ</string>
+    <string name="chat_handoff_resume_prefix">ทำงานที่ยังไม่เสร็จจากเซสชันก่อนหน้าต่อ ด้านล่างคือสรุปแบบบีบอัดของเซสชันนั้น — ทำต่อจากจุดที่ค้างไว้ทันที และอย่าทำงานที่เสร็จแล้วซ้ำ:\n\n</string>
     <string name="chat_message_large_export_fail">ส่งออกไม่สำเร็จ</string>
     <string name="update_error_network_unreachable">ติดต่อเซิร์ฟเวอร์อัปเดตไม่ได้ ตรวจสอบเครือข่ายของคุณแล้วลองอีกครั้ง</string>
     <string name="update_error_forbidden_with_link">เข้าถึงเซิร์ฟเวอร์อัปเดตไม่ได้ อาจถูกบล็อกโดยเครือข่ายของคุณ เปิด GitHub Releases เพื่อดาวน์โหลดด้วยตนเอง</string>

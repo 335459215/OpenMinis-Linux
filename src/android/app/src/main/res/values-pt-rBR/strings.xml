@@ -1575,6 +1575,7 @@
     <string name="chat_message_large_export_ok">Exportado</string>
     <string name="chat_stream_degraded_notice">Proteção de desempenho: exibição simplificada durante a resposta</string>
     <string name="chat_resume_crash_warning">Da última vez, este app parou de responder durante a resposta. Toque de novo para retomar mesmo assim.</string>
+    <string name="chat_handoff_resume_prefix">Continue a tarefa inacabada da sessão anterior. Abaixo está o resumo compactado dessa sessão — retome exatamente de onde parou e não repita o trabalho já feito:\n\n</string>
     <string name="chat_message_large_export_fail">Falha na exportação</string>
     <string name="update_error_network_unreachable">Não foi possível acessar o servidor de atualização. Verifique sua rede e tente de novo.</string>
     <string name="update_error_forbidden_with_link">Não foi possível acessar o servidor de atualização; talvez sua rede esteja bloqueando. Abra o GitHub Releases para baixar manualmente.</string>

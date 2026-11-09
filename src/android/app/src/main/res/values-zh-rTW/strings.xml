@@ -1648,6 +1648,7 @@
     <string name="chat_message_large_export_ok">已匯出</string>
     <string name="chat_stream_degraded_notice">效能保護：串流期間採用簡化算繪</string>
     <string name="chat_resume_crash_warning">上次這個應用程式在串流時停止回應。再點一次即可仍要繼續。</string>
+    <string name="chat_handoff_resume_prefix">繼續上一工作階段未完成的任務。以下是上一工作階段的壓縮摘要，請直接接著做，不要重複已完成的工作：\n\n</string>
     <string name="chat_message_large_export_fail">匯出失敗</string>
     <string name="update_error_network_unreachable">無法連線到更新伺服器，請檢查網路後重試。</string>
     <string name="update_error_forbidden_with_link">存取更新伺服器失敗，可能受網路限制。可前往 GitHub Releases 手動下載最新版本。</string>

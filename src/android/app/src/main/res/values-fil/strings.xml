@@ -1575,6 +1575,7 @@
     <string name="chat_message_large_export_ok">Na-export</string>
     <string name="chat_stream_degraded_notice">Proteksyon sa performance: pinasimple ang pagpapakita habang tumatanggap ng sagot</string>
     <string name="chat_resume_crash_warning">Noong huli, hindi tumugon ang app na ito habang tumatanggap ng sagot. I-tap muli para magpatuloy pa rin.</string>
+    <string name="chat_handoff_resume_prefix">Ipagpatuloy ang hindi natapos na gawain mula sa nakaraang session. Nasa ibaba ang compaction summary ng session na iyon — ituloy agad kung saan ito tumigil at huwag ulitin ang nagawa na:\n\n</string>
     <string name="chat_message_large_export_fail">Nabigo ang pag-export</string>
     <string name="update_error_network_unreachable">Hindi maabot ang update server. Suriin ang network mo at subukan muli.</string>
     <string name="update_error_forbidden_with_link">Hindi ma-access ang update server, maaaring hinaharangan ng network mo. Buksan ang GitHub Releases para mag-download nang manu-mano.</string>
