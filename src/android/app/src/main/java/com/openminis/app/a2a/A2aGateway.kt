@@ -68,8 +68,22 @@ object A2aGateway {
         }
     }
 
+    /**
+     * 最近一次真实探活的结果。**只由后台线程写，主线程只读**。
+     *
+     * 存在的理由：`isRunning()` 会发起同步 HTTP，而 Android 对 targetSdk ≥ 11
+     * 的应用在主线程联网一律抛 `NetworkOnMainThreadException`。悬浮球门禁、
+     * 面板 onResume 的保活判断、服务的 onStartCommand 全在主线程，一旦直接
+     * 调 `isRunning()`，异常被 `catch (_: Throwable)` 吞成 false —— 网关明明
+     * 活着也判成没活：悬浮球永远不出现、前台服务永远拉不起来，而且因为
+     * 异常发生在写日志之前，连一行诊断都不会留下。
+     */
+    @Volatile
+    private var probeOk: Boolean = false
+
+    /** 同步探活。会联网，**只能在后台线程调用**。 */
     fun isRunning(): Boolean {
-        return try {
+        val ok = try {
             val connection = URL("http://$HOST:$PORT/health").openConnection() as HttpURLConnection
             connection.connectTimeout = 800
             connection.readTimeout = 800
@@ -79,6 +93,44 @@ object A2aGateway {
         } catch (_: Throwable) {
             false
         }
+        probeOk = ok
+        return ok
+    }
+
+    /**
+     * 主线程安全的存活判断：只看进程句柄与探活缓存，**绝不联网**。
+     *
+     * 句柄存在时它是权威的 —— 进程死了就是死了，watchdog 会重拉并换新句柄。
+     * 句柄为空说明网关可能是上个 App 进程遗留的，这时只能信后台线程最近
+     * 一次探活的结果。
+     */
+    fun isRunningFast(): Boolean {
+        val handle = process
+        if (handle != null) return handle.isAlive
+        return probeOk
+    }
+
+    /** 是否正在后台探活（防止主线程连发时开一堆线程）。 */
+    @Volatile
+    private var probeInFlight: Boolean = false
+
+    /**
+     * 踢一次后台探活，刷新 [probeOk]。
+     *
+     * 句柄为空时（网关是上个 App 进程遗留的）主线程无从得知真实状态，只能
+     * 先信缓存。调一次这个，下一次生命周期回调就能拿到准确值。
+     */
+    fun refreshProbeAsync() {
+        if (process != null) return
+        if (probeInFlight) return
+        probeInFlight = true
+        Thread({
+            try {
+                isRunning()
+            } finally {
+                probeInFlight = false
+            }
+        }, "a2a-probe").start()
     }
 
     fun ensureStarted(context: Context): Result<Unit> = synchronized(lock) {
@@ -253,7 +305,7 @@ object A2aGateway {
      * 收敛在这里——所有入口都查到同一个运行状态，而不是每个调用方
      * 自己拼一次弱守卫。
      */
-    fun bubbleAllowed(): Boolean = !stopRequested && isRunning()
+    fun bubbleAllowed(): Boolean = !stopRequested && isRunningFast()
 
     fun logFile(context: Context): File = File(dataDir(context), "gateway.log")
 

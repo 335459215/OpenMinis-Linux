@@ -125,7 +125,7 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = 26
         targetSdk = 35
-        versionCode = 291
+        versionCode = 292
         // [T-rolling-version] Rolling builds (push to main) carry the merge PR
         // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
         // be traced back to the change that produced it. Tag/release builds keep

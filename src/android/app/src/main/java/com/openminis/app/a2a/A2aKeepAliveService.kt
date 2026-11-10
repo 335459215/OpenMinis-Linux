@@ -101,7 +101,7 @@ class A2aKeepAliveService : Service() {
             ACTION_HIDE_BUBBLE -> {
                 hideBubble()
                 log("HIDE_BUBBLE")
-                if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunning()) stopSelf()
+                if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunningFast()) stopSelf()
             }
             ACTION_STOP -> {
                 A2aBubble.hide()

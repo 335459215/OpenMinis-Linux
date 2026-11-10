@@ -213,6 +213,29 @@ class UpdateVersionLogicTest {
     }
 
     @Test
+    fun `rolling newer versionName with older versionCode is not an upgrade`() {
+        // 2026-11-10 false positive on this device: installed was 2.0.90
+        // (versionCode 291, built without MINIS_VERSION_SUFFIX), the rolling
+        // body carried versionName 2.0.90.306 / versionCode 290. The name
+        // comparison alone said "newer", but Android rejects a package with a
+        // lower versionCode — so the prompt reappeared after every failed
+        // install. versionCode must be authoritative whenever the body has one.
+        val c = rolling(code = 290, name = "2.0.90.306", updatedAt = 10_000_000L)
+        assertFalse(
+            UpdateVersionLogic.isNewerThanLocal(
+                c, "2.0.90", 291, localLastUpdateMs = 1_000_000L,
+            ),
+        )
+        // And the mirror case still reports an upgrade: code beats name in both
+        // directions, so a real bump is never suppressed by a stale name.
+        assertTrue(
+            UpdateVersionLogic.isNewerThanLocal(
+                c.copy(bodyVersionCode = 292), "2.0.90", 291, 1_000_000L,
+            ),
+        )
+    }
+
+    @Test
     fun `highestPublished compares pairwise not against zero`() {
         assertEquals(
             "1.0.1-linux",

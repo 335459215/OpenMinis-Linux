@@ -417,7 +417,10 @@ class A2aPanelActivity : Activity() {
         //    时自动 kick keepAlive 会在 stopRequested=true 时把服务拉回来。
         if (A2aGateway.stopRequested) return
         if (A2aGateway.isStartingNow()) return
-        if (!A2aGateway.isRunning()) return
+        if (!A2aGateway.isRunningFast()) {
+            A2aGateway.refreshProbeAsync()
+            return
+        }
         // 前台时才允许启动前台服务（Android 12+ 的后台启动限制）。
         if (A2aPrefs.keepAlive(this)) A2aKeepAliveService.start(this)
     }
@@ -437,6 +440,9 @@ class A2aPanelActivity : Activity() {
         // 但用户只是回到 Minis Ultra，并不是退出网关，球应该留下。
         // 直接由 Activity 走 WindowManager 加窗，不经过服务：后台
         // startService 会被系统丢弃，那条路根本到不了。
+        // 先踢一次后台探活：网关可能是上个 App 进程遗留的（句柄为空），
+        // 此时主线程只能用缓存值判断。预热后下一次离开面板就能准确加窗。
+        A2aGateway.refreshProbeAsync()
         if (A2aPrefs.floatingBubble(this) && A2aGateway.bubbleAllowed()) {
             A2aBubble.show(this)
         }

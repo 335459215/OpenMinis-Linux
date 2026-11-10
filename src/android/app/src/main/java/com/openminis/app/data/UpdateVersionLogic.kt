@@ -100,25 +100,38 @@ object UpdateVersionLogic {
         if (isRollingTag(c.tagName)) {
             val bodyCode = c.bodyVersionCode
             val bodyVer = c.bodyVersionName?.let { normalizeTag(it) }
-            if (bodyCode != null && bodyCode > localCode) return true
+            if (bodyCode != null) {
+                // [T-rolling-code-authoritative] When the body carries a
+                // versionCode, it alone decides. Android refuses to install a
+                // package whose versionCode is lower than the installed one, so
+                // a "newer" versionName with an older code is an uninstallable
+                // candidate: the UI prompts, the installer rejects with
+                // INSTALL_FAILED_VERSION_DOWNGRADE, the prompt comes back on the
+                // next check — forever. Observed on 2.0.90 (code 291) against a
+                // rolling body of 2.0.90.306 / code 290.
+                //
+                // Same code is likewise not an upgrade: a rebuild at the same
+                // versionCode replaces the installed package with identical
+                // provenance, which is what the rolling channel already treats
+                // as "not an upgrade" (see the rebuilt-APK test).
+                return bodyCode > localCode
+            }
             if (bodyVer != null && compareVersions(bodyVer, localVer) > 0) return true
-            if (bodyCode == null) {
-                val apkName = bodyVer ?: normalizeTag(c.versionName)
-                // Fail closed unless the name actually looks like a version.
-                // Without this guard, a rolling body we cannot parse yields
-                // apkName == "android", which lexicographically beats every
-                // digit-leading local version ("a" > "2") — the timestamp
-                // alone then falsely claims an update for users already on
-                // the newest build.
-                val versionLike = apkName.firstOrNull()?.isDigit() == true
-                if (versionLike &&
-                    c.apkUpdatedAtMs > 0L &&
-                    localLastUpdateMs > 0L &&
-                    c.apkUpdatedAtMs > localLastUpdateMs + ROLLING_SLOP_MS &&
-                    compareVersions(apkName, localVer) > 0
-                ) {
-                    return true
-                }
+            val apkName = bodyVer ?: normalizeTag(c.versionName)
+            // Fail closed unless the name actually looks like a version.
+            // Without this guard, a rolling body we cannot parse yields
+            // apkName == "android", which lexicographically beats every
+            // digit-leading local version ("a" > "2") — the timestamp
+            // alone then falsely claims an update for users already on
+            // the newest build.
+            val versionLike = apkName.firstOrNull()?.isDigit() == true
+            if (versionLike &&
+                c.apkUpdatedAtMs > 0L &&
+                localLastUpdateMs > 0L &&
+                c.apkUpdatedAtMs > localLastUpdateMs + ROLLING_SLOP_MS &&
+                compareVersions(apkName, localVer) > 0
+            ) {
+                return true
             }
             return false
         }

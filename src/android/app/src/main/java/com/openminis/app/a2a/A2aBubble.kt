@@ -47,6 +47,9 @@ object A2aBubble {
     /** 显示；已存在则直接返回 true。 */
     fun show(context: Context): Boolean {
         if (!A2aGateway.bubbleAllowed()) {
+            // 句柄为空（网关是上个 App 进程遗留的）时，主线程无从得知真实状态，
+            // 此刻通常是误判。踢一次后台探活，下一次 onStop/切后台就能正确加窗。
+            A2aGateway.refreshProbeAsync()
             hide()
             return false
         }
