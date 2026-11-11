@@ -752,3 +752,72 @@ android {
         }
     }
 }
+
+// [T-rootfs-asset-guard] The Ubuntu rootfs is deliberately NOT committed
+// (BUILDING.md: "不进 git") — scripts/prepare_android_sandbox.sh downloads it
+// and the sandbox-assets workflow caches it on a release. CI covers the APK
+// path with `test -s`, but a plain `./gradlew assembleRelease` on a clean
+// checkout has no such check and silently yields a ~54 MiB APK with no rootfs.
+//
+// That APK is worse than a broken build: RootfsManager.installIfNeeded()
+// returns early when a rootfs is already installed (so upgrades work), which
+// means the defect stays invisible on the build machine and only detonates on
+// a fresh install — where all three candidate assets miss, `assets.open()`
+// throws, and installIfNeeded() rethrows after setting Failed. The sandbox can
+// then never initialise. Same failure class as the missing libproot.so in
+// 2.0.90-test.
+//
+// Escape hatch mirrors minis.skipMinifyForTests: PR checks and other
+// compile-only jobs must stay able to build without the asset.
+val skipRootfsAssetGuard =
+    providers.gradleProperty("minis.skipRootfsAssetGuard").orNull == "true"
+
+val verifyRootfsAsset by tasks.registering {
+    group = "verification"
+    description = "Fails the build when the Ubuntu rootfs asset is missing or empty."
+    val assetsDir = layout.projectDirectory.dir("src/main/assets")
+    // Capture these during configuration: reading script-level properties from
+    // doLast breaks the configuration cache (the outer reference deserialises
+    // as null -> "Cannot invoke ... because this.this$0 is null").
+    val guardEnabled = !skipRootfsAssetGuard
+    val candidateFiles = listOf("ubuntu-base.tgz", "ubuntu-base.tar.gz", "ubuntu-base.tar")
+        .map { assetsDir.file(it).asFile }
+    val candidatePaths = candidateFiles.map { it.path }
+    inputs.files(candidateFiles).optional()
+    outputs.upToDateWhen { false }
+    doLast {
+        if (!guardEnabled) {
+            logger.lifecycle("verifyRootfsAsset skipped (-Pminis.skipRootfsAssetGuard=true)")
+            return@doLast
+        }
+        val present = candidateFiles.filter { it.isFile && it.length() > 0L }
+        if (present.isEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("Ubuntu rootfs asset missing — refusing to package a brick.")
+                    candidatePaths.forEach { appendLine("  missing: $it") }
+                    appendLine(
+                        "A fresh install of such an APK can never initialise the sandbox " +
+                            "(upgrades hide it, because installIfNeeded() returns early " +
+                            "when a rootfs already exists).",
+                    )
+                    appendLine("Fix: run scripts/prepare_android_sandbox.sh, or copy the")
+                    appendLine("rootfs from the sandbox-assets release:")
+                    appendLine("  gh release download sandbox-assets --pattern 'ubuntu-base-*' \\")
+                    appendLine("    --output src/main/assets/ubuntu-base.tgz")
+                    appendLine("Compile-only jobs may pass -Pminis.skipRootfsAssetGuard=true.")
+                },
+            )
+        }
+        logger.lifecycle(
+            "verifyRootfsAsset ok: " +
+                present.joinToString { "${it.name} (${it.length() / 1024 / 1024} MiB)" },
+        )
+    }
+}
+// Hang the guard off merge*Assets only, for the same reason documented on
+// verifyProotJniLibs: pr-check.yml compiles Kotlin without packaging, and the
+// rootfs is not in git, so anything reachable from preBuild would make that
+// job impossible to pass.
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
+    .configureEach { dependsOn(verifyRootfsAsset) }
