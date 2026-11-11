@@ -462,6 +462,13 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
+
+    // [T-git-panel] Host-native git for the Git panel: JGit reads the workspace
+    // directory directly on the HOST filesystem — no PRoot boot, no shell
+    // round-trip — so history/branches show the moment the panel opens.
+    // Read-only here; commit/stage/push stay on the sandbox path because
+    // credentials live in the sandbox git config. Ported from upstream #307.
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.8.1.202611041320-r")
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

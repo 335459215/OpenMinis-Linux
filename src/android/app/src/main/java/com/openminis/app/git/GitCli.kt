@@ -89,8 +89,10 @@ object GitCli {
         .map { DiscoveredRepo(path = it, name = it.substringAfterLast('/')) }
         .filter { it.name.isNotBlank() }
 
+    // `-uall` lists untracked files individually so the Changes tab granularity
+    // matches the host JGit status (porcelain v1 collapses untracked dirs by default).
     fun statusCmd(root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b"
+        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b -uall"
 
     /**
      * Local + remote refs for the branch switcher, newest commits first.
@@ -158,14 +160,19 @@ object GitCli {
             "--pretty=format:%H%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%s%x1f%b " +
             shellQuote(hash)
 
-    /** Per-file stats of one commit; `--format=` leaves numstat rows only. */
+    /**
+     * Per-file stats of one commit; `--format=` leaves numstat rows only.
+     * `-m --first-parent` pins merge commits to the first-parent diff — the
+     * host JGit path has no combined-diff mode, and plain `git show` on a
+     * merge would print the (usually empty) combined diff instead.
+     */
     fun commitNumstatCmd(hash: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show --numstat --format= " +
+        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --numstat --format= " +
             shellQuote(hash)
 
     /** Diff of a single file inside one commit (details sheet → diff view). */
     fun commitFileDiffCmd(hash: String, path: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show --date=iso " +
+        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso " +
             shellQuote(hash) + " -- " + shellQuote(path)
 
     /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
@@ -669,7 +676,9 @@ object GitCli {
     suspend fun commitDiff(sessionId: String, hash: String, root: String? = null): String {
         val quoted = shellQuote(hash)
         val r = runCatching {
-            run(sessionId, "${gitPrefix(root)} -c core.quotepath=false show --date=iso $quoted")
+            // `-m --first-parent` matches the host JGit diff, which always
+            // formats against the first parent of a merge commit.
+            run(sessionId, "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso $quoted")
         }.getOrElse { return "[diff unavailable: ${it.message}]" }
         if (r.exitCode != 0) return "[git show exit=${r.exitCode}]\n${r.output.take(2000)}"
         return truncateDiff(r.output)
