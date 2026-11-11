@@ -580,6 +580,11 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // JGit is declared once, in the [T-git-panel] block above the Core section.
+    // Upstream #307 added a second copy of the same coordinate during the merge
+    // (both branches introduced the line independently, so git saw two
+    // insertions, not a conflict); Gradle fails on the duplicate coordinate.
+
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
     // filesDir/logs/ where LogManagementScreen surfaces them.

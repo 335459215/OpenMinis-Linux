@@ -96,6 +96,26 @@ internal object BuiltinFreeLanes {
     val ALL_INSTANCE_IDS: Set<String> = ALL.map { it.instanceId }.toSet()
 
     /**
+     * Ids this build ships that are NOT free lanes, so they must never appear
+     * in [ALL] — but they are still ours and still alive.
+     *
+     * The Agent2API bridge registers its own provider row under a `builtin-`
+     * id ([com.openminis.app.a2a.A2aProviderBridge.INSTANCE_ID], duplicated
+     * here as a literal to keep this package free of an app/a2a dependency).
+     * The boot purge retires every `builtin-` row it does not recognise, so
+     * without this set the bridge's row — and with it the model rows, group
+     * membership, agent-loop slots and credentials that hang off the id — is
+     * deleted on every cold start and only partly rebuilt by the gateway's
+     * own sync (which re-adds the row and models, never the groups).
+     *
+     * The value is a storage id, not a name: renaming it would orphan every
+     * existing install. `BuiltinLaneRetirementTest` pins it against
+     * [com.openminis.app.a2a.A2aProviderBridge.INSTANCE_ID] so the two cannot
+     * drift silently.
+     */
+    val RESIDENT_INSTANCE_IDS: Set<String> = setOf("builtin-agent2api-local")
+
+    /**
      * The full lane list for this device: the compiled-in lanes plus every
      * manifest entry that synthesises cleanly. Manifest entries whose
      * `instanceId` collides with a compiled-in lane are dropped (the

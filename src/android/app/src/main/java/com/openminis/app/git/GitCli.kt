@@ -11,66 +11,19 @@ import com.openminis.app.sandbox.ExecutionCoordinator
  * budget classifier. Nothing here is destructive by design: the panel
  * can stage, unstage and commit, but never reset --hard / clean / push.
  *
- * Parsers are pure and unit-tested (GitCliParseTest); the shell layer is
- * a thin wrapper that only quotes paths and picks machine-readable git
- * flags (`--porcelain`, `%x1f` field separators, `-c core.quotepath=false`
- * so unicode paths arrive unescaped).
+ * Parsers are pure and unit-tested (GitCliParseTest); command builders
+ * live in [GitCliCmd] (pure string functions, also JVM-unit-tested) and
+ * the shell layer is a thin wrapper that only quotes paths and routes
+ * through them, so every git flag and escape stays machine-checkable
+ * (`--porcelain`, `%x1f` field separators, `-c core.quotepath=false` so
+ * unicode paths arrive unescaped).
  */
 object GitCli {
 
-    /**
-     * `git` with an optional `-C <root>`: every panel command carries the
-     * resolved repo root so a repo nested below the session cwd (the common
-     * `workspace/<clone>` layout) works without cd-ing the shared shell —
-     * cd-ing would move the agent's cwd out from under it.
-     */
-    fun gitPrefix(root: String?): String =
-        if (root.isNullOrBlank()) "git" else "git -C ${shellQuote(root)}"
+    /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
+    private const val DIFF_MAX_CHARS = 200_000
 
-    /** Probe whether a directory is inside a work tree, plus identity. */
-    fun probeCmd(root: String? = null): String {
-        val g = gitPrefix(root)
-        return "$g rev-parse --is-inside-work-tree 2>/dev/null && " +
-            "$g rev-parse --show-toplevel && " +
-            "$g branch --show-current; " +
-            "printf 'cfg\\t%s\\t%s\\n' \"\$(" + g + " config user.name 2>/dev/null)\" " +
-            "\"\$(" + g + " config user.email 2>/dev/null)\""
-    }
-
-    /**
-     * Workspace-anchored repo discovery for when cwd itself is not a repo.
-     *
-     * The persistent shell boots at `/root` and its cwd drifts with every
-     * agent `cd`, so `find .` from the live cwd can silently miss the
-     * session's repos (cwd = /root) or pick the wrong winner (cwd =
-     * workspace root with several clones). Discovery therefore anchors at
-     * the session workspace's fixed guest path and emits ABSOLUTE repo-root
-     * lines — they resolve identically from any cwd.
-     *
-     * Output: `<abs repo root>` per line, most recently active first.
-     * Activity = max(newest HEAD commit time, newest shallow working-tree
-     * mtime). The commit signal comes from `git log -1` (O(1) object read,
-     * immune to PRoot I/O amplification) and covers repos the agent commits
-     * into; the shallow mtime covers uncommitted top-level edits without a
-     * full-tree walk (a per-repo full-tree `find` made the panel hang on
-     * real devices, where every stat crosses PRoot at 10-50x cost). Ties
-     * break by path so a same-second clone batch resolves deterministically.
-     * mindepth 2 skips the workspace's own (absent) `.git`; maxdepth 4
-     * covers both `<workspace>/<repo>` and `<workspace>/<group>/<repo>`.
-     */
-    const val DISCOVER_CMD =
-        "find /var/minis/workspace -maxdepth 4 -mindepth 2 -type d -name .git 2>/dev/null | " +
-            "while IFS= read -r d; do " +
-            "root=\${d%/.git}; " +
-            "committed=\$(git -C \"\$root\" log -1 --format=%ct 2>/dev/null); " +
-            "touched=\$(find \"\$root\" -maxdepth 2 -type f -not -path '*/.git/*' " +
-            "-printf '%T@\\n' 2>/dev/null | sort -rn | head -1); " +
-            "score=\$(printf '%s\\n%s\\n' \"\${committed:-0}\" \"\${touched:-0}\" " +
-            "| sort -rn | head -1); " +
-            "printf '%s %s\\n' \"\${score:-0}\" \"\$root\"; " +
-            "done | sort -k1,1nr -k2 | sed 's/^[^ ]* //' | head -8"
-
-    /** A repo found by [DISCOVER_CMD]: absolute root path + display name. */
+    /** A repo found by [GitCliCmd.DISCOVER_CMD]: absolute root path + display name. */
     data class DiscoveredRepo(
         /** Absolute guest path of the repo root (the directory containing `.git`). */
         val path: String,
@@ -80,103 +33,14 @@ object GitCli {
 
     /**
      * Discovery lines are absolute repo-root paths, most recently active
-     * first (see [DISCOVER_CMD]). Blank lines and stray text are dropped;
-     * order is preserved because it is the activity ranking.
+     * first (see [GitCliCmd.DISCOVER_CMD]). Blank lines and stray text are
+     * dropped; order is preserved because it is the activity ranking.
      */
     fun parseDiscover(output: String): List<DiscoveredRepo> = output.lines()
         .map { it.trim() }
         .filter { it.startsWith("/") }
         .map { DiscoveredRepo(path = it, name = it.substringAfterLast('/')) }
         .filter { it.name.isNotBlank() }
-
-    // `-uall` lists untracked files individually so the Changes tab granularity
-    // matches the host JGit status (porcelain v1 collapses untracked dirs by default).
-    fun statusCmd(root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b -uall"
-
-    /**
-     * Local + remote refs for the branch switcher, newest commits first.
-     * `--format` is single-quoted for the shell (`%(` is a bare subshell
-     * opener otherwise) and separators use for-each-ref's `%NN` hex escapes
-     * (`%1f` = 0x1f; the pretty-only `%xNN` stays literal here). The extra
-     * `%(symref)` column is non-empty only for symbolic refs like
-     * origin/HEAD, which [parseBranches] drops — they are aliases, not
-     * switchable branches.
-     */
-    fun branchesCmd(root: String? = null) =
-        "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
-            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)' | head -40"
-
-    /** Stash list: `stash@{n}<x1f>subject`, newest first. */
-    fun stashCmd(root: String? = null) =
-        "${gitPrefix(root)} stash list --format=%gd%x1f%s"
-
-    /** Push/pull both refresh status afterwards; upstream must exist for push. */
-    fun pushCmd(root: String? = null) = "${gitPrefix(root)} push"
-    fun pullCmd(root: String? = null) = "${gitPrefix(root)} pull --ff-only"
-
-    fun logCmd(limit: Int, root: String? = null, skip: Int = 0) =
-        "${gitPrefix(root)} -c core.quotepath=false log -n $limit" +
-            (if (skip > 0) " --skip $skip" else "") +
-            " --date=unix --pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s"
-
-    /** Per-file +/- line counts for staged (`--cached`) or unstaged changes. */
-    fun numstatCmd(staged: Boolean, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false diff --numstat" +
-            (if (staged) " --cached" else "")
-
-    fun remoteCmd(root: String? = null) = "${gitPrefix(root)} remote -v"
-
-    /**
-     * History page: same record as [logCmd] plus `%P` (parents) so the
-     * commit-graph lanes can be laid out; `--skip` pages older commits.
-     */
-    fun graphLogCmd(offset: Int, limit: Int, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false log -n $limit --skip $offset " +
-            "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
-
-    /**
-     * History fallback for repos whose HEAD cannot be resolved (`git log`
-     * fails with bad/missing HEAD, and `--all` fails too because git still
-     * parses HEAD first). Walking the concrete shas of every local+remote
-     * ref sidesteps HEAD entirely — verified live in gitpanel_verify.py.
-     * Same record shape as [graphLogCmd] so [parseGraphLog] is shared.
-     */
-    fun graphLogCmdFallback(offset: Int, limit: Int, root: String? = null): String {
-        val p = gitPrefix(root)
-        return "$p -c core.quotepath=false log \$($p for-each-ref " +
-            "--format='%(objectname)' refs/heads refs/remotes | sort -u) " +
-            "-n $limit --skip $offset --date=unix " +
-            "--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
-    }
-
-    /**
-     * Commit-detail sheet: identity + dates + subject + body, no diff.
-     * Newlines inside %b stay literal — [parseCommitDetail] reassembles
-     * multi-line bodies from the trailing lines.
-     */
-    fun commitDetailCmd(hash: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show --no-patch --date=unix " +
-            "--pretty=format:%H%x1f%an%x1f%ae%x1f%at%x1f%cn%x1f%ce%x1f%ct%x1f%s%x1f%b " +
-            shellQuote(hash)
-
-    /**
-     * Per-file stats of one commit; `--format=` leaves numstat rows only.
-     * `-m --first-parent` pins merge commits to the first-parent diff — the
-     * host JGit path has no combined-diff mode, and plain `git show` on a
-     * merge would print the (usually empty) combined diff instead.
-     */
-    fun commitNumstatCmd(hash: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --numstat --format= " +
-            shellQuote(hash)
-
-    /** Diff of a single file inside one commit (details sheet → diff view). */
-    fun commitFileDiffCmd(hash: String, path: String, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso " +
-            shellQuote(hash) + " -- " + shellQuote(path)
-
-    /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
-    private const val DIFF_MAX_CHARS = 200_000
 
     // ---------------------------------------------------------------- models
 
@@ -358,7 +222,7 @@ object GitCli {
     /**
      * `hash<x1f>name<x1f>subject<x1f>symref` rows → switcher entries;
      * garbage rows drop. The optional 4th column carries `%(symref)` from
-     * [branchesCmd]: symbolic refs (origin/HEAD) are non-empty there and
+     * [GitCliCmd.branchesCmd]: symbolic refs (origin/HEAD) are non-empty there and
      * are skipped — listing them would offer an unswitchable alias row.
      */
     fun parseBranches(output: String, current: String): List<GitBranchRef> =
@@ -454,30 +318,14 @@ object GitCli {
     fun parseCommitDetail(output: String): GitCommitDetail? =
         GitCliParse.parseCommitDetail(output)
 
+    /**
+     * Per-file stats of one commit. `-\t-` rows are binary files or pure
+     * renames; rename rows resolve via [splitRename] into renameFrom/new
+     * path (both the `old => new` and `prefix/{old => new}` spellings).
+     */
     /** Delegates to [GitCliParse] — kept so every existing `GitCli.X` call site compiles. */
     fun parseCommitNumstat(output: String): List<CommitFileStat> =
         GitCliParse.parseCommitNumstat(output)
-
-    /**
-     * Commit via a base64-relayed message file: the message never touches
-     * shell quoting (b64 alphabet is quote-free), and `-F` preserves
-     * multi-line bodies verbatim.
-     *
-     * [T-git-commit-temp-collision] The message file is keyed by the shell's
-     * own pid (`$$`, expanded inside the single `bash -c` this runs in), not a
-     * fixed name. The ExecutionCoordinator mutex is per session, so two
-     * sessions committing concurrently used to clobber the same
-     * `/tmp/.minis-git-msg` — the second `rm -f` could delete the first's file
-     * mid-flight. A per-invocation path makes each commit independent.
-     */
-    fun buildCommitCommand(messageB64: String, root: String? = null): String {
-        val msg = "/tmp/.minis-git-msg.$$"
-        return "printf '%s' '$messageB64' | base64 -d > $msg && " +
-            "${gitPrefix(root)} commit -F $msg && rm -f $msg"
-    }
-
-    /** POSIX single-quote escaping: `'` → `'\''`. */
-    fun shellQuote(s: String): String = "'" + s.replace("'", "'\\''") + "'"
 
     private fun truncateDiff(s: String): String =
         if (s.length <= DIFF_MAX_CHARS) s
@@ -497,7 +345,7 @@ object GitCli {
         ExecutionCoordinator.execute(sessionId, cmd, timeout = timeoutMs)
 
     suspend fun probe(sessionId: String): GitRepoInfo {
-        val r = runCatching { run(sessionId, probeCmd(), timeoutMs = 30_000L) }.getOrElse {
+        val r = runCatching { run(sessionId, GitCliCmd.probeCmd(), timeoutMs = 30_000L) }.getOrElse {
             return GitRepoInfo(isRepo = false, error = it.message ?: "shell unavailable")
         }
         val direct = parseProbe(r.output, r.exitCode)
@@ -507,15 +355,15 @@ object GitCli {
         // discover from the session workspace with ABSOLUTE paths (most
         // recently active first) and probe the winner by absolute path, so
         // a cd landing between the two commands cannot skew the adoption.
-        val d = runCatching { run(sessionId, DISCOVER_CMD, timeoutMs = 30_000L) }.getOrNull() ?: return direct
+        val d = runCatching { run(sessionId, GitCliCmd.DISCOVER_CMD, timeoutMs = 30_000L) }.getOrNull() ?: return direct
         val repo = parseDiscover(d.output).firstOrNull() ?: return direct
-        val r2 = runCatching { run(sessionId, probeCmd(repo.path), timeoutMs = 30_000L) }.getOrElse { return direct }
+        val r2 = runCatching { run(sessionId, GitCliCmd.probeCmd(repo.path), timeoutMs = 30_000L) }.getOrElse { return direct }
         val nested = parseProbe(r2.output, r2.exitCode)
         return if (nested.isRepo) nested.copy(relativeRoot = repo.name) else direct
     }
 
     suspend fun status(sessionId: String, root: String? = null): GitStatus {
-        val r = runCatching { run(sessionId, statusCmd(root)) }.getOrElse {
+        val r = runCatching { run(sessionId, GitCliCmd.statusCmd(root)) }.getOrElse {
             return GitStatus(error = it.message ?: "shell unavailable")
         }
         if (r.exitCode != 0) return GitStatus(error = r.output.take(500))
@@ -523,7 +371,7 @@ object GitCli {
     }
 
     suspend fun log(sessionId: String, limit: Int = 50, root: String? = null): List<GitCommit> {
-        val r = runCatching { run(sessionId, logCmd(limit, root)) }.getOrElse { return emptyList() }
+        val r = runCatching { run(sessionId, GitCliCmd.logCmd(limit, root)) }.getOrElse { return emptyList() }
         // exit 128 = no commits yet; that is an empty history, not an error.
         return if (r.exitCode == 0) parseLog(r.output) else emptyList()
     }
@@ -535,12 +383,12 @@ object GitCli {
         limit: Int = 50,
         root: String? = null,
     ): List<GitCommit> {
-        val r = runCatching { run(sessionId, graphLogCmd(offset, limit, root)) }
+        val r = runCatching { run(sessionId, GitCliCmd.graphLogCmd(offset, limit, root)) }
             .getOrElse { return emptyList() }
         if (r.exitCode == 0) return parseGraphLog(r.output)
         // HEAD unresolvable (bad/missing object): `git log` and `--all` both
         // fail — walk every ref's concrete sha instead, HEAD parsing bypassed.
-        val all = runCatching { run(sessionId, graphLogCmdFallback(offset, limit, root)) }
+        val all = runCatching { run(sessionId, GitCliCmd.graphLogCmdFallback(offset, limit, root)) }
             .getOrElse { return emptyList() }
         return if (all.exitCode == 0) parseGraphLog(all.output) else emptyList()
     }
@@ -550,14 +398,14 @@ object GitCli {
         staged: Boolean,
         root: String? = null,
     ): Map<String, NumStat> {
-        val r = runCatching { run(sessionId, numstatCmd(staged, root)) }
+        val r = runCatching { run(sessionId, GitCliCmd.numstatCmd(staged, root)) }
             .getOrElse { return emptyMap() }
         return if (r.exitCode == 0) parseNumstat(r.output) else emptyMap()
     }
 
     /** Branches for the switcher; empty (with no error) outside a repo. */
     suspend fun branches(sessionId: String, root: String?): List<GitBranchRef> {
-        val r = runCatching { run(sessionId, branchesCmd(root)) }.getOrElse { return emptyList() }
+        val r = runCatching { run(sessionId, GitCliCmd.branchesCmd(root)) }.getOrElse { return emptyList() }
         if (r.exitCode != 0) return emptyList()
         val current = currentBranch(sessionId, root)
         return parseBranches(r.output, current)
@@ -565,26 +413,26 @@ object GitCli {
 
     private suspend fun currentBranch(sessionId: String, root: String?): String =
         runCatching {
-            run(sessionId, "${gitPrefix(root)} branch --show-current").output.trim()
+            run(sessionId, "${GitCliCmd.gitPrefix(root)} branch --show-current").output.trim()
         }.getOrDefault("")
 
     /** Stash list for the Changes tab; empty (with no error) outside a repo. */
     suspend fun stashes(sessionId: String, root: String?): List<GitStashEntry> {
-        val r = runCatching { run(sessionId, stashCmd(root)) }.getOrElse { return emptyList() }
+        val r = runCatching { run(sessionId, GitCliCmd.stashCmd(root)) }.getOrElse { return emptyList() }
         if (r.exitCode != 0) return emptyList()
         return parseStashes(r.output)
     }
 
     /** @return error text, or null when the push succeeded. */
     suspend fun push(sessionId: String, root: String?): String? {
-        val r = runCatching { run(sessionId, pushCmd(root), timeoutMs = 60_000L) }
+        val r = runCatching { run(sessionId, GitCliCmd.pushCmd(root), timeoutMs = 60_000L) }
             .getOrElse { return it.message ?: "shell unavailable" }
         return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
 
     /** @return error text, or null when the ff-only pull succeeded. */
     suspend fun pull(sessionId: String, root: String?): String? {
-        val r = runCatching { run(sessionId, pullCmd(root), timeoutMs = 60_000L) }
+        val r = runCatching { run(sessionId, GitCliCmd.pullCmd(root), timeoutMs = 60_000L) }
             .getOrElse { return it.message ?: "shell unavailable" }
         return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
@@ -600,14 +448,14 @@ object GitCli {
         val verb = argv.getOrNull(0) ?: return "no command"
         if (verb !in allowed) return "command not allowed: $verb"
         val r = runCatching {
-            run(sessionId, gitPrefix(root) + " " + argv.joinToString(" ") { shellQuote(it) }, 30_000L)
+            run(sessionId, GitCliCmd.gitPrefix(root) + " " + argv.joinToString(" ") { GitCliCmd.shellQuote(it) }, 30_000L)
         }.getOrElse { return it.message ?: "shell unavailable" }
         return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
     }
 
     /** Push URL of the first remote, or null when the repo has none. */
     suspend fun remote(sessionId: String, root: String? = null): String? {
-        val r = runCatching { run(sessionId, remoteCmd(root)) }.getOrElse { return null }
+        val r = runCatching { run(sessionId, GitCliCmd.remoteCmd(root)) }.getOrElse { return null }
         return if (r.exitCode == 0) parseRemote(r.output) else null
     }
 
@@ -616,7 +464,7 @@ object GitCli {
         hash: String,
         root: String? = null,
     ): GitCommitDetail? {
-        val r = runCatching { run(sessionId, commitDetailCmd(hash, root)) }
+        val r = runCatching { run(sessionId, GitCliCmd.commitDetailCmd(hash, root)) }
             .getOrElse { return null }
         return if (r.exitCode == 0) parseCommitDetail(r.output) else null
     }
@@ -626,7 +474,7 @@ object GitCli {
         hash: String,
         root: String? = null,
     ): List<CommitFileStat> {
-        val r = runCatching { run(sessionId, commitNumstatCmd(hash, root)) }
+        val r = runCatching { run(sessionId, GitCliCmd.commitNumstatCmd(hash, root)) }
             .getOrElse { return emptyList() }
         return if (r.exitCode == 0) parseCommitNumstat(r.output) else emptyList()
     }
@@ -638,7 +486,7 @@ object GitCli {
         path: String,
         root: String? = null,
     ): String {
-        val r = runCatching { run(sessionId, commitFileDiffCmd(hash, path, root)) }
+        val r = runCatching { run(sessionId, GitCliCmd.commitFileDiffCmd(hash, path, root)) }
             .getOrElse { return "[diff unavailable: ${it.message}]" }
         if (r.exitCode != 0) return "[git show exit=${r.exitCode}]\n${r.output.take(2000)}"
         return truncateDiff(r.output.ifBlank { "[empty diff]" })
@@ -646,8 +494,8 @@ object GitCli {
 
     /** Working-tree diff for one entry; untracked files diff against /dev/null. */
     suspend fun fileDiff(sessionId: String, entry: GitFileEntry, root: String? = null): String {
-        val path = shellQuote(entry.path)
-        val g = gitPrefix(root)
+        val path = GitCliCmd.shellQuote(entry.path)
+        val g = GitCliCmd.gitPrefix(root)
         val cmd = when {
             entry.untracked ->
                 "$g -c core.quotepath=false diff --no-index -- /dev/null $path"
@@ -668,17 +516,17 @@ object GitCli {
 
     suspend fun stagedDiff(sessionId: String, root: String? = null): String {
         val r = runCatching {
-            run(sessionId, "${gitPrefix(root)} -c core.quotepath=false diff --cached")
+            run(sessionId, "${GitCliCmd.gitPrefix(root)} -c core.quotepath=false diff --cached")
         }.getOrElse { return "" }
         return if (r.exitCode == 0) r.output else ""
     }
 
     suspend fun commitDiff(sessionId: String, hash: String, root: String? = null): String {
-        val quoted = shellQuote(hash)
+        val quoted = GitCliCmd.shellQuote(hash)
         val r = runCatching {
             // `-m --first-parent` matches the host JGit diff, which always
             // formats against the first parent of a merge commit.
-            run(sessionId, "${gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso $quoted")
+            run(sessionId, "${GitCliCmd.gitPrefix(root)} -c core.quotepath=false show -m --first-parent --date=iso $quoted")
         }.getOrElse { return "[diff unavailable: ${it.message}]" }
         if (r.exitCode != 0) return "[git show exit=${r.exitCode}]\n${r.output.take(2000)}"
         return truncateDiff(r.output)
@@ -691,8 +539,8 @@ object GitCli {
         staged: Boolean,
         root: String? = null,
     ): String? {
-        val path = shellQuote(entry.path)
-        val g = gitPrefix(root)
+        val path = GitCliCmd.shellQuote(entry.path)
+        val g = GitCliCmd.gitPrefix(root)
         val cmd = if (staged) "$g add -- $path" else "$g restore --staged -- $path"
         val r = runCatching { run(sessionId, cmd) }.getOrElse {
             return it.message ?: "shell unavailable"
@@ -701,7 +549,7 @@ object GitCli {
     }
 
     suspend fun stageAll(sessionId: String, root: String? = null): String? {
-        val r = runCatching { run(sessionId, "${gitPrefix(root)} add -A") }.getOrElse {
+        val r = runCatching { run(sessionId, "${GitCliCmd.gitPrefix(root)} add -A") }.getOrElse {
             return it.message ?: "shell unavailable"
         }
         return if (r.exitCode == 0) null else r.output.take(500).ifBlank { "exit=${r.exitCode}" }
@@ -715,7 +563,7 @@ object GitCli {
             trimmed.toByteArray(Charsets.UTF_8),
             android.util.Base64.NO_WRAP,
         )
-        val r = runCatching { run(sessionId, buildCommitCommand(b64, root)) }.getOrElse {
+        val r = runCatching { run(sessionId, GitCliCmd.buildCommitCommand(b64, root)) }.getOrElse {
             return CommitOutcome(false, it.message ?: "shell unavailable")
         }
         return if (r.exitCode == 0) CommitOutcome(true, r.output.trim())

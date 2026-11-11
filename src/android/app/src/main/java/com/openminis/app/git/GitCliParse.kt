@@ -12,6 +12,9 @@ package com.openminis.app.git
  * is unnecessary — same package) and still reachable as `GitCli.parseRemote(…)`
  * through the delegating aliases left behind there, so the 37 existing call
  * sites and GitCliParseTest keep compiling unchanged.
+ *
+ * Orthogonal to [GitCliCmd]: that one builds the shell strings, this one reads
+ * what came back. Neither owns the other's half of the pipeline.
  */
 object GitCliParse {
 

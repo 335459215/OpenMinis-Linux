@@ -38,12 +38,23 @@ internal object BuiltinLaneRetirement {
      *
      * User-built providers are never candidates: they do not carry the
      * `builtin-` prefix and are never in either channel.
+     *
+     * Residents ([BuiltinFreeLanes.RESIDENT_INSTANCE_IDS]) are never
+     * candidates either, and that check comes first — see the note in the
+     * body for why it cannot live in the caller.
      */
     fun instancesToPurge(
         config: ProviderConfig,
         activeInstanceIds: Set<String> = BuiltinFreeLanes.ALL_INSTANCE_IDS,
     ): List<String> = config.instances.map { it.id }.filter { id ->
         when {
+            // Hard floor, checked before either retirement channel: a resident
+            // is ours and alive, so no active set can retire it. The seed pass
+            // computes its set from the manifest alone, and the manifest knows
+            // nothing about rows that are not lanes — putting this in the
+            // caller instead makes the guarantee only as good as every future
+            // caller remembering to add it back.
+            id in BuiltinFreeLanes.RESIDENT_INSTANCE_IDS -> false
             id in BuiltinFreeLanes.RETIRED_IDS -> true
             id.startsWith("builtin-") && id !in activeInstanceIds -> true
             else -> false

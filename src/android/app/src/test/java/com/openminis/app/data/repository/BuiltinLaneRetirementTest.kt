@@ -119,4 +119,58 @@ class BuiltinLaneRetirementTest {
 
         assertTrue(BuiltinLaneRetirement.instancesToPurge(config, persistedActiveIds).isEmpty())
     }
+
+    // ---- resident rule: rows we ship but do not seed as lanes ----
+
+    @Test
+    fun aResidentRowIsNeverPurgedByTheDefaultSet() {
+        // The Agent2API bridge registers `builtin-agent2api-local` itself, so
+        // the lane list cannot name it. Without the resident whitelist the
+        // `builtin-` prefix rule retires it on every cold start and
+        // removeInstance() takes its models, group membership and agent-loop
+        // slots with it — the gateway's later sync restores the row and the
+        // models, never the groups.
+        val config = ProviderConfig(
+            instances = mutableListOf(instance("builtin-agent2api-local")),
+        )
+
+        assertTrue(BuiltinLaneRetirement.instancesToPurge(config).isEmpty())
+    }
+
+    @Test
+    fun aResidentSurvivesEvenWhenTheManifestRuled() {
+        // The seed pass builds its active set from the manifest alone; the
+        // resident must be in it, not rescued afterwards by the default.
+        val config = ProviderConfig(
+            instances = mutableListOf(instance("builtin-agent2api-local")),
+        )
+        val activeFromManifest = BuiltinFreeLanes.ALL_INSTANCE_IDS
+
+        assertTrue(
+            BuiltinLaneRetirement.instancesToPurge(config, activeFromManifest).isEmpty(),
+        )
+    }
+
+    @Test
+    fun theResidentIdMatchesTheBridgeConstant() {
+        // The id lives in this package as a literal to avoid an app/a2a
+        // dependency; this is the only thing stopping the two from drifting.
+        // Renaming either side orphans every existing install's row.
+        assertTrue(
+            "A2aProviderBridge.INSTANCE_ID moved — update BuiltinFreeLanes.RESIDENT_INSTANCE_IDS",
+            com.openminis.app.a2a.A2aProviderBridge.INSTANCE_ID in
+                BuiltinFreeLanes.RESIDENT_INSTANCE_IDS,
+        )
+    }
+
+    @Test
+    fun aResidentIsNotALaneForManifestDedupe() {
+        // ACTIVE_INSTANCE_IDS feeds retirement; ALL_INSTANCE_IDS feeds dedupe.
+        // A manifest entry claiming the resident id must still be able to
+        // synthesise, otherwise the split was wired to the wrong set.
+        assertTrue(
+            "builtin-agent2api-local leaked into the lane dedupe set",
+            "builtin-agent2api-local" !in BuiltinFreeLanes.ALL_INSTANCE_IDS,
+        )
+    }
 }
