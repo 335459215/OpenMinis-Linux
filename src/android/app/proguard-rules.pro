@@ -70,3 +70,11 @@
 -dontwarn com.jcraft.jsch.**
 -dontwarn org.bouncycastle.**
 -dontwarn com.jcraft.jzlib.**
+
+# [T-dual-source-git] JGit's WindowCache/Monitoring optionally registers an
+# MBean when java.lang.management is present. Android has neither that package
+# nor javax.management, and R8 fails the release build on the references even
+# though the JMX branch is never reached on-device.
+# Verified with :app:minifyReleaseWithR8 on 2.0.91.
+-dontwarn java.lang.management.**
+-dontwarn javax.management.**
