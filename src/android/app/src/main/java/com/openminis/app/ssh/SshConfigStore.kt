@@ -52,6 +52,12 @@ data class SshCredentials(
 class SshConfigStore(
     private val metadataFile: File,
     private val secrets: SecretBox,
+    /**
+     * [T-ssh-credential-ref] Looks up an app environment variable by name.
+     * Null (the default) keeps the store literal-only, which is what the JVM
+     * tests want; production wires it up in [forContext].
+     */
+    private val envLookup: ((String) -> String?)? = null,
 ) {
 
     private val lock = Any()
@@ -116,6 +122,43 @@ class SshConfigStore(
             cached = next
             persist(next)
         }
+    }
+
+    /**
+     * [T-ssh-credential-ref] Credentials with `$$NAME` / `env:NAME` references
+     * resolved against the app environment.
+     *
+     * The CONNECT path calls this rather than [credentialsFor]: references stay
+     * in the store and resolve per connection, so rotating a variable takes
+     * effect immediately and a saved host never holds the secret itself.
+     *
+     * @throws SshFailure.Config when a reference is malformed, or names a
+     *         variable that is missing, empty, or disabled. The message never
+     *         carries the secret value.
+     */
+    fun resolveCredentialsFor(id: String): SshCredentials? {
+        val raw = credentialsFor(id) ?: return null
+        return SshCredentials(
+            password = resolveStoredSecret(raw.password),
+            privateKeyPem = resolveStoredSecret(raw.privateKeyPem),
+            passphrase = resolveStoredSecret(raw.passphrase),
+        )
+    }
+
+    private fun resolveStoredSecret(raw: String?): String? {
+        if (raw.isNullOrEmpty()) return raw
+        if (!SshSecretRefs.hasRefPrefix(raw)) return raw
+        val key = SshSecretRefs.envKeyOrNull(raw)
+            ?: throw SshFailure.Config(
+                "SSH credential uses a reference prefix but names no valid environment variable.",
+            )
+        val value = envLookup?.invoke(key)
+        if (value.isNullOrEmpty()) {
+            throw SshFailure.Config(
+                "SSH credential references environment variable \$\$$key, but it is unavailable.",
+            )
+        }
+        return value
     }
 
     fun credentialsFor(id: String): SshCredentials? {
@@ -221,7 +264,11 @@ class SshConfigStore(
             val app = context.applicationContext
             val meta = File(app.filesDir, "ssh/hosts.json")
             val prefs = com.openminis.app.util.EncryptedPrefsFactory.safeCreate(app, "ssh_host_secrets")
-            return SshConfigStore(meta, PrefsSecretBox(prefs))
+            // [T-ssh-credential-ref] Resolve `$$NAME` / `env:NAME` credentials
+            // against the app's Environment Variables store; the raw secret is
+            // never written into hosts.json or the secret box.
+            val env = com.openminis.app.data.repository.EnvVarRepository(app)
+            return SshConfigStore(meta, PrefsSecretBox(prefs)) { name -> env.getActiveValue(name) }
         }
     }
 }

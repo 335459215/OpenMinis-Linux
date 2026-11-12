@@ -306,7 +306,9 @@ class JschSshBackend(
     }
 
     private fun openSession(cfg: SshHostConfig): Session {
-        val creds = store.credentialsFor(cfg.id)
+        // [T-ssh-credential-ref] Resolve `$$NAME` / `env:NAME` credentials at
+        // connect time so the store holds a pointer, not the secret.
+        val creds = store.resolveCredentialsFor(cfg.id)
             ?: throw SshFailure.Config("No stored credentials for '${cfg.name}' — re-run add_host with auth material.")
         val jsch = JSch()
         if (cfg.authType == SshAuthType.PRIVATE_KEY) {

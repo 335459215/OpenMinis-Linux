@@ -4,6 +4,7 @@ import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.data.repository.EnvVarRepository
+import com.openminis.app.ssh.SshSecretRefs
 import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.ssh.SshBackend
 import com.openminis.app.ssh.SshAuthType
@@ -218,10 +219,25 @@ object SshTool {
         val authType = SshAuthType.parse(args.optString("auth_type", ""))
             ?: return invalid("'auth_type' must be password or private_key for action=add_host")
 
-        val passphrase = resolveSecret(args, "passphrase", envResolver)
+        // [T-ssh-credential-ref] `$$NAME` / `env:NAME` credentials are stored
+        // VERBATIM and resolved on the connect path (SshConfigStore
+        // .resolveCredentialsFor), so rotating the variable needs no re-save
+        // and the secret never lands in hosts.json. Probe the reference once
+        // here so a typo fails at add time rather than at connect time.
+        for (field in listOf("password", "private_key", "passphrase")) {
+            val raw = args.optString(field, "").trim()
+            if (!SshSecretRefs.hasRefPrefix(raw)) continue
+            val varName = SshSecretRefs.envKeyOrNull(raw)
+                ?: return invalid("'$field' uses a reference prefix but names no valid variable; use \$\$NAME or env:NAME")
+            if (envResolver(varName).isNullOrBlank()) {
+                return invalid("'$field' references environment variable '$varName', but it is missing, empty, or disabled")
+            }
+        }
+
+        val passphrase = rawSecret(args, "passphrase")
         val creds = when (authType) {
             SshAuthType.PASSWORD -> {
-                val pw = resolveSecret(args, "password", envResolver)
+                val pw = rawSecret(args, "password")
                     ?: return invalid("'password' (literal or env:VAR_NAME) is required for auth_type=password")
                 SshCredentials(password = pw, passphrase = passphrase)
             }
@@ -235,7 +251,7 @@ object SshTool {
                     runCatching { f.readText() }.getOrNull()
                         ?: return invalid("private_key_path '$keyPath' could not be read")
                 } else {
-                    resolveSecret(args, "private_key", envResolver)
+                    rawSecret(args, "private_key")
                         ?: return invalid("'private_key' / 'private_key_path' (or env:VAR_NAME) is required for auth_type=private_key")
                 }
                 if (!pem.contains("PRIVATE KEY")) {
@@ -348,20 +364,15 @@ object SshTool {
     // ------------------------------------------------------------ helpers
 
     /**
-     * Resolves one credential argument: `env:VAR` → envResolver, literal →
-     * as-is, absent/blank → null. The env form keeps secrets out of chat
-     * history (same rationale as MCP's $$VAR header references).
+     * [T-ssh-credential-ref] Credential argument for storage: trimmed, or null
+     * when absent/blank.
+     *
+     * A `$$NAME` / `env:NAME` reference passes through UNRESOLVED — the connect
+     * path resolves it — so the host store keeps a pointer instead of the
+     * secret. This is the same rationale as MCP's `$$VAR` header references.
      */
-    private fun resolveSecret(args: JSONObject, key: String, envResolver: (String) -> String?): String? {
-        val raw = args.optString(key, "").trim()
-        if (raw.isEmpty()) return null
-        if (raw.startsWith("env:")) {
-            val varName = raw.removePrefix("env:").trim()
-            if (varName.isEmpty()) return null
-            return envResolver(varName)
-        }
-        return raw
-    }
+    private fun rawSecret(args: JSONObject, key: String): String? =
+        args.optString(key, "").trim().ifEmpty { null }
 
     private fun invalid(msg: String): ToolExecutionResult = ToolExecutionResult(
         msg,

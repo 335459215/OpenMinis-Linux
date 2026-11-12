@@ -2881,4 +2881,22 @@
     <string name="pool_mode_round_robin">Round-robin</string>
     <string name="pool_mode_random">Random</string>
     <string name="pool_mode_hint">How the extra keys are picked</string>
+    <string name="ssh_hosts_title">SSH Hosts</string>
+    <string name="ssh_hosts_empty">No SSH hosts yet. Add one to run commands and transfer files over SSH/SFTP.</string>
+    <string name="ssh_host_add">Add host</string>
+    <string name="ssh_host_edit">Edit host</string>
+    <string name="ssh_host_delete_confirm">Remove this host? Its credentials are deleted and its pinned host key is forgotten, so the next connection re-pins.</string>
+    <string name="ssh_host_name">Name</string>
+    <string name="ssh_host_addr">Host</string>
+    <string name="ssh_host_port">Port</string>
+    <string name="ssh_host_user">Username</string>
+    <string name="ssh_host_auth_password">Password</string>
+    <string name="ssh_host_auth_key">Private key</string>
+    <string name="ssh_host_secret">Secret</string>
+    <string name="ssh_secret_ref_hint">Paste the secret directly, or reference an environment variable with $$ENV_NAME (recommended — the value never enters app storage or the conversation).</string>
+    <string name="ssh_host_test">Test connection</string>
+    <string name="ssh_host_test_ok">Connected</string>
+    <string name="ssh_host_test_fail">Connection failed</string>
+    <string name="ssh_host_save">Save</string>
+    <string name="ssh_host_pinned">Host key pinned</string>
 </resources>

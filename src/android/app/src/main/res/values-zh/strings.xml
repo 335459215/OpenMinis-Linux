@@ -2702,4 +2702,22 @@
     <string name="pool_mode_round_robin">轮询</string>
     <string name="pool_mode_random">随机</string>
     <string name="pool_mode_hint">备用密钥的选取方式</string>
+    <string name="ssh_hosts_title">SSH 主机</string>
+    <string name="ssh_hosts_empty">还没有 SSH 主机。添加一个即可通过 SSH/SFTP 执行命令、传输文件。</string>
+    <string name="ssh_host_add">添加主机</string>
+    <string name="ssh_host_edit">编辑主机</string>
+    <string name="ssh_host_delete_confirm">删除这台主机？凭据会被清除，已固定的主机密钥也会遗忘，下次连接将重新固定。</string>
+    <string name="ssh_host_name">名称</string>
+    <string name="ssh_host_addr">地址</string>
+    <string name="ssh_host_port">端口</string>
+    <string name="ssh_host_user">用户名</string>
+    <string name="ssh_host_auth_password">密码</string>
+    <string name="ssh_host_auth_key">私钥</string>
+    <string name="ssh_host_secret">凭据</string>
+    <string name="ssh_secret_ref_hint">可直接粘贴凭据，也可用 $$ENV_NAME 引用环境变量（推荐——值不会进入应用存储，也不会出现在对话里）。</string>
+    <string name="ssh_host_test">测试连接</string>
+    <string name="ssh_host_test_ok">连接成功</string>
+    <string name="ssh_host_test_fail">连接失败</string>
+    <string name="ssh_host_save">保存</string>
+    <string name="ssh_host_pinned">已固定主机密钥</string>
 </resources>
