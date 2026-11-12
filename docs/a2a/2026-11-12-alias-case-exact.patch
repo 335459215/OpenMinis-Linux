@@ -1,0 +1,545 @@
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/api/model_manage.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/api/model_manage.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/api/model_manage.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/api/model_manage.rs	2026-11-12 14:36:18.298299115 +0800
+@@ -215,8 +215,9 @@
+     // 「未挂载的模型映射」正是给这批条目留的入口。判据与视图里标记 `dangling`
+     // 的那一处同源（`catalog::host_row_exists`），免得出现「界面显示为未挂载、
+     // 点删除却被拒」的死锁。
+-    if alias.eq_ignore_ascii_case(&target)
+-        && catalog::host_row_exists(state.store(), provider_opt, &target)
++    // 只拦**逐字相同**的自映射：`glm-5.3-flash` 与 `GLM-5.3-Flash` 是两个不同的
++    // 对外名，前者是挂在后者上的别名映射，必须允许删除。
++    if alias == target && catalog::host_row_exists(state.store(), provider_opt, &target)
+     {
+         return errors::management_error(400, "原始 ID 的默认绑定不能删除，请关闭它的开关");
+     }
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/custom_providers/bindings.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/custom_providers/bindings.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/custom_providers/bindings.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/custom_providers/bindings.rs	2026-11-12 12:49:27.639497840 +0800
+@@ -13,9 +13,9 @@
+ pub(super) fn normalize(models: &mut [Value], mappings: &mut Vec<Value>) {
+     for model in models.iter_mut() {
+         let id = model_id(model);
++        // 精确：只有同名同字才是「这条模型的历史自映射」
+         if let Some(legacy) = mappings.iter().find(|mapping| {
+-            text(mapping, "alias").eq_ignore_ascii_case(&id)
+-                && text(mapping, "target").eq_ignore_ascii_case(&id)
++            text(mapping, "alias") == id && text(mapping, "target") == id
+         }) {
+             model["enabled"] = Value::Bool(enabled(model) && enabled(legacy));
+             if !text(legacy, "reasoning").is_empty() {
+@@ -23,25 +23,28 @@
+             }
+         }
+     }
++    // 自映射（alias 与上游名完全一致）= 默认绑定，由模型行本身表达，不留在 mappings 里。
++    // 精确比较：大小写不同的别名是另一条映射，不能当成自映射丢掉。
+     mappings.retain(|mapping| {
+-        !(text(mapping, "alias").eq_ignore_ascii_case(text(mapping, "target"))
++        !(text(mapping, "alias") == text(mapping, "target")
+             && models
+                 .iter()
+-                .any(|model| model_id(model).eq_ignore_ascii_case(text(mapping, "target"))))
++                .any(|model| model_id(model) == text(mapping, "target")))
+     });
++    // 已占用的对外名。原样存，不折叠大小写 —— 见 bindings() 的说明。
+     let mut claimed = models
+         .iter()
+         .filter(|model| enabled(model))
+-        .map(|model| model_id(model).to_ascii_lowercase())
++        .map(model_id)
+         .collect::<HashSet<_>>();
+     for carried in [true, false] {
+         for mapping in mappings.iter_mut().filter(|mapping| {
+             models
+                 .iter()
+-                .any(|model| model_id(model).eq_ignore_ascii_case(text(mapping, "target")))
++                .any(|model| model_id(model) == text(mapping, "target"))
+                 == carried
+         }) {
+-            if enabled(mapping) && !claimed.insert(text(mapping, "alias").to_ascii_lowercase()) {
++            if enabled(mapping) && !claimed.insert(text(mapping, "alias").to_string()) {
+                 mapping["enabled"] = Value::Bool(false);
+             }
+         }
+@@ -59,21 +62,22 @@
+         .unwrap_or(true)
+ }
+ 
++/// 收集「(对外名, 上游名, 是否启用)」三元组，用于冲突判定。
++///
++/// **不做大小写折叠**：对外名是客户端可见的模型 ID，调用侧按精确名匹配，
++/// `GLM-5.3-Flash` 与 `glm-5.3-flash` 是两个不同的模型，不该互相判冲突。
++/// （折叠成小写会让后者被当成前者的重复，报「不能同时启用多个绑定」。）
+ fn bindings(models: &[Value], mappings: &[Value]) -> Vec<(String, String, bool)> {
+     models
+         .iter()
+         .map(|model| {
+             let id = model_id(model);
+-            (
+-                id.to_ascii_lowercase(),
+-                id.to_ascii_lowercase(),
+-                enabled(model),
+-            )
++            (id.clone(), id, enabled(model))
+         })
+         .chain(mappings.iter().map(|mapping| {
+             (
+-                text(mapping, "alias").to_ascii_lowercase(),
+-                text(mapping, "target").to_ascii_lowercase(),
++                text(mapping, "alias").to_string(),
++                text(mapping, "target").to_string(),
+                 enabled(mapping),
+             )
+         }))
+@@ -120,11 +124,11 @@
+     for mapping in mappings {
+         if !models
+             .iter()
+-            .any(|model| model_id(model).eq_ignore_ascii_case(text(mapping, "target")))
++            .any(|model| model_id(model) == text(mapping, "target"))
+         {
+             let previous = old_mappings.iter().find(|old| {
+-                text(old, "alias").eq_ignore_ascii_case(text(mapping, "alias"))
+-                    && text(old, "target").eq_ignore_ascii_case(text(mapping, "target"))
++                text(old, "alias") == text(mapping, "alias")
++                    && text(old, "target") == text(mapping, "target")
+             });
+             if previous.is_none()
+                 || (enabled(mapping) && previous.is_some_and(|previous| !enabled(previous)))
+@@ -163,17 +167,17 @@
+     };
+     if let Some(model) = models
+         .iter()
+-        .find(|model| model_id(model).eq_ignore_ascii_case(requested))
++        .find(|model| model_id(model) == requested)
+     {
+         let default = mappings.iter().find(|mapping| {
+             mapping
+                 .get("alias")
+                 .and_then(Value::as_str)
+-                .is_some_and(|alias| alias.eq_ignore_ascii_case(requested))
++                .is_some_and(|alias| alias == requested)
+                 && mapping
+                     .get("target")
+                     .and_then(Value::as_str)
+-                    .is_some_and(|target| target.eq_ignore_ascii_case(requested))
++                    .is_some_and(|target| target == requested)
+         });
+         if model
+             .get("enabled")
+@@ -195,8 +199,7 @@
+     mappings.iter().find_map(|mapping| {
+         let alias = mapping.get("alias")?.as_str()?;
+         let target = mapping.get("target")?.as_str()?;
+-        if !alias.eq_ignore_ascii_case(requested)
+-            || alias.eq_ignore_ascii_case(target)
++        if alias != requested || alias == target
+             || !mapping
+                 .get("enabled")
+                 .and_then(Value::as_bool)
+@@ -207,7 +210,7 @@
+         // target 的 enabled 只控制原始 ID，不能阻止别名调用它。
+         let model = models
+             .iter()
+-            .find(|model| model_id(model).eq_ignore_ascii_case(target))?;
++            .find(|model| model_id(model) == target)?;
+         Some((model_id(model), level(mapping)))
+     })
+ }
+@@ -248,7 +251,7 @@
+         if name.is_empty()
+             || result
+                 .iter()
+-                .any(|model| model_id(model).eq_ignore_ascii_case(&name))
++                .any(|model| model_id(model) == name)
+         {
+             continue;
+         }
+@@ -259,7 +262,7 @@
+         let capabilities = capability::normalize_object(
+             models
+                 .iter()
+-                .find(|model| model_id(model).eq_ignore_ascii_case(&target))
++                .find(|model| model_id(model) == target)
+                 .and_then(|model| model.get("capabilities")),
+         );
+         capability::apply_overrides(&mut item, &capabilities);
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/custom_providers.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/custom_providers.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/custom_providers.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/custom_providers.rs	2026-11-12 13:04:27.547497497 +0800
+@@ -496,7 +496,9 @@
+         if id.is_empty() {
+             continue;
+         }
+-        if entries.iter().any(|model| model_id(model).eq_ignore_ascii_case(&id)) {
++        // 精确比较：对外模型名区分大小写，`GLM-5.3-Flash` 与 `glm-5.3-flash`
++        // 是两个模型。折叠大小写会让后者在回读时被静默丢弃。
++        if entries.iter().any(|model| model_id(model) == id) {
+             continue;
+         }
+         let mut entry = json!({
+@@ -1067,11 +1069,13 @@
+             Some(Value::Bool(enabled)) => *enabled,
+             Some(_) => return Err(format!("models 第 {} 项的 enabled 必须是布尔值", position + 1)),
+         };
++        // 精确比较：`GLM-5.3-Flash` 与 `glm-5.3-flash` 是两个不同的对外模型名，
++        // 调用侧也是按精确名匹配的（见 model_rules::binding 的口径）。
+         let duplicated = entries.iter().any(|known| {
+             known
+                 .get("id")
+                 .and_then(Value::as_str)
+-                .is_some_and(|text| text.eq_ignore_ascii_case(id))
++                .is_some_and(|text| text == id)
+         });
+         if duplicated {
+             return Err(format!("模型 ID「{id}」已存在，请勿重复登记"));
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/bindings.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/bindings.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/bindings.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/bindings.rs	2026-11-12 14:24:05.174299395 +0800
+@@ -20,9 +20,7 @@
+             .iter()
+             .find(|(owner, _)| owner.eq_ignore_ascii_case(provider))
+             .is_some_and(|(_, items)| {
+-                items
+-                    .iter()
+-                    .any(|item| model_id(item).eq_ignore_ascii_case(id))
++                items.iter().any(|item| model_id(item) == id)
+             })
+     }
+ 
+@@ -77,7 +75,7 @@
+     ) -> String {
+         let manifest = self.manifest(rules, provider);
+         let candidates = rules.mappings.iter().filter(|mapping| {
+-            mapping.alias.eq_ignore_ascii_case(alias)
++            mapping.alias == alias
+                 && mapping
+                     .provider
+                     .as_deref()
+@@ -85,11 +83,11 @@
+         });
+         candidates
+             .clone()
+-            .find(|mapping| mapping.target.eq_ignore_ascii_case(target))
++            .find(|mapping| mapping.target == target)
+             .or_else(|| {
+                 candidates.clone().find(|mapping| {
+                     catalog::entry_id_in_manifest(&manifest, &mapping.target)
+-                        .is_some_and(|id| id.eq_ignore_ascii_case(target))
++                        .is_some_and(|id| id == target)
+                 })
+             })
+             .map(|mapping| mapping.target.clone())
+@@ -112,9 +110,7 @@
+         alias: &str,
+         manifest: &[Value],
+     ) -> Option<&'a Mapping> {
+-        if manifest
+-            .iter()
+-            .any(|item| model_id(item).eq_ignore_ascii_case(alias))
++        if manifest.iter().any(|item| model_id(item) == alias)
+             && self.default_enabled(provider, alias)
+         {
+             return None;
+@@ -125,8 +121,8 @@
+         self.mappings
+             .iter()
+             .filter(|mapping| {
+-                mapping.alias.eq_ignore_ascii_case(alias)
+-                    && !mapping.alias.eq_ignore_ascii_case(&mapping.target)
++                mapping.alias == alias
++                    && mapping.alias != mapping.target
+                     && mapping
+                         .provider
+                         .as_deref()
+@@ -153,7 +149,7 @@
+         target: &str,
+         manifest: &[Value],
+     ) -> bool {
+-        if alias.eq_ignore_ascii_case(target) {
++        if alias == target {
+             return self.default_enabled(provider, target);
+         }
+         self.selected_mapping(provider, alias, manifest)
+@@ -216,8 +212,7 @@
+ ) {
+     let inherited = provider.and_then(|owner| rules.binding(owner, alias, target).cloned());
+     let index = rules.mappings.iter().position(|mapping| {
+-        mapping.alias.eq_ignore_ascii_case(alias)
+-            && mapping.target.eq_ignore_ascii_case(target)
++        mapping.alias == alias && mapping.target == target
+             && mapping
+                 .provider
+                 .as_deref()
+@@ -273,19 +268,14 @@
+     target: &str,
+ ) {
+     let manifest = catalog.manifest(rules, provider);
+-    if !alias.eq_ignore_ascii_case(target)
+-        && manifest
+-            .iter()
+-            .any(|item| model_id(item).eq_ignore_ascii_case(alias))
+-    {
++    if alias != target && manifest.iter().any(|item| model_id(item) == alias) {
+         set_default(rules, catalog, provider, alias, false);
+     }
+     let rivals = rules
+         .mappings
+         .iter()
+         .filter(|mapping| {
+-            mapping.alias.eq_ignore_ascii_case(alias)
+-                && !mapping.target.eq_ignore_ascii_case(target)
++            mapping.alias == alias && mapping.target != target
+                 && mapping
+                     .provider
+                     .as_deref()
+@@ -296,7 +286,7 @@
+     for rival in rivals {
+         put_binding(rules, Some(provider), alias, &rival, None, Some(false));
+     }
+-    if alias.eq_ignore_ascii_case(target) {
++    if alias == target {
+         set_default(rules, catalog, provider, target, true);
+     } else {
+         put_binding(rules, Some(provider), alias, target, None, Some(true));
+@@ -310,10 +300,9 @@
+     alias: &str,
+ ) {
+     let manifest = catalog.manifest(rules, provider);
+-    let default = manifest
+-        .iter()
+-        .any(|item| model_id(item).eq_ignore_ascii_case(alias))
+-        && rules.default_enabled(provider, alias);
++    let default =
++        manifest.iter().any(|item| model_id(item) == alias)
++            && rules.default_enabled(provider, alias);
+     let selected = if default {
+         Some(alias.to_string())
+     } else {
+@@ -325,11 +314,9 @@
+         .mappings
+         .iter()
+         .filter(|mapping| {
+-            mapping.alias.eq_ignore_ascii_case(alias)
++            mapping.alias == alias
+                 && mapping.enabled
+-                && !selected
+-                    .as_deref()
+-                    .is_some_and(|target| mapping.target.eq_ignore_ascii_case(target))
++                && !selected.as_deref().is_some_and(|target| mapping.target == target)
+                 && mapping
+                     .provider
+                     .as_deref()
+@@ -352,10 +339,10 @@
+     let manifest = catalog.manifest(rules, provider);
+     (manifest
+         .iter()
+-        .any(|item| model_id(item).eq_ignore_ascii_case(alias))
+-        && !alias.eq_ignore_ascii_case(target)
++        .any(|item| model_id(item) == alias)
++        && alias != target
+         && rules.default_enabled(provider, alias))
+         || rules
+             .selected_mapping(provider, alias, &manifest)
+-            .is_some_and(|mapping| !mapping.target.eq_ignore_ascii_case(target))
++            .is_some_and(|mapping| mapping.target != target)
+ }
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/mod.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/mod.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/mod.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/mod.rs	2026-11-12 14:24:05.174299395 +0800
+@@ -227,10 +227,13 @@
+     /// 是否命中 `(provider, id)`（都忽略大小写）。
+     ///
+     /// `pub`：管理页判「来源 = 手动」时要在 `catalog` 侧按同一口径比对
+-    /// （见 `catalog::manage_entries`）—— 在那里另写一遍忽略大小写的比较，
+-    /// 迟早会与这里的口径分叉。
++    /// （见 `catalog::manage_entries`）—— 在那里另写一遍比较，迟早会与这里分叉。
++    ///
++    /// **id 是精确比较**：自定义模型的 id 就是对外模型名，而对外名区分大小写
++    /// （`glm-5.3-flash` 与 `GLM-5.3-Flash` 是两个模型）。provider 侧仍忽略
++    /// 大小写 —— 那是内部标识，用户看不到。
+     pub fn matches(&self, provider: &str, id: &str) -> bool {
+-        self.provider.eq_ignore_ascii_case(provider) && self.id.eq_ignore_ascii_case(id)
++        self.provider.eq_ignore_ascii_case(provider) && self.id == id
+     }
+ }
+ 
+@@ -521,7 +524,7 @@
+     /// 精确提供商规则覆盖旧版全局规则，包括显式关闭的条目。
+     pub fn binding(&self, provider: &str, alias: &str, target: &str) -> Option<&Mapping> {
+         let matches = |m: &&Mapping| {
+-            m.alias.eq_ignore_ascii_case(alias) && m.target.eq_ignore_ascii_case(target)
++            m.alias == alias && m.target == target
+         };
+         self.mappings.iter().filter(matches)
+             .find(|m| m.provider.as_deref().is_some_and(|owner| owner.eq_ignore_ascii_case(provider)))
+@@ -550,13 +553,13 @@
+     pub fn mappings_of(&self, model: &str) -> Vec<&Mapping> {
+         self.mappings
+             .iter()
+-            .filter(|m| m.enabled && m.alias.eq_ignore_ascii_case(model))
++            .filter(|m| m.enabled && m.alias == model)
+             .collect()
+     }
+ 
+     /// 该对外名是否已存在任何映射条目（种子防抢占判断用）。
+     pub fn has_alias(&self, alias: &str) -> bool {
+-        self.mappings.iter().any(|m| m.alias.eq_ignore_ascii_case(alias))
++        self.mappings.iter().any(|m| m.alias == alias)
+     }
+ 
+     /// 某条映射的对外名：target 归属 `provider`（None = 旧版全局条目）。
+@@ -572,7 +575,7 @@
+     pub fn aliases_of(&self, provider: &str, target: &str) -> Vec<&str> {
+         self.mappings
+             .iter()
+-            .filter(|m| m.target.eq_ignore_ascii_case(target))
++            .filter(|m| m.target == target)
+             .filter(|m| m.provider.as_deref().map_or(true, |p| p.eq_ignore_ascii_case(provider)))
+             .map(|m| m.alias.as_str())
+             .collect()
+@@ -593,8 +596,8 @@
+         let mut out: Vec<&str> = Vec::new();
+         for m in &self.mappings {
+             if m.enabled
+-                && m.target.eq_ignore_ascii_case(target)
+-                && !out.iter().any(|a| m.alias.eq_ignore_ascii_case(*a))
++                && m.target == target
++                && !out.iter().any(|a| m.alias == *a)
+             {
+                 out.push(m.alias.as_str());
+             }
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/mutations.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/mutations.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/model_rules/mutations.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/model_rules/mutations.rs	2026-11-12 14:24:05.178299395 +0800
+@@ -103,12 +103,12 @@
+                     })
+                     .cloned()
+             });
+-        if create == Some(true) && (alias.eq_ignore_ascii_case(target) || existing.is_some()) {
++        if create == Some(true) && (alias == target || existing.is_some()) {
+             return Err(conflict(format!(
+                 "模型 ID「{alias}」已绑定到此上游模型，请直接使用已有绑定"
+             )));
+         }
+-        if create == Some(false) && existing.is_none() && !alias.eq_ignore_ascii_case(target) {
++        if create == Some(false) && existing.is_none() && alias != target {
+             return Err(GatewayError::with_status(
+                 404,
+                 format!("映射不存在: {alias} → {target}"),
+@@ -117,7 +117,7 @@
+         if create != Some(true)
+             && existing.is_none()
+             && enabled == Some(false)
+-            && !alias.eq_ignore_ascii_case(target)
++            && alias != target
+         {
+             return Err(GatewayError::with_status(
+                 404,
+@@ -130,7 +130,7 @@
+             .unwrap_or(target);
+         let effective =
+             enabled.unwrap_or_else(|| existing.as_ref().map_or(true, |mapping| mapping.enabled));
+-        let creating = !alias.eq_ignore_ascii_case(target) && existing.is_none();
++        let creating = alias != target && existing.is_none();
+         // 对外别名的名字只在**这一条别名是新建的**时候检查（`creating`）。
+         //
+         // 两个要点，缺一个都会踩坑：
+@@ -184,7 +184,7 @@
+                 if effective {
+                     enable_exclusive(rules, &catalog, &owner, alias, target);
+                 }
+-            } else if enabled == Some(false) && alias.eq_ignore_ascii_case(target) {
++            } else if enabled == Some(false) && alias == target {
+                 set_default(rules, &catalog, &owner, target, false);
+             }
+             normalize_name(rules, &catalog, &owner, alias);
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/providers/catalog/view.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/providers/catalog/view.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/providers/catalog/view.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/providers/catalog/view.rs	2026-11-12 14:28:07.470299302 +0800
+@@ -49,7 +49,7 @@
+             let Some(wire) = builtin_target(&rules, provider, manifest, &name) else { continue };
+             let Some(upstream) = manifest.iter().find(|item| model_id(item) == wire.model) else { continue };
+             let mut item = list_item(upstream, provider);
+-            if let Some(index) = claimed.get(&name.to_lowercase()).copied() {
++            if let Some(index) = claimed.get(&name).copied() {
+                 let existing = &mut result[index].1;
+                 if item.get("supports_image_generation").and_then(Value::as_bool) == Some(true)
+                     && existing.get("kind").and_then(Value::as_str) == Some("image")
+@@ -63,7 +63,7 @@
+                 }
+                 continue;
+             }
+-            claimed.insert(name.to_lowercase(), result.len());
++            claimed.insert(name.clone(), result.len());
+             if let Some(object) = item.as_object_mut() {
+                 object.insert("id".to_string(), Value::String(name.clone()));
+                 if !name.eq_ignore_ascii_case(&wire.model) {
+@@ -179,7 +179,7 @@
+     if id.is_empty() {
+         return;
+     }
+-    if !claimed.insert((provider.to_string(), id.to_lowercase())) {
++    if !claimed.insert((provider.to_string(), id.clone())) {
+         return; // 同家同 id 的重复条目（见 `manage_view` 里 claimed 的说明）
+     }
+     let default = rules.binding(provider, &id, &id);
+@@ -191,12 +191,15 @@
+     }));
+     let mut aliases = Vec::new();
+     for (index, mapping) in rules.mappings.iter().enumerate() {
+-        if !mapping.target.eq_ignore_ascii_case(&id)
++        if mapping.target != id
+             || !mapping.provider.as_deref().map_or(true, |owner| owner.eq_ignore_ascii_case(provider))
+         { continue; }
+         attached.insert(index);
+-        if mapping.alias.eq_ignore_ascii_case(&id)
+-            || aliases.iter().any(|alias: &String| alias.eq_ignore_ascii_case(&mapping.alias))
++        // 只跳过**逐字等于**模型 id 的自映射（那是默认绑定本身，已单独渲染）。
++        // 大小写不同的别名是另一条真实映射，必须显示出来 —— 藏了它就变成
++        // 「界面看不见、再加又报已存在」的死结。
++        if mapping.alias == id
++            || aliases.iter().any(|alias: &String| alias == &mapping.alias)
+         { continue; }
+         let Some(effective) = rules.binding(provider, &mapping.alias, &id) else { continue };
+         aliases.push(mapping.alias.clone());
+@@ -292,7 +295,7 @@
+         .into_iter()
+         .any(|(owner, manifest)| {
+             provider.map_or(true, |provider| owner.eq_ignore_ascii_case(provider))
+-                && manifest.iter().any(|item| model_id(item).eq_ignore_ascii_case(target))
++                && manifest.iter().any(|item| model_id(item) == target)
+         })
+ }
+ 
+@@ -354,7 +357,7 @@
+         mappings.push(json!({
+             "alias": mapping.alias, "target": mapping.target, "provider": mapping.provider,
+             "enabled": enabled, "reasoning": mapping.reasoning,
+-            "isDefault": mapping.alias.eq_ignore_ascii_case(&mapping.target),
++            "isDefault": mapping.alias == mapping.target,
+             "dangling": true, "carried": carried,
+         }));
+     }
+diff -ruN '--exclude=target' '--exclude=.git' a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/providers/custom/mod.rs a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/providers/custom/mod.rs
+--- a2a-orig/Agent2API-3.4.2/desktop-tauri/src-tauri/server/src/server/core/providers/custom/mod.rs	2026-11-05 15:02:52.000000000 +0800
++++ a2a-src-342/desktop-tauri/src-tauri/server/src/server/core/providers/custom/mod.rs	2026-11-12 12:58:38.847497630 +0800
+@@ -31,13 +31,15 @@
+ }
+ 
+ pub fn append_models_response(store: &AccountStore, scope: Option<&KeyScope>, data: &mut Vec<Value>) {
++    // 已占用的对外名按**原样**存：对外名区分大小写，`GLM-5.3-Flash` 与
++    // `glm-5.3-flash` 是两个不同的模型，折叠大小写会把后者静默吞掉。
+     let mut claimed: std::collections::HashSet<_> = data.iter()
+-        .map(|item| model_id(item).to_lowercase()).collect();
++        .map(model_id).collect();
+     for (provider, models) in catalog_providers(store) {
+         if !key_scope::allows_provider(scope, &provider) { continue; }
+         for model in models {
+             let id = model_id(&model);
+-            if key_scope::allows_model(scope, &id) && claimed.insert(id.to_lowercase()) {
++            if key_scope::allows_model(scope, &id) && claimed.insert(id.clone()) {
+                 data.push(list_item(&model, &provider));
+             }
+         }

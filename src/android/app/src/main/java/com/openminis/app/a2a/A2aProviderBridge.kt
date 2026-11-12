@@ -99,10 +99,18 @@ object A2aProviderBridge {
                     synchronized(lock) { repository.addInstance(instance) }
                     Log.i(TAG, "registered builtin provider '$LABEL' -> ${baseUrl()}")
                 }
-                // 无论新建还是已存在，都拉一次模型：网关侧的模型集合会变
+                // 无论新建还是已存在，都**强制**拉一次模型。
+                //
+                // 之前这里是 `refreshModels(instance)`（forceRefresh 默认 false）：
+                // 网关侧下线的模型会一直留在 Minis 的模型清单里，直到
+                // `MODEL_CACHE_TTL_MS`（24 小时）过期才被替换掉 —— 用户看到的是
+                // 「Agent2API 里已经没有这个模型了，Minis 里还在」。
+                //
+                // 网关是自己进程里起的、每次启动都会重建模型目录，所以这里没有
+                // 「省一次网络请求」的价值：强制刷新才能让下线的模型立刻消失。
                 val instance = synchronized(lock) { repository.instances.find { it.id == INSTANCE_ID } }
                 if (instance != null) {
-                    val result = repository.refreshModels(instance)
+                    val result = repository.refreshModels(instance, forceRefresh = true)
                     Log.i(TAG, "model refresh result: $result")
                 }
                 A2aPrefs.setProviderSynced(context, System.currentTimeMillis())
