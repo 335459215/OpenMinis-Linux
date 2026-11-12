@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +64,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import com.openminis.app.ui.components.MinisCenterTopBar
+import com.openminis.app.ui.theme.m3Icon
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -146,6 +149,26 @@ fun SettingsScreen(
         topBar = {
             MinisCenterTopBar(
                 title = { Text(stringResource(R.string.settings_title)) },
+                // [T-android-settings-back] 之前这个 topBar 没有 navigationIcon：
+                // Routes.SETTINGS 是 push 进栈的独立 composable，进来后既没有
+                // 返回箭头，也没有 actions，用户只能靠系统手势/返回键退出——
+                // 在无手势导航的设备上等于出不去。onBack 参数本来就有（见
+                // 函数签名第 90 行），AppNavigation 也早已传入
+                // `navController.safePopBackStack()`，只是从没被消费。
+                //
+                // 写法照抄同包其余页面的标准形态（MemoryManagementScreen /
+                // SkillsManagementScreen / MinisSkillsBrowserScreen）：IconButton +
+                // m3Icon(ArrowBack) + common_back 无障碍文案。用 common_back 而非
+                // SettingsComponents 里那个 cd_back，是因为 ui/settings 下 7 处
+                // 返回箭头有 6 处用 common_back。
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
+                            contentDescription = stringResource(R.string.common_back),
+                        )
+                    }
+                },
             )
         },
     ) { padding ->
@@ -519,10 +542,15 @@ fun SettingsScreen(
                     Slider(
                         value = autoNewSessionThreshold.toFloat(),
                         onValueChange = {
-                            autoNewSessionThreshold = it.toInt().coerceIn(1, 3)
+                            autoNewSessionThreshold = it.toInt().coerceIn(
+                                com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD,
+                                com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD,
+                            )
                         },
-                        valueRange = 1f..3f,
-                        steps = 1,
+                        valueRange = com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD
+                            .toFloat()..com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD.toFloat(),
+                        steps = com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD -
+                            com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD - 1,
                     )
                 }
             },

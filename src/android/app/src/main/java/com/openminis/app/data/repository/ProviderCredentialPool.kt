@@ -38,8 +38,28 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 internal class ProviderCredentialPool(private val context: Context) {
 
+    /**
+     * [T-credential-pool-mode] How the pool chooses among its live keys.
+     *
+     *  - [ROUND_ROBIN]: the historical behaviour — a persisted-nowhere runtime
+     *    cursor walks the slots in order.
+     *  - [RANDOM]: uniformly pick among the keys that are NOT cooled down, so a
+     *    client that opens several parallel streams does not slam the same
+     *    account the way a shared cursor would.
+     *
+     * Both modes keep the cooldown-skip semantics (a cooled key is never
+     * chosen while a live one exists).
+     */
+    enum class PoolMode { ROUND_ROBIN, RANDOM }
+
     companion object {
         private const val POOL_PREFIX = "credpool_"
+
+        /** Encrypted-prefs key holding the [PoolMode] for one instance. */
+        private const val POOL_MODE_PREFIX = "poolmode_"
+
+        /** Fallback when nothing is stored or the stored value is not a mode. */
+        val DEFAULT_MODE = PoolMode.ROUND_ROBIN
 
         /** Default cooldown when a rate-limit error carries no Retry-After. */
         const val DEFAULT_COOLDOWN_MS = 30_000L
@@ -59,6 +79,25 @@ internal class ProviderCredentialPool(private val context: Context) {
     }
 
     private fun prefsKey(instanceId: String) = "$POOL_PREFIX$instanceId"
+
+    // ── mode ────────────────────────────────────────────────────────────
+
+    /**
+     * Persisted pick mode for [instanceId]. Unset or unrecognised values fall
+     * back to [DEFAULT_MODE] — a corrupted pref must never leave the pool
+     * unusable, and round-robin is the pre-existing behaviour.
+     */
+    fun mode(instanceId: String): PoolMode {
+        val raw = encryptedPrefs.getString(modeKey(instanceId), null) ?: return DEFAULT_MODE
+        return PoolMode.entries.firstOrNull { it.name == raw } ?: DEFAULT_MODE
+    }
+
+    /** Persist the pick mode for [instanceId]. Changing it leaves keys and cooldowns untouched. */
+    fun setMode(instanceId: String, mode: PoolMode) {
+        encryptedPrefs.edit().putString(modeKey(instanceId), mode.name).apply()
+    }
+
+    private fun modeKey(instanceId: String) = "$POOL_MODE_PREFIX$instanceId"
 
     /** Snapshot of the persisted pool list for [instanceId] (ordered). */
     fun keys(instanceId: String): List<String> {
@@ -127,13 +166,34 @@ internal class ProviderCredentialPool(private val context: Context) {
         // Callers that only have ONE key still use this path — the
         // single-request-pick version: the pool could be size 1 transiently
         // (e.g. user removed the only extra) and still valid for rotation.
-        val (key, idx) = poolPickKey(
-            keys = current,
-            cursor = cursors.getOrPut(instanceId) { AtomicInteger(0) },
-            cooldownForKey = { cooldownUntil[cooldownKey(instanceId, it)] ?: 0L },
-        ) ?: run {
-            // All keys cooled — serve whichever the cursor points at.
-            val fallbackIndex = (cursors[instanceId] ?: AtomicInteger(0)).get()
+        val cooldownForKey = { k: String -> cooldownUntil[cooldownKey(instanceId, k)] ?: 0L }
+        val cursor = cursors.getOrPut(instanceId) { AtomicInteger(0) }
+        val poolMode = mode(instanceId)
+        // [T-credential-pool-mode] Dispatch on the persisted mode. ROUND_ROBIN
+        // keeps the exact cursor walk (and its all-cooled null signal) so the
+        // pure poolPickKey contract is untouched; RANDOM picks uniformly among
+        // the live candidates instead.
+        val picked: Pair<String, Int>? = when (poolMode) {
+            PoolMode.ROUND_ROBIN -> poolPickKey(
+                keys = current,
+                cursor = cursor,
+                cooldownForKey = cooldownForKey,
+                nowMs = nowMs,
+            )
+            PoolMode.RANDOM -> poolPickKeyRandom(
+                keys = current,
+                cooldownForKey = cooldownForKey,
+                nowMs = nowMs,
+            )
+        }
+        val (key, idx) = picked ?: run {
+            // Every key is cooled — serve one anyway (a degraded answer beats no
+            // answer). ROUND_ROBIN keeps its historical cursor-position pick;
+            // RANDOM falls back to the whole pool so it does not pin slot 0.
+            val fallbackIndex = when (poolMode) {
+                PoolMode.ROUND_ROBIN -> cursor.get()
+                PoolMode.RANDOM -> kotlin.random.Random.nextInt(current.size)
+            }
             val actualIdx = fallbackIndex.coerceIn(current.indices)
             current[actualIdx] to actualIdx
         }
@@ -264,6 +324,29 @@ internal fun poolPickKey(
         ticket = cursor.getAndIncrement()
     }
     return null
+}
+
+/**
+ * [T-credential-pool-mode] Pure random walk for [ProviderCredentialPool.PoolMode.RANDOM]:
+ * collect every key whose cooldown has expired, then pick one uniformly with
+ * [kotlin.random.Random]. Returns null when every key is cooled — the caller
+ * then falls back to the whole pool (degraded answer beats no answer), exactly
+ * as the round-robin path does.
+ *
+ * [random] is injectable so tests can pin the choice; production callers use
+ * the default.
+ */
+internal fun poolPickKeyRandom(
+    keys: List<String>,
+    cooldownForKey: (String) -> Long,
+    nowMs: Long = System.currentTimeMillis(),
+    random: kotlin.random.Random = kotlin.random.Random.Default,
+): Pair<String, Int>? {
+    if (keys.isEmpty()) return null
+    val live = keys.indices.filter { cooldownForKey(keys[it]) <= nowMs }
+    if (live.isEmpty()) return null
+    val idx = live[random.nextInt(live.size)]
+    return keys[idx] to idx
 }
 
 // ── Error-to-cooldown classification (pure, test-pinned) ────────────────

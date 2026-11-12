@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.openminis.app.R
+import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.theme.monetIconTileColor
 import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.m3Icon
@@ -307,7 +308,13 @@ fun SettingsRow(
                 // is what made a no-subtitle last row read ~50px shorter.
                 .heightIn(min = minHeight)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                // [T-android-settings-row-inset] 原来是硬编码 14.dp —— 全仓唯一
+                // 不在 16 网格上的行内边距：SectionDesign.RowHorizontalPadding 是
+                // 16，SettingsChoiceRow 是 16，SettingsCardBlock 是 16，卡片自身的
+                // 外边距也是 16。只有这里和它派生出的分隔线 inset 一起停在 14，
+                // 于是 SettingsRow 的文字和相邻的 choice/card 行差 2dp，卡片
+                // 圆角内缘也少这一截。改成消费 SectionDesign 的单一真相源。
+                .padding(horizontal = SectionDesign.RowHorizontalPadding, vertical = 12.dp),
             // #10 keep the trailing control (Switch/value) vertically centered
             // against the title — already centered, kept explicit.
             verticalAlignment = Alignment.CenterVertically,
@@ -382,11 +389,17 @@ fun SettingsRow(
         }
 
         if (showDivider) {
-            val insetStart = if (icon != null) 58.dp else 14.dp
+            // [T-android-settings-divider-inset] insetStart 必须跟着行内边距走：
+            // 有图标时是「行内边距 + 30dp 图标块 + 14dp 间隙」，即
+            // 16 + 30 + 14 = 60。它原先是 58（= 旧的 14 + 30 + 14），行内边距
+            // 统一到 16 后如果不跟着改，分隔线会比图标块左移 2dp、不再对齐
+            // 标题文字的左缘。end 用同一个 RowHorizontalPadding，之前是写死的
+            // 14，导致卡片右缘露出一截不该有的缝。
+            val insetStart = if (icon != null) 60.dp else SectionDesign.RowHorizontalPadding
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = insetStart, end = 14.dp)
+                    .padding(start = insetStart, end = SectionDesign.RowHorizontalPadding)
                     .height(0.5.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )
@@ -497,10 +510,13 @@ fun SettingsChoiceRow(
             }
         }
         if (showDivider) {
+            // [T-android-settings-divider-inset] 分隔线的 start/end 跟行内边距
+            // 同源（原来 start 16 / end 14 两头不对称，卡片右缘会露出一截
+            // 不该有的缝）。end 跟 SettingsRow 保持一致，都用 16dp。
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 14.dp)
+                    .padding(start = SectionDesign.RowHorizontalPadding, end = SectionDesign.RowHorizontalPadding)
                     .height(0.5.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             )

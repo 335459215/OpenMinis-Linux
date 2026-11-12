@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.model.ProviderInstance
+import com.openminis.app.data.repository.ProviderCredentialPool
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.MinisAlertDialog
@@ -60,6 +62,12 @@ internal fun AccountPoolSection(
     var poolInput by remember { mutableStateOf("") }
     var poolError by remember { mutableStateOf(false) }
     var poolRemoveIndex by remember { mutableStateOf<Int?>(null) }
+    // [T-credential-pool-mode] Distribution policy for the extra keys. Held in
+    // local state so the chips repaint immediately; the store stays the source
+    // of truth on the next recomposition.
+    var poolMode by remember(instance.id) {
+        mutableStateOf(configStore.poolMode(instance.id))
+    }
 
     fun refreshPool() {
         poolKeys = configStore.poolKeys(instance.id)
@@ -121,6 +129,51 @@ internal fun AccountPoolSection(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (poolKeys.size >= 2) {
+                // [T-credential-pool-mode] Only meaningful with two or more
+                // keys: round-robin walks the pool on the existing cursor,
+                // random picks uniformly among keys that are not cooling down.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.pool_mode_title),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = stringResource(R.string.pool_mode_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row {
+                        FilterChip(
+                            selected = poolMode == ProviderCredentialPool.PoolMode.ROUND_ROBIN,
+                            onClick = {
+                                poolMode = ProviderCredentialPool.PoolMode.ROUND_ROBIN
+                                configStore.setPoolMode(instance.id, poolMode)
+                            },
+                            label = { Text(stringResource(R.string.pool_mode_round_robin)) },
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        FilterChip(
+                            selected = poolMode == ProviderCredentialPool.PoolMode.RANDOM,
+                            onClick = {
+                                poolMode = ProviderCredentialPool.PoolMode.RANDOM
+                                configStore.setPoolMode(instance.id, poolMode)
+                            },
+                            label = { Text(stringResource(R.string.pool_mode_random)) },
+                        )
+                    }
+                }
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                 )
             }
             if (poolKeys.isNotEmpty()) {

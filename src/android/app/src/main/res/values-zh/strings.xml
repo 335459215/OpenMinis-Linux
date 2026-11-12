@@ -665,6 +665,12 @@
     <string name="group_suggest_merge">移入“%1$s”？</string>
     <string name="group_collapse">收起工作区</string>
     <string name="group_expand">展开工作区</string>
+    <!-- [T-android-group-auto-classify] 顶栏「魔术」按钮。 -->
+    <string name="group_magic">自动整理会话</string>
+    <string name="group_magic_running">正在整理…</string>
+    <string name="group_magic_done">已重新整理 %1$d 个会话</string>
+    <string name="group_magic_failed">整理失败，请重试</string>
+    <string name="group_magic_no_sessions">没有可整理的会话</string>
     <string name="sessionlist_settings">设置</string>
     <string name="sessionlist_shell_terminal">Shell 终端</string>
     <string name="sessionlist_open_browser">打开浏览器</string>
@@ -2684,4 +2690,16 @@
     <string name="git_panel_no_branches">没有分支</string>
     <string name="git_panel_no_stashes">没有暂存记录</string>
     <string name="git_panel_switch_branch">切换分支</string>
+    <string name="auto_group_models">自动分组</string>
+    <string name="auto_group_confirm_title">自动分组</string>
+    <string name="auto_group_confirm_body">按服务商和能力把可见模型分桶，每个桶建一个分组。同名分组直接合并，手工建的分组不会被改动。</string>
+    <string name="auto_group_plan_summary">将创建或更新 %1$d 个分组。</string>
+    <string name="auto_group_merge_existing">合并</string>
+    <string name="auto_group_rebuild">重建</string>
+    <string name="auto_group_done_toast">完成 —— %1$d 个分组，%2$d 个条目。</string>
+    <string name="auto_group_empty_toast">没有可分组的模型。</string>
+    <string name="pool_mode_title">密钥使用模式</string>
+    <string name="pool_mode_round_robin">轮询</string>
+    <string name="pool_mode_random">随机</string>
+    <string name="pool_mode_hint">备用密钥的选取方式</string>
 </resources>

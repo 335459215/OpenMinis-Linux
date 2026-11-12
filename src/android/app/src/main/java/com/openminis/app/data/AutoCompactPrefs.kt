@@ -31,7 +31,17 @@ object AutoCompactPrefs {
     private const val KEY_AUTO_NEW_SESSION_THRESHOLD = "autoNewSessionCompactionThreshold"
     private const val KEY_PENDING_HANDOFF = "pendingHandoffSummary"
     const val DEFAULT_THRESHOLD_PERCENT = 75
-    const val DEFAULT_AUTO_NEW_SESSION_THRESHOLD = 3
+    /** Lowest allowed "compactions before we auto-open a new session". */
+    const val MIN_AUTO_NEW_SESSION_THRESHOLD = 1
+    /**
+     * Highest allowed "compactions before we auto-open a new session".
+     * The cap is deliberately high (50, not 3): this setting only controls how
+     * often we PROMPT to hand off into a fresh session — it does not change how
+     * or when compaction itself runs, so a large value is a harmless preference
+     * ("almost never nag me") rather than a behaviour change.
+     */
+    const val MAX_AUTO_NEW_SESSION_THRESHOLD = 50
+    const val DEFAULT_AUTO_NEW_SESSION_THRESHOLD = 10
 
     @Volatile
     private var appContext: Context? = null
@@ -64,7 +74,7 @@ object AutoCompactPrefs {
         cachedAutoNewSessionEnabled = prefs(context).getBoolean(KEY_AUTO_NEW_SESSION_ENABLED, true)
         cachedAutoNewSessionThreshold = prefs(context)
             .getInt(KEY_AUTO_NEW_SESSION_THRESHOLD, DEFAULT_AUTO_NEW_SESSION_THRESHOLD)
-            .coerceIn(1, 3)
+            .coerceIn(MIN_AUTO_NEW_SESSION_THRESHOLD, MAX_AUTO_NEW_SESSION_THRESHOLD)
     }
 
     /** Context-free read. True before [prime] runs (auto-compact on by default). */
@@ -74,7 +84,8 @@ object AutoCompactPrefs {
 
     fun autoNewSessionEnabled(): Boolean = cachedAutoNewSessionEnabled
 
-    fun autoNewSessionThreshold(): Int = cachedAutoNewSessionThreshold.coerceIn(1, 3)
+    fun autoNewSessionThreshold(): Int =
+        cachedAutoNewSessionThreshold.coerceIn(MIN_AUTO_NEW_SESSION_THRESHOLD, MAX_AUTO_NEW_SESSION_THRESHOLD)
 
     fun setAutoNewSessionEnabled(context: Context, enabled: Boolean) {
         cachedAutoNewSessionEnabled = enabled
@@ -82,7 +93,8 @@ object AutoCompactPrefs {
     }
 
     fun setAutoNewSessionThreshold(context: Context, threshold: Int) {
-        cachedAutoNewSessionThreshold = threshold.coerceIn(1, 3)
+        cachedAutoNewSessionThreshold =
+            threshold.coerceIn(MIN_AUTO_NEW_SESSION_THRESHOLD, MAX_AUTO_NEW_SESSION_THRESHOLD)
         prefs(context).edit().putInt(KEY_AUTO_NEW_SESSION_THRESHOLD, cachedAutoNewSessionThreshold).apply()
     }
 

@@ -154,6 +154,7 @@ fun ModelGroupsScreen(
             MinisCenterTopBar(
                 title = { Text(stringResource(R.string.model_groups_model_groups)) },
                 actions = {
+                    AutoGroupEntryButton(providerRepository = providerRepository)
                     IconButton(onClick = { showNewGroupDialog = true }) {
                         Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.model_groups_new_group))
                     }
@@ -368,8 +369,7 @@ fun ModelGroupsScreen(
                 MinisTextButton(
                     onClick = {
                         if (newGroupName.isNotBlank()) {
-                            val newGroup = ModelGroup(name = newGroupName.trim())
-                            providerRepository.addGroup(newGroup)
+                            val newGroup = ModelGroup(name = newGroupName.trim()).also(providerRepository::addGroup)
                             // Auto-set as primary default if it's the first group
                             if (config.modelGroups.size == 1 && config.defaultPrimaryGroupId == null) {
                                 providerRepository.defaultPrimaryGroupId = newGroup.id

@@ -647,6 +647,23 @@ internal class ProviderConfigStore(
         _credentialRevision.update { it + 1 }
     }
 
+    // [T-credential-pool-mode] Round-robin vs random pick for this instance.
+    // Mirror of poolKeys / setPoolKeys: reads go straight through, writes take
+    // configLock so they cannot interleave with the backup-restore writer. The
+    // mode lives in its own pref key, so saveApiKey's slot-0 sync and
+    // setPoolKeys can never clobber it.
+
+    /** Pick mode stored for [instanceId] (round-robin unless set otherwise). */
+    fun poolMode(instanceId: String): ProviderCredentialPool.PoolMode =
+        credentialPool.mode(instanceId)
+
+    /** Persist the pick mode for [instanceId]; keys and cooldowns are untouched. */
+    fun setPoolMode(instanceId: String, mode: ProviderCredentialPool.PoolMode) =
+        synchronized(repo.configLock) {
+            credentialPool.setMode(instanceId, mode)
+            _credentialRevision.update { it + 1 }
+        }
+
     /**
      * Add [key] as an extra account.  The first add seeds slot 0 from the
      * legacy single key.  Duplicates and pools that would stay below the

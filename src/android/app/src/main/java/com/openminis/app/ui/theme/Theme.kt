@@ -77,6 +77,31 @@ private val TealDarkSurfaceVariant = Color(0xFF444446)
 private val TealDarkOnSurfaceVariant = Color(0xFFC4C4C8)
 private val TealDarkOutline = Color(0xFF8E8E92)
 
+// [T-android-scheme-error-slot] 补上 M3 的 error 色槽，红值分裂的根因。
+//
+// 两套 scheme 之前都只声明了 primary…outline，没有 error/onError/
+// errorContainer/onErrorContainer，于是 `colorScheme.error` 全部落到
+// Material3 的默认值 #B3261E（暗色默认 #FFB4AB）；而同一对话框里旁边的
+// 图标 tint 用的是 IosRed #FF3B30。同一个删除确认框因此出现两种红。
+//
+// 亮色直接用 IosRed：它是这些对话框图标本来就在用的值，也让
+// AccentTokens.kt 里“red 的色相就是语义、不进 monetAccentTiles 动态表”的
+// 约定和 colorScheme.error 成为同一个红。
+// 暗色不能照搬：#FF3B30 在 #1C1C1E 底上对比度不足 4.5:1，按 M3 tone 取
+// tone-80 附近的 #FC6B63（色相不变、提亮到可读），onError 取它自己的
+// tone-20 深红。container 一对沿用 M3 标准 error 配对的取值。
+// 动态取色分支无需处理：dynamicLight/DarkColorScheme 由系统壁纸方案提供
+// 全部色槽，本来就带 error。
+// 注：IosRed 与本文件同包（com.openminis.app.ui.theme），无需 import。
+private val ErrorRed = IosRed
+private val OnErrorRed = Color(0xFFFFFFFF)
+private val ErrorRedContainer = Color(0xFFFFDAD6)
+private val OnErrorRedContainer = Color(0xFF93000A)
+private val ErrorRedDark = Color(0xFFFC6B63)
+private val OnErrorRedDark = Color(0xFF3B0906)
+private val ErrorRedContainerDark = Color(0xFF93000A)
+private val OnErrorRedContainerDark = Color(0xFFFFDAD6)
+
 // Surface tokens are defined inline in LightColorScheme/DarkColorScheme above.
 
 private val LightColorScheme = lightColorScheme(
@@ -105,6 +130,11 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainerHighest = Color(0xFFF7F7FA),
     outline = TealOutline,
     outlineVariant = TealOutline,
+    // [T-android-scheme-error-slot] 见上方 ErrorRed* 注释块。
+    error = ErrorRed,
+    onError = OnErrorRed,
+    errorContainer = ErrorRedContainer,
+    onErrorContainer = OnErrorRedContainer,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -129,6 +159,13 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerHighest = Color(0xFF2C2C2E),
     outline = TealDarkOutline,
     outlineVariant = TealDarkOutline,
+    // [T-android-scheme-error-slot] 见上方 ErrorRed* 注释块。暗色不能照搬
+    // #FF3B30：它在 #1C1C1E 底上对比度不足 4.5:1，这里用提亮的同色相
+    // #FC6B63，onError 取对应的深红以便图标/文字在其上可读。
+    error = ErrorRedDark,
+    onError = OnErrorRedDark,
+    errorContainer = ErrorRedContainerDark,
+    onErrorContainer = OnErrorRedContainerDark,
 )
 
 // App-wide FAB accent color (warm beige, matching iOS New Chat button).

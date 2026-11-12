@@ -734,6 +734,14 @@
     <string name="group_suggest_merge">Move into “%1$s”?</string>
     <string name="group_collapse">Collapse workspace</string>
     <string name="group_expand">Expand workspace</string>
+    <!-- [T-android-group-auto-classify] Top-bar "magic" button: one tap files
+         every ungrouped session. Wording says what happens to the data
+         (organize), not how (AI), because the risk is a batch move. -->
+    <string name="group_magic">Auto-organize sessions</string>
+    <string name="group_magic_running">Organizing…</string>
+    <string name="group_magic_done">Reorganized %1$d sessions</string>
+    <string name="group_magic_failed">Couldn\'t organize — try again</string>
+    <string name="group_magic_no_sessions">No ungrouped sessions to organize</string>
     <string name="sessionlist_settings">Settings</string>
     <string name="sessionlist_shell_terminal">Shell Terminal</string>
     <string name="sessionlist_open_browser">Open Browser</string>
@@ -2861,4 +2869,16 @@
     <string name="model_group_detail_quota_period_placeholder">Window length (hours)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Quota window reset — primary member serves again</string>
     <string name="model_group_detail_quota_window_remaining">Remaining this window: %1$d sends</string>
+    <string name="auto_group_models">Auto-group</string>
+    <string name="auto_group_confirm_title">Auto-group models</string>
+    <string name="auto_group_confirm_body">Buckets every visible model by provider and modality, then creates one group per bucket. Same-named groups are merged; hand-made groups are never touched.</string>
+    <string name="auto_group_plan_summary">%1$d groups will be created or updated.</string>
+    <string name="auto_group_merge_existing">Merge</string>
+    <string name="auto_group_rebuild">Rebuild</string>
+    <string name="auto_group_done_toast">Done — %1$d groups, %2$d entries.</string>
+    <string name="auto_group_empty_toast">No models available to group.</string>
+    <string name="pool_mode_title">Key usage mode</string>
+    <string name="pool_mode_round_robin">Round-robin</string>
+    <string name="pool_mode_random">Random</string>
+    <string name="pool_mode_hint">How the extra keys are picked</string>
 </resources>
