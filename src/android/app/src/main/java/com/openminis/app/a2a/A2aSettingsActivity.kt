@@ -44,7 +44,7 @@ class A2aSettingsActivity : Activity() {
         val scroll = ScrollView(this).apply { setBackgroundColor(bgColor()) }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
+            setPadding(dp(20), dp(20), dp(20), dp(24))
             setBackgroundColor(bgColor())
         }
         scroll.addView(root)
@@ -58,16 +58,9 @@ class A2aSettingsActivity : Activity() {
         })
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_gateway_title)
-            textSize = 22f
+            textSize = 20f
             setTextColor(textColor())
         })
-        root.addView(TextView(this).apply {
-            text = getString(R.string.a2a_gateway_subtitle)
-            textSize = 13f
-            setTextColor(mutedColor())
-            setPadding(0, 8, 0, 0)
-        })
-
         statusView = TextView(this).apply {
             textSize = 15f
             setPadding(0, 28, 0, 0)
@@ -113,13 +106,6 @@ class A2aSettingsActivity : Activity() {
             }
         }
         root.addView(keepAliveSwitch)
-        root.addView(TextView(this).apply {
-            text = getString(R.string.a2a_keepalive_desc)
-            textSize = 12f
-            setTextColor(mutedColor())
-            setPadding(0, 0, 0, 16)
-        })
-
         bubbleSwitch = Switch(this).apply {
             text = getString(R.string.a2a_overlay_title)
             textSize = 15f
@@ -141,13 +127,6 @@ class A2aSettingsActivity : Activity() {
             }
         }
         root.addView(bubbleSwitch)
-        root.addView(TextView(this).apply {
-            text = getString(R.string.a2a_overlay_desc)
-            textSize = 12f
-            setTextColor(mutedColor())
-            setPadding(0, 0, 0, 16)
-        })
-
         root.addView(button(getString(R.string.a2a_action_grant_overlay)) { requestOverlay() })
         root.addView(button(getString(R.string.a2a_action_clear_cookies)) { clearCookies() })
         root.addView(button(getString(R.string.a2a_action_view_log)) { showLog() })
@@ -172,17 +151,22 @@ class A2aSettingsActivity : Activity() {
     private fun button(label: String, onClick: () -> Unit): Button = Button(this).apply {
         text = label
         isAllCaps = false
-        textSize = 15f
+        textSize = 13f
         setTextColor(Color.WHITE)
+        minWidth = 0
+        minimumWidth = 0
+        minHeight = 0
+        minimumHeight = 0
+        setPadding(dp(16), dp(8), dp(16), dp(8))
         background = GradientDrawable().apply {
-            cornerRadius = 24f * resources.displayMetrics.density
+            cornerRadius = dp(10).toFloat()
             setColor(accentColor())
         }
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = 10 }
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(8) }
     }
 
     // [T-a2a-chrome] 与 Compose 页面同一组语义色：夜/昼双色板，圆角胶囊按钮。

@@ -1,5 +1,7 @@
 package com.openminis.app.ui.sessions
 
+import com.openminis.app.ui.theme.CategoryPalette
+
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -193,23 +195,23 @@ internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 // 16 categories matching iOS (ContentView.swift:1897-1916)
 internal fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
-        "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
-        "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, Color(0xFF30B0C7))
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, Color(0xFF5856D6))
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, Color(0xFFFF2D55))
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF34C759))
-        "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
-        "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, Color(0xFFFF3B30))
-        "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
-        "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
-        "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, Color(0xFFFF2D55))
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, Color(0xFFFFCC00))
-        "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, Color(0xFF8E8E93))
-        else           -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF8E8E93))
+        "code"         -> CategoryStyle(Icons.Outlined.Code, CategoryPalette.Code)
+        "writing"      -> CategoryStyle(Icons.Outlined.Description, CategoryPalette.Writing)
+        "research"     -> CategoryStyle(Icons.Outlined.Language, CategoryPalette.Research)
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, CategoryPalette.Analysis)
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, CategoryPalette.Creative)
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, CategoryPalette.Chat)
+        "math"         -> CategoryStyle(Icons.Outlined.Calculate, CategoryPalette.Math)
+        "translation"  -> CategoryStyle(Icons.Outlined.Translate, CategoryPalette.Translation)
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, CategoryPalette.Health)
+        "finance"      -> CategoryStyle(Icons.Outlined.Payments, CategoryPalette.Finance)
+        "travel"       -> CategoryStyle(Icons.Outlined.Map, CategoryPalette.Code)
+        "education"    -> CategoryStyle(Icons.Outlined.Book, CategoryPalette.Writing)
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, CategoryPalette.Creative)
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, CategoryPalette.Productivity)
+        "support"      -> CategoryStyle(Icons.Outlined.Settings, CategoryPalette.Support)
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, CategoryPalette.Neutral)
+        else           -> CategoryStyle(Icons.Outlined.Forum, CategoryPalette.Neutral)
     }
 }
 
@@ -2853,7 +2855,7 @@ private fun SetupStepCard(
             modifier = Modifier
                 .size(32.dp)
                 .background(
-                    color = if (isDone) Color(0xFF34C759) else MaterialTheme.colorScheme.primary,
+                    color = if (isDone) CategoryPalette.Success else MaterialTheme.colorScheme.primary,
                     shape = CircleShape,
                 ),
             contentAlignment = Alignment.Center,

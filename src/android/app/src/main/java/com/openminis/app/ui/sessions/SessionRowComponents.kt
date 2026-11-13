@@ -1,5 +1,7 @@
 package com.openminis.app.ui.sessions
 
+import com.openminis.app.ui.theme.CategoryPalette
+
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -126,7 +128,7 @@ internal fun SessionBadgeOverlay(
                     .background(
                         // Solid system-orange. Picked over yellow so the
                         // alert reads as "attention" rather than "info".
-                        color = Color(0xFFFF9500),
+                        color = CategoryPalette.Warning,
                         shape = CircleShape,
                     )
                     .border(
