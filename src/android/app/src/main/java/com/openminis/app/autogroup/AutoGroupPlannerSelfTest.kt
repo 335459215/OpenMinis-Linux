@@ -46,12 +46,13 @@ object AutoGroupPlannerSelfTest {
     @JvmStatic
     fun main(args: Array<String>) {
         emptyInput()
-        singleProviderSingleModality()
-        singleProviderDualModality()
+        sameCapabilityAcrossChannelsIsOneGroup()
+        singleModalityNaming()
+        dualModalityNaming()
         audioVsVisionTokens()
         hiddenFiltering()
         entryIdDeduplication()
-        blankProviderUngrouped()
+        blankProviderStillGroupedByCapability()
         outputOrderingStable()
         rebuildMergeSameNames()
         prefixValue()
@@ -68,26 +69,42 @@ object AutoGroupPlannerSelfTest {
         )
     }
 
-    private fun singleProviderSingleModality() {
+    /**
+     * THE core requirement: channels must not partition capability. Three vision-capable
+     * models reached through three different providers all belong to one group.
+     */
+    private fun sameCapabilityAcrossChannelsIsOneGroup() {
+        val items = listOf(
+            item("x1", modelId = "gpt-4o", providerInstanceId = "p1", providerLabel = "OpenAI"),
+            item("x2", modelId = "claude-3-5-sonnet", providerInstanceId = "p2", providerLabel = "Anthropic"),
+            item("x3", modelId = "gemini-1.5-pro", providerInstanceId = "p3", providerLabel = "Google"),
+        )
+        val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
+        checkEq("cross-channel vision -> exactly one group", plan.size, 1)
+        checkEq("cross-channel group name carries no provider", plan[0].name, "[自动] 视觉")
+        checkEq("cross-channel members unified", plan[0].entryIds, listOf("x1", "x2", "x3"))
+    }
+
+    private fun singleModalityNaming() {
         val items = listOf(
             item("e1", modelId = "gpt-4o"),
             item("e2", modelId = "gpt-4o-mini"),
         )
         val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
-        checkEq("single provider single modality -> one group", plan.size, 1)
-        checkEq("group name not split", plan[0].name, "[自动] OpenAI")
+        checkEq("single modality -> one group", plan.size, 1)
+        checkEq("group named after capability, not provider", plan[0].name, "[自动] 视觉")
         checkEq("members preserved", plan[0].entryIds, listOf("e1", "e2"))
     }
 
-    private fun singleProviderDualModality() {
+    private fun dualModalityNaming() {
         val items = listOf(
             item("e1", modelId = "gpt-4o", providerInstanceId = "p1", providerLabel = "OpenAI"),
             item("e2", modelId = "dall-e-3", providerInstanceId = "p1", providerLabel = "OpenAI"),
         )
         val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
         checkEq("dual modality -> two groups", plan.size, 2)
-        checkEq("vision group name", plan[0].name, "[自动] OpenAI · 视觉")
-        checkEq("image group name", plan[1].name, "[自动] OpenAI · 图像")
+        checkEq("vision group name", plan[0].name, "[自动] 视觉")
+        checkEq("image group name", plan[1].name, "[自动] 图像")
         checkEq("vision members", plan[0].entryIds, listOf("e1"))
         checkEq("image members", plan[1].entryIds, listOf("e2"))
     }
@@ -161,21 +178,27 @@ object AutoGroupPlannerSelfTest {
             item("dup", modelId = "dall-e-3", providerInstanceId = "p2", providerLabel = "Other"),
         )
         val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
-        // "dup" is first seen under OpenAI; the Other provider must not receive it.
+        // First occurrence wins: "dup" is a vision entry, the image duplicate is dropped.
         checkEq("dedup -> only one group survives", plan.size, 1)
-        checkEq("dedup group name", plan[0].name, "[自动] OpenAI")
+        checkEq("dedup group name", plan[0].name, "[自动] 视觉")
         checkEq("dedup members", plan[0].entryIds, listOf("dup"))
     }
 
-    private fun blankProviderUngrouped() {
+    /**
+     * A blank provider used to dump entries into a separate "ungrouped" bucket. Now that
+     * capability is the only key, a blank provider is simply irrelevant: the entry is grouped
+     * by what it can do like any other.
+     */
+    private fun blankProviderStillGroupedByCapability() {
         val items = listOf(
             item("e1", modelId = "gpt-4o", providerInstanceId = "", providerLabel = ""),
-            item("e2", modelId = "llama-3", providerInstanceId = "", providerLabel = ""),
+            item("e2", modelId = "whisper-1", providerInstanceId = "", providerLabel = ""),
         )
         val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
-        checkEq("blank provider -> single ungrouped group", plan.size, 1)
-        checkEq("ungrouped name", plan[0].name, "[自动] 未分组模型")
-        checkEq("ungrouped members", plan[0].entryIds, listOf("e1", "e2"))
+        checkEq("blank provider -> capability buckets only", plan.size, 2)
+        checkEq("blank provider vision bucket", plan[0].name, "[自动] 视觉")
+        checkEq("blank provider audio bucket", plan[1].name, "[自动] 语音")
+        checkEq("blank provider members kept", plan[0].entryIds, listOf("e1"))
     }
 
     private fun outputOrderingStable() {
@@ -189,16 +212,17 @@ object AutoGroupPlannerSelfTest {
         val plan = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
         val names = plan.map { it.name }
         checkEq(
-            "ordering by providerLabel then modality ord",
+            "ordering is modality ordinal, provider-independent",
             names,
             listOf(
-                "[自动] Alpha · 视觉",
-                "[自动] Alpha · 图像",
-                "[自动] Alpha · 语音",
-                "[自动] Mid",
-                "[自动] Zeta",
+                "[自动] 视觉",
+                "[自动] 图像",
+                "[自动] 语音",
+                "[自动] 文本",
             ),
         )
+        // Vision bucket must have absorbed both providers, in input order.
+        checkEq("vision bucket merges channels", plan[0].entryIds, listOf("a1", "m1"))
         // Run twice to confirm determinism.
         val plan2 = AutoGroupPlanner.plan(items, rebuild = false, existingNames = emptyList())
         checkEq("deterministic repeat", plan2.map { it.name }, names)
@@ -212,18 +236,18 @@ object AutoGroupPlannerSelfTest {
         val merged = AutoGroupPlanner.plan(
             items,
             rebuild = false,
-            existingNames = listOf("[自动] OpenAI · 视觉"),
+            existingNames = listOf("[自动] 视觉"),
         )
         val rebuilt = AutoGroupPlanner.plan(
             items,
             rebuild = true,
-            existingNames = listOf("[自动] OpenAI · 视觉"),
+            existingNames = listOf("[自动] 视觉"),
         )
         checkEq("merge names == rebuild names", merged.map { it.name }, rebuilt.map { it.name })
         checkEq(
             "existingNames does not rename",
             merged.map { it.name },
-            listOf("[自动] OpenAI · 视觉", "[自动] OpenAI · 图像"),
+            listOf("[自动] 视觉", "[自动] 图像"),
         )
     }
 

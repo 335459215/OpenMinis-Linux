@@ -2692,7 +2692,7 @@
     <string name="git_panel_switch_branch">切换分支</string>
     <string name="auto_group_models">自动分组</string>
     <string name="auto_group_confirm_title">自动分组</string>
-    <string name="auto_group_confirm_body">按服务商和能力把可见模型分桶，每个桶建一个分组。同名分组直接合并，手工建的分组不会被改动。</string>
+    <string name="auto_group_confirm_body">按能力（视觉 / 图像 / 语音 / 文本）给可见模型分桶，不看渠道——同一能力来自多个服务商也会落进同一个分组。同名分组直接合并，手工建的分组不会被改动。</string>
     <string name="auto_group_plan_summary">将创建或更新 %1$d 个分组。</string>
     <string name="auto_group_merge_existing">合并</string>
     <string name="auto_group_rebuild">重建</string>

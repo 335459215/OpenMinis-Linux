@@ -10,9 +10,9 @@ package com.openminis.app.autogroup
  * @param entryId stable identifier of the entry; empty ids are ignored by [AutoGroupPlanner.plan].
  * @param modelId raw model identifier (e.g. `"gpt-4o-audio"`), used for modality detection.
  * @param displayName human readable name, used as a secondary modality signal.
- * @param providerInstanceId identifier of the provider instance; blank values fall into the
- *        dedicated "ungrouped" bucket.
- * @param providerLabel human readable provider name; becomes the base of the group name.
+ * @param providerInstanceId identifier of the provider instance. **Not used for bucketing** —
+ *        kept so callers can pass the full entry shape without a lossy mapping.
+ * @param providerLabel human readable provider name. Also unused for bucketing.
  * @param isHidden when true the entry is excluded from planning.
  */
 data class AutoGroupInput(
@@ -27,8 +27,8 @@ data class AutoGroupInput(
 /**
  * Modality bucket a model belongs to.
  *
- * The declaration order is significant: [AutoGroupPlanner.plan] uses it as the tie breaker
- * for the final output ordering (`VISION < IMAGE < AUDIO < TEXT`).
+ * The declaration order is significant: [AutoGroupPlanner.plan] uses it as the output
+ * ordering (`VISION < IMAGE < AUDIO < TEXT`).
  */
 enum class AutoGroupModality { VISION, IMAGE, AUDIO, TEXT }
 
@@ -46,24 +46,24 @@ data class AutoGroupPlan(val name: String, val entryIds: List<String>)
  * The planner never performs IO, never touches Android APIs and is stateless, so every
  * function can be called from any thread and is trivially testable.
  *
- * ### Grouping rules (two levels)
- * 1. First level groups by `providerInstanceId`; the base name is `providerLabel`.
- * 2. Second level sub-divides a single provider by modality. The result is only split when
- *    the provider actually contains **two or more** distinct modalities — a provider with a
- *    single modality stays as one group named after the provider (avoids fragmented groups).
- *    When split, the name is `<providerLabel> · <modality Chinese label>`.
+ * ### Grouping rule (capability only, one level)
  *
- * Every produced name is prefixed with [AUTO_PREFIX], e.g. `[自动] OpenAI · 视觉`.
+ * Entries are bucketed by **capability / modality** alone. The provider instance is
+ * deliberately NOT part of the key: every vision model from every channel lands in the same
+ * `[自动] 视觉` group, likewise for image / audio / text.
+ *
+ * A channel is only *how* a model is reached, not *what* it can do. Splitting by channel
+ * fragments one capability across many groups — with three vision-capable providers you get
+ * three near-identical vision groups — which defeats the purpose of grouping: pick a
+ * capability, not a vendor.
+ *
+ * Empty buckets are never emitted. Every produced name is prefixed with [AUTO_PREFIX],
+ * e.g. `[自动] 视觉`.
  */
 object AutoGroupPlanner {
 
     /** Prefix marking an automatically managed group. Value is `"[自动] "` (with trailing space). */
     const val AUTO_PREFIX: String = "[自动] "
-
-    /** Group name used for entries whose `providerInstanceId` is blank. */
-    const val UNGROUPED_NAME: String = AUTO_PREFIX + "未分组模型"
-
-    private const val SEPARATOR = " · "
 
     /** Chinese display label of each modality. */
     private fun modalityLabel(modality: AutoGroupModality): String = when (modality) {
@@ -151,22 +151,18 @@ object AutoGroupPlanner {
      * - Entries with a blank `entryId` are skipped.
      * - A given `entryId` lands in at most one group (first occurrence wins; later
      *   duplicates are ignored).
-     * - Entries with a blank `providerInstanceId` are collected into a single
-     *   `[自动] 未分组模型` group (no modality sub-split).
-     * - A provider is sub-divided by modality only when it contains two or more distinct
-     *   modalities; otherwise it produces a single group named after the provider.
+     * - Bucketing uses **modality only**. `providerInstanceId` / `providerLabel` are ignored
+     *   on purpose, so the same capability from several channels ends up in ONE group.
      * - Member `entryIds` preserve the input order.
      *
-     * [rebuild] does **not** change the produced names: in both merge (`false`) and rebuild
-     * (`true`) mode the output is identical. `rebuild == true` only signals to the caller
-     * that pre-existing auto groups (identified by [AUTO_PREFIX]) may be removed; `plan`
-     * itself never deletes anything, and [existingNames] is accepted for caller-side merge
-     * de-duplication only (already existing names are still emitted unchanged).
+     * [rebuild] does **not** change the produced names: merge (`false`) and rebuild (`true`)
+     * produce identical output. `rebuild == true` only signals to the caller that
+     * pre-existing auto groups (identified by [AUTO_PREFIX]) may be removed; `plan` itself
+     * never deletes anything, and [existingNames] is accepted for caller-side merge
+     * de-duplication only.
      *
-     * Output ordering is deterministic: groups are ordered by `providerLabel` ascending
-     * (blanks last, since blank providers only ever produce the ungrouped bucket) and, for
-     * a split provider, by modality `VISION < IMAGE < AUDIO < TEXT`. The ungrouped bucket,
-     * when present, is emitted last.
+     * Output ordering is deterministic: `VISION < IMAGE < AUDIO < TEXT`. Empty buckets are
+     * omitted.
      *
      * @param items input entries.
      * @param rebuild true for rebuild mode, false for merge mode.
@@ -185,62 +181,26 @@ object AutoGroupPlanner {
         if (items.isEmpty()) return emptyList()
 
         val seenEntryIds = HashSet<String>()
-        // providerInstanceId -> providerLabel -> (modality -> entryIds), insertion ordered.
-        val providers = LinkedHashMap<String, String>()
-        val byModality = LinkedHashMap<String, LinkedHashMap<AutoGroupModality, MutableList<String>>>()
-        val ungrouped = ArrayList<String>()
+        // modality -> entryIds. Channel is deliberately NOT part of the key.
+        val byModality = LinkedHashMap<AutoGroupModality, MutableList<String>>()
 
         for (item in items) {
             if (item.isHidden) continue
             if (item.entryId.isEmpty()) continue
             if (!seenEntryIds.add(item.entryId)) continue
 
-            if (item.providerInstanceId.isEmpty()) {
-                ungrouped.add(item.entryId)
-                continue
-            }
-
-            providers[item.providerInstanceId] = item.providerLabel
-            val modalityMap = byModality.getOrPut(item.providerInstanceId) { LinkedHashMap() }
             val modality = modalityOf(item.modelId, item.displayName)
-            modalityMap.getOrPut(modality) { ArrayList() }.add(item.entryId)
+            byModality.getOrPut(modality) { ArrayList() }.add(item.entryId)
         }
 
-        // Ordered providers: providerLabel ascending.
-        val orderedProviders = providers.keys.sortedWith(
-            compareBy({ providers[it] ?: "" }, { it }),
-        )
-
-        val plans = ArrayList<AutoGroupPlan>()
-
-        for (providerId in orderedProviders) {
-            val label = providers[providerId].orEmpty()
-            val modalityMap = byModality[providerId] ?: continue
-            if (modalityMap.isEmpty()) continue
-
-            if (modalityMap.size == 1) {
-                // Single modality: keep one group named after the provider.
-                val ids = modalityMap.values.first()
-                plans.add(AutoGroupPlan(AUTO_PREFIX + label, ids.toList()))
-            } else {
-                // Multiple modalities: split, ordered VISION < IMAGE < AUDIO < TEXT.
-                val modalities = modalityMap.keys.sortedBy { it.ordinal }
-                for (modality in modalities) {
-                    val ids = modalityMap.getValue(modality)
-                    plans.add(
-                        AutoGroupPlan(
-                            AUTO_PREFIX + label + SEPARATOR + modalityLabel(modality),
-                            ids.toList(),
-                        ),
-                    )
-                }
+        // Deterministic order: VISION < IMAGE < AUDIO < TEXT.
+        return byModality.keys
+            .sortedBy { it.ordinal }
+            .map { modality ->
+                AutoGroupPlan(
+                    AUTO_PREFIX + modalityLabel(modality),
+                    byModality.getValue(modality).toList(),
+                )
             }
-        }
-
-        if (ungrouped.isNotEmpty()) {
-            plans.add(AutoGroupPlan(UNGROUPED_NAME, ungrouped.toList()))
-        }
-
-        return plans
     }
 }

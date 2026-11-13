@@ -2871,7 +2871,7 @@
     <string name="model_group_detail_quota_window_remaining">Remaining this window: %1$d sends</string>
     <string name="auto_group_models">Auto-group</string>
     <string name="auto_group_confirm_title">Auto-group models</string>
-    <string name="auto_group_confirm_body">Buckets every visible model by provider and modality, then creates one group per bucket. Same-named groups are merged; hand-made groups are never touched.</string>
+    <string name="auto_group_confirm_body">Buckets every visible model by capability (vision / image / audio / text). Channels are ignored on purpose, so the same capability from several providers lands in one group. Same-named groups are merged; hand-made groups are never touched.</string>
     <string name="auto_group_plan_summary">%1$d groups will be created or updated.</string>
     <string name="auto_group_merge_existing">Merge</string>
     <string name="auto_group_rebuild">Rebuild</string>
