@@ -750,6 +750,22 @@
                 android:value="Local Agent2API gateway keep-alive: keeps a loopback-only HTTP gateway and its provider plugin processes reachable for the on-device agent while the user has it enabled." />
         </service>
 
+        <!-- [A2A] 开机自启。用户把「保活」打开之后，重启手机应当自动恢复网关，
+             否则每次开机都要手动进面板点一次。
+             exported=false：只接系统广播，不需要任何外部应用触发。
+             QUICKBOOT_POWERON 是 Honor/EMUI 等 ROM 在快速启动时发的替代广播
+             （HTC 遗留，被大量国产 ROM 沿用），只发 BOOT_COMPLETED 会漏。
+             保活开关为 false 时接收器自己直接 return，不做任何事。 -->
+        <receiver
+            android:name=".a2a.A2aBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- [A2A] 隔离登录容器：每次登录都是全新 Cookie/Storage 环境 + 桌面 UA。
              横屏是刻意的 —— 授权页（Google/微软/各家发卡方）的桌面版排版
              在竖屏窄屏下会横向溢出，横屏才有可用的表单宽度。

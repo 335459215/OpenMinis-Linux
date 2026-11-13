@@ -30,6 +30,17 @@ class MultiAgentSettingsRepository(context: Context) {
     )
     val maxConcurrent: StateFlow<Int> = _maxConcurrent.asStateFlow()
 
+    /**
+     * [MultiAgentSettings.INVOKE_MODE_EFFICIENT] lets the coordinator decide
+     * when a multi-step task is worth a team; [MultiAgentSettings.INVOKE_MODE_SAVING]
+     * only dispatches when the user explicitly asks for one. Drives the
+     * spawn_agent guidance line in the system prompt.
+     */
+    private val _teamInvokeMode = MutableStateFlow(
+        MultiAgentSettings.normalizeInvokeMode(prefs.getString(KEY_TEAM_INVOKE_MODE, null)),
+    )
+    val teamInvokeMode: StateFlow<String> = _teamInvokeMode.asStateFlow()
+
     private val _selectedModelEntryIds = MutableStateFlow(readSelectedIds())
     val selectedModelEntryIds: StateFlow<List<String>> = _selectedModelEntryIds.asStateFlow()
 
@@ -82,6 +93,12 @@ class MultiAgentSettingsRepository(context: Context) {
             _selectedThinkingLevels.value,
             clamped,
         )
+    }
+
+    fun setTeamInvokeMode(mode: String) {
+        val normalized = MultiAgentSettings.normalizeInvokeMode(mode)
+        prefs.edit().putString(KEY_TEAM_INVOKE_MODE, normalized).apply()
+        _teamInvokeMode.value = normalized
     }
 
     fun setSubagentMaxTurns(value: Int) {
@@ -197,6 +214,7 @@ class MultiAgentSettingsRepository(context: Context) {
         private const val PREFS_NAME = "multi_agent_settings"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_MAX_CONCURRENT = "max_concurrent"
+        private const val KEY_TEAM_INVOKE_MODE = "team_invoke_mode"
         private const val KEY_MODEL_IDS = "model_entry_ids"
         private const val KEY_SUBAGENT_MAX_TURNS = "subagent_max_turns"
         private const val KEY_SUBAGENT_MAX_ATTEMPTS = "subagent_max_attempts"
@@ -207,6 +225,10 @@ class MultiAgentSettingsRepository(context: Context) {
 }
 
 object MultiAgentSettings {
+    const val INVOKE_MODE_EFFICIENT = "efficient"
+    const val INVOKE_MODE_SAVING = "saving"
+    const val DEFAULT_INVOKE_MODE = INVOKE_MODE_EFFICIENT
+
     const val MIN_CONCURRENT = 1
     const val MAX_CONCURRENT = 8
     const val DEFAULT_CONCURRENT = 3
@@ -221,6 +243,15 @@ object MultiAgentSettings {
     const val DEFAULT_SUPERVISOR_TURNS = 50
 
     fun clampConcurrent(n: Int): Int = n.coerceIn(MIN_CONCURRENT, MAX_CONCURRENT)
+
+    /** Unknown / blank stored values fall back to [DEFAULT_INVOKE_MODE]. */
+    fun normalizeInvokeMode(mode: String?): String = when (mode?.trim()?.lowercase()) {
+        INVOKE_MODE_SAVING -> INVOKE_MODE_SAVING
+        INVOKE_MODE_EFFICIENT -> INVOKE_MODE_EFFICIENT
+        else -> DEFAULT_INVOKE_MODE
+    }
+
+    fun isSavingMode(mode: String?): Boolean = normalizeInvokeMode(mode) == INVOKE_MODE_SAVING
 
     fun clampTurns(n: Int): Int = n.coerceIn(MIN_SUBAGENT_TURNS, MAX_SUBAGENT_TURNS)
 

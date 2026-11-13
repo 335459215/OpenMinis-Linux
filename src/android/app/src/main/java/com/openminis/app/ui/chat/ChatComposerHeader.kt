@@ -17,8 +17,9 @@ import kotlinx.coroutines.launch
 internal fun ChatComposerHeader(
     viewModel: ChatViewModel,
     sessionId: String,
+    onLocatePlan: ((String) -> Unit)? = null,
 ) {
-    PlanGoalCard(viewModel)
+    PlanGoalCard(viewModel, onLocate = onLocatePlan)
     GoalSheet(viewModel)
     // [T-supervisor-status-bar] Live supervisor-worker phase bar.
     // Render-side sessionId gating lives inside the bar; the halt button

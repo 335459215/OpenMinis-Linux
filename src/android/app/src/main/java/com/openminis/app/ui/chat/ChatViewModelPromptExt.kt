@@ -98,7 +98,19 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
             providerRepository.config.value.modelEntries.associate { it.id to it.model.displayName },
         )
         val cap = multiAgentSettings.maxConcurrent.value
-        "\n- spawn_agent: You are this session's coordinator — decompose, dispatch, accept, summarize; do not complete all work yourself. Prefer ONE spawn_agent call with a tasks[] array (you choose N from complexity; they run concurrently, isolated failures, cap=" + cap + "). Each task prompt MUST be self-contained with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration because sub-agents cannot see this conversation and cannot call spawn_agent. kind=explore (read-only recon)|plan (read-only design)|worker (writes; parallel workers MUST set non-overlapping write_paths)|general-purpose (fallback). Omit max_turns to auto-size (simple≈10, complex 40–60; user cap in Settings → Tool limits, runaway 200). Settings: minis://settings/tool-limits A <budget_warning> is injected as a teammate nears its budget so it hands in partial findings instead of silently running dry. Dependent phases: accept before the next wave. After a teammate returns, verify Expected result; on failure, name the gap and re-dispatch. Team models: " + names + ". Settings: minis://settings/multi-agent" +
+        // [T-team-invoke-mode] Efficient = the coordinator decides when a
+        // team is worth it; saving = only on an explicit user request. The
+        // guidance sits right after the dispatch rules so the model reads it
+        // together with the spawn_agent contract instead of as a stray line.
+        val invokeMode = MultiAgentSettings.normalizeInvokeMode(
+            multiAgentSettings.teamInvokeMode.value,
+        )
+        val modeGuidance = if (MultiAgentSettings.isSavingMode(invokeMode)) {
+            "\n- Team invoke mode (SAVING): only dispatch a team when the user explicitly asks for one. Do not volunteer a team on your own, even for multi-step work — solve it yourself or ask first."
+        } else {
+            "\n- Team invoke mode (EFFICIENT): proactively dispatch a team for multi-file, multi-step tasks that need parallel work or parallel verification. Do not hold back on spawning when the work clearly benefits from decomposition."
+        }
+        "\n- spawn_agent: You are this session's coordinator — decompose, dispatch, accept, summarize; do not complete all work yourself. Prefer ONE spawn_agent call with a tasks[] array (you choose N from complexity; they run concurrently, isolated failures, cap=" + cap + "). Each task prompt MUST be self-contained with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration because sub-agents cannot see this conversation and cannot call spawn_agent. kind=explore (read-only recon)|plan (read-only design)|worker (writes; parallel workers MUST set non-overlapping write_paths)|general-purpose (fallback). Omit max_turns to auto-size (simple≈10, complex 40–60; user cap in Settings → Tool limits, runaway 200). Settings: minis://settings/tool-limits A <budget_warning> is injected as a teammate nears its budget so it hands in partial findings instead of silently running dry. Dependent phases: accept before the next wave. After a teammate returns, verify Expected result; on failure, name the gap and re-dispatch. Team models: " + names + ". Settings: minis://settings/multi-agent" + modeGuidance +
             "\n- Collaboration mode choice: when the user's ask is one multi-step build that needs a closed instruct→execute→accept loop with acceptance criteria, suggest a Supervisor session (/supervisor — the user arms it, their next message becomes the objective; a supervisor seat plans and reviews, a worker seat executes, the user can interject mid-run). Use spawn_agent for one-shot parallel decomposition of independent tasks. Use group chat when peers should discuss as equals. Never arm the supervisor mode yourself — the objective and its acceptance criteria belong to the user."
     } else {
         ""

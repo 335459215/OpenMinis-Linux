@@ -340,6 +340,20 @@ class MinisApp : Application(), ImageLoaderFactory {
             return
         }
 
+        // [A2A-lifecycle] 网关跟随 App 主进程：App 一活就把网关拉起来并挂上
+        // 前台服务。用户点过停止（gatewayWanted=false）时这里不再复活，
+        // 做到「让他活就一直活，让他死就不能活」。
+        if (com.openminis.app.a2a.A2aPrefs.gatewayWanted(this) &&
+            com.openminis.app.a2a.A2aPrefs.keepAlive(this)
+        ) {
+            com.openminis.app.a2a.A2aKeepAliveService.start(this)
+            appCoroutineScopes.io.launch {
+                runCatching {
+                    com.openminis.app.a2a.A2aGateway.ensureStarted(applicationContext)
+                }
+            }
+        }
+
         // [Wave3 #12] SoulStore chain + GLOBAL.md seeding moved off the critical path (readers collect reactively or read files on demand).
         appCoroutineScopes.io.launch {
             // Load assets first (DEFAULT_CONTENT shipped persona); do not force-overwrite SOUL.md.

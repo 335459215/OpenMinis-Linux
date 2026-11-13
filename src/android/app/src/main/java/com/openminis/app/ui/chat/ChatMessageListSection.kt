@@ -2,6 +2,14 @@ package com.openminis.app.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -65,6 +73,12 @@ internal fun ChatFlatItemRow(
     // of each assistant reply that has persisted token_usage (see
     // computeUsageFooterRows). Empty map = feature off / nothing parsed.
     usageFooterRows: Map<String, MessageUsageStats> = emptyMap(),
+    /** 每条助手消息的运行记录条数，用于头部折叠按钮。 */
+    runRecordCounts: Map<String, Int> = emptyMap(),
+    /** 已折叠运行记录的助手消息 id。 */
+    collapsedRuns: Set<String> = emptySet(),
+    /** 点击折叠/展开某条助手消息的运行记录。 */
+    onToggleRun: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
                         val isNewestItem = item == flatItems.lastOrNull()
@@ -254,7 +268,31 @@ internal fun ChatFlatItemRow(
                                 )
                             }
                             } // close UserBubble SideEffect + UserMessageBubble block
-                            is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
+                            is FlatChatItem.AssistantHeader -> {
+                                val headerMessageId = FlatKeys.parse(item.key)?.messageId
+                                val recordCount = headerMessageId?.let { runRecordCounts[it] } ?: 0
+                                if (headerMessageId != null && recordCount > 0) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(Modifier.weight(1f)) {
+                                            AssistantHeader(item.speakerName, item.speakerVendor)
+                                        }
+                                        IconButton(onClick = { onToggleRun(headerMessageId) }) {
+                                            Icon(
+                                                imageVector = if (headerMessageId in collapsedRuns) {
+                                                    Icons.Filled.KeyboardArrowDown
+                                                } else {
+                                                    Icons.Filled.KeyboardArrowUp
+                                                },
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    AssistantHeader(item.speakerName, item.speakerVendor)
+                                }
+                            }
                             // Assistant text renders ONLY here: the
                             // FlatChatItem.AssistantText row class was deleted
                             // (nothing ever built one), and its branch below is

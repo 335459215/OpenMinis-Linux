@@ -126,6 +126,8 @@ internal fun PlanBoardBody(
      * The objective takes over the summary line's title slot instead.
      */
     goalObjective: String? = null,
+    /** 点击某条任务时回调，用于跳回创建它的那段对话。 */
+    onLocate: ((AgentPlanStore.Plan) -> Unit)? = null,
 ) {
     val accent = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary
     val title: String? = goalObjective?.takeIf { it.isNotBlank() } ?: if (allDone) {
@@ -169,7 +171,12 @@ internal fun PlanBoardBody(
                         .heightIn(max = 300.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    board.forEach { PlanBoardRow(it) }
+                    board.forEach { plan ->
+                        PlanBoardRow(
+                            plan = plan,
+                            onClick = onLocate?.let { cb -> { cb(plan) } },
+                        )
+                    }
                 }
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
@@ -299,13 +306,23 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
 
 /** One board item: status glyph + title (strikethrough when done). */
 @Composable
-private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
+private fun PlanBoardRow(
+    plan: AgentPlanStore.Plan,
+    onClick: (() -> Unit)? = null,
+) {
     val done = plan.status == "done"
     val active = plan.status == "active"
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 28.dp),
+            .heightIn(min = 28.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Fixed 14dp slot so every title starts on the same x no matter which

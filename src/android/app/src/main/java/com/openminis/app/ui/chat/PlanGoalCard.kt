@@ -129,7 +129,11 @@ internal fun formatGoalTokens(value: Long): String =
  * writers bump — so status flips appear on the very next frame.
  */
 @Composable
-internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifier) {
+internal fun PlanGoalCard(
+    viewModel: ChatViewModel,
+    modifier: Modifier = Modifier,
+    onLocate: ((String) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val sid = viewModel.activeSessionId
     val planVersion by AgentPlanStore.version.collectAsStateWithLifecycle()
@@ -270,6 +274,7 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                             allDone = allDone,
                             expanded = expanded,
                             goalObjective = goalDisplay?.objective,
+                            onLocate = { plan -> onLocate?.invoke(plan.title) },
                             onToggle = {
                                 expanded = !expanded
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)

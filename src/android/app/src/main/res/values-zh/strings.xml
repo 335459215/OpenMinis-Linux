@@ -183,6 +183,9 @@
     <string name="settings_multi_agent_section_dispatch">调度</string>
     <string name="settings_multi_agent_enable">启用多智能体</string>
     <string name="settings_multi_agent_enable_subtitle">主会话模型做协调者，通过 spawn_agent 分派队友</string>
+    <string name="settings_multi_agent_invoke_mode">团队调用模式</string>
+    <string name="settings_multi_agent_mode_efficient">高效</string>
+    <string name="settings_multi_agent_mode_saving">节省</string>
     <string name="settings_multi_agent_max">子代理并发上限</string>
     <string name="settings_multi_agent_max_subtitle">同一回合最多 %1$d 个队友并行</string>
     <string name="settings_multi_agent_attempts">子代理重试次数</string>

@@ -10,6 +10,7 @@ object A2aPrefs {
     private const val FILE = "a2a_prefs"
     private const val KEY_FLOATING = "floating_bubble"
     private const val KEY_KEEP_ALIVE = "keep_alive"
+    private const val KEY_GATEWAY_WANTED = "gateway_wanted"
     private const val KEY_PROVIDER_SYNC = "provider_sync"
     private const val KEY_PROVIDER_SYNCED_AT = "provider_synced_at"
     private const val KEY_PANEL_ADMIN_PASSWORD = "panel_admin_password"
@@ -26,6 +27,21 @@ object A2aPrefs {
 
     fun setFloatingBubble(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_FLOATING, enabled).apply()
+    }
+
+    /**
+     * 用户是否希望网关运行。默认开启。
+     *
+     * 与 [keepAlive] 的分工：keepAlive 管「用不用前台服务守」，
+     * gatewayWanted 管「到底要不要活着」。用户在面板点停止后置 false，
+     * App 冷启动与开机广播都必须尊重它 —— 否则「我让他死他就不能活」
+     * 会被下一次启动推翻。
+     */
+    fun gatewayWanted(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_GATEWAY_WANTED, true)
+
+    fun setGatewayWanted(context: Context, wanted: Boolean) {
+        prefs(context).edit().putBoolean(KEY_GATEWAY_WANTED, wanted).apply()
     }
 
     /** 是否用前台服务保活网关。默认开启。 */

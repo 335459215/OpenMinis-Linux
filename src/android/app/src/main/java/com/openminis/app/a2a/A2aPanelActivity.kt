@@ -69,11 +69,7 @@ class A2aPanelActivity : Activity() {
             setTextColor(Color.parseColor("#333333"))
             setPadding(0, 0, 24, 0)
             setOnClickListener {
-                when {
-                    closePopupIfAny() -> Unit
-                    webView?.canGoBack() == true -> webView?.goBack()
-                    else -> finish()
-                }
+                if (!handlePanelBack()) finish()
             }
         })
         titleView = TextView(this).apply {
@@ -448,18 +444,44 @@ class A2aPanelActivity : Activity() {
         }
     }
 
+    companion object {
+        /**
+         * 让页面自己判断是否在根路由。面板路由形如 /、/#/、/index.html；
+         * 其它路径一律 history.back()，并把判定结果回传给 Kotlin。
+         */
+        private const val PANEL_BACK_JS =
+            "(function(){var p=(location.pathname||'/')+(location.hash||'');" +
+                "if(p==='/'||p==='/#/'||p==='/index.html'){return 'root';}" +
+                "history.back();return 'back';})()"
+    }
+
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
+    /**
+     * 面板是单页应用（SPA）：路由由前端 history 维护，WebView 的 canGoBack()
+     * 永远是 false，所以旧实现一点返回就直接退出面板。这里改成两段式：
+     *   1. WebView 真有历史 → goBack；
+     *   2. 否则问页面自己在不在根路由：不在就 history.back()，在根才 finish()。
+     * 顶栏的 "←" 与系统返回键走同一条路径，行为一致。
+     */
+    private fun handlePanelBack(): Boolean {
+        if (closePopupIfAny()) return true
+        val web = webView ?: return false
+        if (web.canGoBack()) {
+            web.goBack()
+            return true
+        }
+        web.evaluateJavascript(PANEL_BACK_JS) { result ->
+            if (result?.contains("root") == true) finish()
+        }
+        return true
+    }
+
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        if (closePopupIfAny()) return
-        val web = webView
-        if (web != null && web.canGoBack()) {
-            web.goBack()
-        } else {
-            super.onBackPressed()
-        }
+        if (handlePanelBack()) return
+        super.onBackPressed()
     }
 
     override fun onNewIntent(intent: Intent?) {

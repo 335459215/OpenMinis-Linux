@@ -16,6 +16,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,6 +53,7 @@ fun MultiAgentSettingsScreen(
 
     val enabled by repo.enabled.collectAsStateWithLifecycle()
     val maxConcurrent by repo.maxConcurrent.collectAsStateWithLifecycle()
+    val teamInvokeMode by repo.teamInvokeMode.collectAsStateWithLifecycle()
     // Turn budget is coordinator-assigned (1.27 unclamp); only the retry-attempts
     // stepper still reads a repo StateFlow here.
     val subagentMaxAttempts by repo.subagentMaxAttempts.collectAsStateWithLifecycle()
@@ -87,6 +91,45 @@ fun MultiAgentSettingsScreen(
                 onCheckedChange = { repo.setEnabled(it) },
                 icon = Icons.Outlined.Groups,
             )
+            // [T-team-invoke-mode] Two-way policy switch: how aggressively the
+            // coordinator reaches for a team. Persisted, and read by the system
+            // prompt builder to phrase the spawn_agent guidance.
+            val savingMode = MultiAgentSettings.normalizeInvokeMode(teamInvokeMode) ==
+                MultiAgentSettings.INVOKE_MODE_SAVING
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.settings_multi_agent_invoke_mode),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                ) {
+                    SegmentedButton(
+                        selected = !savingMode,
+                        onClick = {
+                            repo.setTeamInvokeMode(MultiAgentSettings.INVOKE_MODE_EFFICIENT)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    ) {
+                        Text(stringResource(R.string.settings_multi_agent_mode_efficient))
+                    }
+                    SegmentedButton(
+                        selected = savingMode,
+                        onClick = {
+                            repo.setTeamInvokeMode(MultiAgentSettings.INVOKE_MODE_SAVING)
+                        },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    ) {
+                        Text(stringResource(R.string.settings_multi_agent_mode_saving))
+                    }
+                }
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

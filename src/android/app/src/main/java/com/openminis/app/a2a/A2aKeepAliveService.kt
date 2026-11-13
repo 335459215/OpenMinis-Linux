@@ -1,6 +1,7 @@
 package com.openminis.app.a2a
 
 import com.openminis.app.R
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,6 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -93,6 +95,19 @@ class A2aKeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_WATCHDOG -> {
+                // AlarmManager 兜底唤醒：厂商省电（MagicOS 的「应用启动管理」/
+                // 「省电优化」）会在进程还活着时就把前台服务摘掉，此时既没有
+                // START_STICKY 重建、也没有任何回调 —— 只有闹钟能把我们叫回来。
+                // 醒来先把前台通知 / FGS 绑定补回去，再重挂快速探活链，最后
+                // 续期下一次闹钟，形成闭环。
+                ensureForeground()
+                watchdog.removeCallbacks(watchdogTick)
+                watchdog.postDelayed(watchdogTick, WATCHDOG_INTERVAL_MS)
+                scheduleWatchdog(this)
+                log("WATCHDOG alarm fired: foreground + watchdog rearmed")
+                return START_STICKY
+            }
             ACTION_SHOW_BUBBLE -> {
                 ensureForeground()
                 val ok = showBubbleInternal()
@@ -104,6 +119,11 @@ class A2aKeepAliveService : Service() {
                 if (!A2aPrefs.keepAlive(this) && !A2aGateway.isRunningFast()) stopSelf()
             }
             ACTION_STOP -> {
+                // 用户主动停止 = 持久意图：冷启动、开机广播、兜底闹钟都不得复活。
+                A2aPrefs.setGatewayWanted(this, false)
+                // 用户主动停止：必须撤掉兜底闹钟，否则 10 分钟后 ACTION_WATCHDOG
+                // 会把刚停掉的服务又拉起来，用户以为「关不掉」。
+                cancelWatchdog(this)
                 A2aBubble.hide()
                 hideBubble()
                 stopForegroundCompat()
@@ -116,7 +136,33 @@ class A2aKeepAliveService : Service() {
         // 先移除旧的避免重复上链。
         watchdog.removeCallbacks(watchdogTick)
         watchdog.postDelayed(watchdogTick, WATCHDOG_INTERVAL_MS)
+        // 每次被拉起都续期 AlarmManager 兜底，避免「服务被厂商清掉 → 没有
+        // 下一次唤醒」的死局。
+        scheduleWatchdog(this)
         return START_STICKY
+    }
+
+    /**
+     * 用户从最近任务里把 App 划掉。
+     *
+     * Honor / MagicOS 上这不是「只杀 Activity」：前台服务会被一起收掉，而且
+     * 不会走 START_STICKY 重建，网关的子进程也随之变成孤儿。这里做两件事：
+     * 1. 重新排一次 AlarmManager 兜底闹钟（后台限制下它是最稳的唤醒通道）；
+     * 2. 立刻用 startForegroundService 把服务拉回来。
+     * 两步都可能被 Android 12+ 的后台启动限制拒绝，所以整段 runCatching 静默。
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        runCatching {
+            scheduleWatchdog(applicationContext)
+            val restart = Intent(this, A2aKeepAliveService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(restart)
+            } else {
+                startService(restart)
+            }
+            log("onTaskRemoved: watchdog rearmed + service restarted")
+        }
     }
 
     // ── 前台通知 ────────────────────────────────────────────────
@@ -130,9 +176,20 @@ class A2aKeepAliveService : Service() {
                     NotificationChannel(
                         channelId,
                         getString(R.string.a2a_gateway_title),
-                        NotificationManager.IMPORTANCE_LOW,
+                        // 抬到 DEFAULT：LOW 的渠道在通知栏里会被压成最底部的
+                        // 一行「静默通知」，MagicOS 甚至直接折叠掉，前台服务的
+                        // 存在感归零之后厂商省电就会顺手清掉它。
+                        NotificationManager.IMPORTANCE_DEFAULT,
                     ).apply {
                         description = getString(R.string.a2a_notif_channel_desc)
+                        // 无声音 / 无震动 / 无角标：抬到 DEFAULT 只是为了「可见」，
+                        // 绝不能在每次网关重启时响一声打扰用户。
+                        // 注意：渠道一旦建成，重要性就只能由用户在系统设置里改，
+                        // App 再 createNotificationChannel 不会生效 —— 所以老用户
+                        // 的 a2a_gateway 渠道可能仍是 LOW。真正兜底的是下面的
+                        // AlarmManager 自唤醒，通知可见性只是锦上添花。
+                        setSound(null, null)
+                        enableVibration(false)
                         setShowBadge(false)
                     },
                 )
@@ -157,6 +214,9 @@ class A2aKeepAliveService : Service() {
             .setContentText(getString(R.string.a2a_notif_text_running, A2aGateway.PORT.toString()))
             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setShowWhen(false)
             .setContentIntent(open)
             .build()
 
@@ -331,6 +391,9 @@ class A2aKeepAliveService : Service() {
 
     override fun onDestroy() {
         watchdog.removeCallbacks(watchdogTick)
+        // 只在「用户已关掉保活」时撤闹钟；被系统回收时闹钟必须留着 ——
+        // 它是服务被清掉之后唯一还能把自己叫醒的东西。
+        if (!A2aPrefs.keepAlive(this)) cancelWatchdog(this)
         hideBubble()
         if (instance === this) instance = null
         super.onDestroy()
@@ -353,6 +416,60 @@ class A2aKeepAliveService : Service() {
         const val ACTION_HIDE_BUBBLE = "com.openminis.app.a2a.HIDE_BUBBLE"
         const val ACTION_STOP = "com.openminis.app.a2a.STOP"
 
+        /** AlarmManager 兜底自唤醒：把被厂商清掉的前台服务重新拉回来。 */
+        const val ACTION_WATCHDOG = "com.openminis.app.a2a.WATCHDOG"
+
+        /**
+         * 兜底闹钟的周期。10 分钟：前台服务被 MagicOS 之类清掉之后，
+         * 最长 10 分钟内一定能自动复活；相比 15s 的 Handler 探活，它对
+         * 电池几乎无影响，也是 Doze 白名单外仍能触发的粒度。
+         */
+        private const val WATCHDOG_ALARM_INTERVAL_MS = 10 * 60 * 1000L
+        private const val WATCHDOG_REQUEST_CODE = 0x2A2B
+
+        /**
+         * 排下一次兜底自唤醒。
+         *
+         * 用 `setAndAllowWhileIdle` 而不是 `setExactAndAllowWhileIdle`：后者需要
+         * SCHEDULE_EXACT_ALARM 特权（Android 12+ 默认不授予，Honor 上更是弹窗
+         * 也未必批），而我们要的只是「十分钟内醒一次」，允许系统合并/推迟。
+         * PendingIntent 用 getService + FLAG_IMMUTABLE（Android 12+ 对可变量
+         * PendingIntent 直接抛异常）+ FLAG_UPDATE_CURRENT（重复排程时刷新）。
+         */
+        fun scheduleWatchdog(context: Context) = runCatching {
+            val app = context.applicationContext
+            if (!A2aPrefs.keepAlive(app)) return@runCatching
+            val alarm = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                ?: return@runCatching
+            val intent = Intent(app, A2aKeepAliveService::class.java)
+                .setAction(ACTION_WATCHDOG)
+            val pending = PendingIntent.getService(
+                app,
+                WATCHDOG_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val triggerAt = SystemClock.elapsedRealtime() + WATCHDOG_ALARM_INTERVAL_MS
+            alarm.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pending)
+        }
+
+        /** 撤掉兜底自唤醒（用户主动停止 / 关掉保活开关时调用）。 */
+        fun cancelWatchdog(context: Context) = runCatching {
+            val app = context.applicationContext
+            val alarm = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+                ?: return@runCatching
+            val intent = Intent(app, A2aKeepAliveService::class.java)
+                .setAction(ACTION_WATCHDOG)
+            val pending = PendingIntent.getService(
+                app,
+                WATCHDOG_REQUEST_CODE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            alarm.cancel(pending)
+            pending.cancel()
+        }
+
         /**
          * 启动前台服务。**必须在 App 处于前台时调用**（面板 onResume/onCreate），
          * 否则 Android 12+ 会抛 ForegroundServiceStartNotAllowedException。
@@ -364,6 +481,8 @@ class A2aKeepAliveService : Service() {
             } else {
                 context.startService(intent)
             }
+            // 用户打开保活开关时就把兜底闹钟排上，不等服务跑到 onStartCommand。
+            scheduleWatchdog(context)
         }
 
         /**
@@ -399,6 +518,8 @@ class A2aKeepAliveService : Service() {
 
         fun stop(context: Context) = runCatching {
             A2aBubble.hide()
+            // 先撤闹钟再停服务：反过来的话，stopSelf 之后闹钟仍会把服务叫回来。
+            cancelWatchdog(context)
             context.startService(
                 Intent(context, A2aKeepAliveService::class.java).setAction(ACTION_STOP),
             )

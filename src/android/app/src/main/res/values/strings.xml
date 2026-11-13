@@ -216,6 +216,9 @@
     <string name="settings_multi_agent_section_dispatch">Dispatch</string>
     <string name="settings_multi_agent_enable">Enable multi-agent</string>
     <string name="settings_multi_agent_enable_subtitle">Main session model coordinates; teammates run via spawn_agent</string>
+    <string name="settings_multi_agent_invoke_mode">Team invoke mode</string>
+    <string name="settings_multi_agent_mode_efficient">Efficient</string>
+    <string name="settings_multi_agent_mode_saving">Saving</string>
     <string name="settings_multi_agent_max">Max concurrent sub-agents</string>
     <string name="settings_multi_agent_max_subtitle">Up to %1$d teammates in one turn</string>
     <string name="settings_multi_agent_attempts">Sub-agent retry attempts</string>

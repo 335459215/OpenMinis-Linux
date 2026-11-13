@@ -78,3 +78,41 @@ private fun foldRun(messageId: String, runItems: List<FlatChatItem>): FlatChatIt
         expanded = false,
     )
 }
+
+/** 每条助手消息的「运行记录」条数（thinking / 工具 / 工具组 / 过程摘要 / info / present）。 */
+internal fun runRecordCounts(items: List<FlatChatItem>): Map<String, Int> {
+    val counts = HashMap<String, Int>()
+    for (item in items) {
+        val id: String? = when (item) {
+            is FlatChatItem.AssistantThinking -> item.messageId
+            is FlatChatItem.AssistantProcessSummary -> item.messageId
+            is FlatChatItem.AssistantToolUse -> item.messageId
+            is FlatChatItem.AssistantToolGroup -> item.messageId
+            is FlatChatItem.AssistantInfo -> item.messageId
+            is FlatChatItem.AssistantPresentCard -> item.messageId
+            else -> null
+        }
+        if (id != null) counts[id] = (counts[id] ?: 0) + 1
+    }
+    return counts
+}
+
+/** 折叠指定助手消息的全部运行记录，只留头部、正文、错误与打字指示。 */
+internal fun applyRunCollapse(
+    items: List<FlatChatItem>,
+    collapsed: Set<String>,
+): List<FlatChatItem> {
+    if (collapsed.isEmpty()) return items
+    return items.filterNot { item ->
+        val id: String? = when (item) {
+            is FlatChatItem.AssistantThinking -> item.messageId
+            is FlatChatItem.AssistantProcessSummary -> item.messageId
+            is FlatChatItem.AssistantToolUse -> item.messageId
+            is FlatChatItem.AssistantToolGroup -> item.messageId
+            is FlatChatItem.AssistantInfo -> item.messageId
+            is FlatChatItem.AssistantPresentCard -> item.messageId
+            else -> null
+        }
+        id != null && id in collapsed
+    }
+}
