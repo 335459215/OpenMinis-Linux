@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.theme.ToolPalette
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -51,40 +53,40 @@ internal fun formatStepTimestamp(epochMs: Long): String =
 // consistent: file tools cyan/blue, agent tools indigo, web tools blue,
 // image tools purple, memory/goal pink, interactive prompts blue.
 internal fun toolAccentColor(toolName: String): Color = when (toolName) {
-    "shell_execute", "shell_exec", "agent_terminal" -> Color(0xFF34C759)
-    "file_read" -> Color(0xFF32ADE6)
-    "file_write" -> Color(0xFF007AFF)
-    "file_edit", "multi_edit" -> Color(0xFFFF9500)
-    "file_checkpoint" -> Color(0xFF8E8E93)
-    "browser_use" -> Color(0xFF007AFF)
-    "read_image", "ocr_image" -> Color(0xFFAF52DE)
-    "memory_write", "memory_get" -> Color(0xFFFF2D55)
-    "web_search" -> Color(0xFF32ADE6)    // iOS: .cyan for search
-    "web_fetch" -> Color(0xFF007AFF)
-    "grep", "grep_source" -> Color(0xFF64D2FF)
-    "glob", "list_dir" -> Color(0xFF32ADE6)
-    "code_graph" -> Color(0xFF5856D6)
-    "search_sessions", "read_session" -> Color(0xFF64D2FF)
-    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> Color(0xFF5856D6)
-    "agent_plan" -> Color(0xFF5856D6)
-    "agent_report" -> Color(0xFF30B0C7)
-    "update_goal" -> Color(0xFFFF2D55)
-    "evolution" -> Color(0xFFAF52DE)
-    "ask_user_question" -> Color(0xFF007AFF)
-    "ask_reasoning" -> Color(0xFFFF9500)
-    "execute_code" -> Color(0xFF5856D6)
-    "su_exec" -> Color(0xFFFF9500)
-    "ssh_exec", "env_exec" -> Color(0xFF32ADE6)
-    "ui_read", "ui_action" -> Color(0xFF64D2FF)
-    "invoke_skill", "ui_skill", "skill_manage" -> Color(0xFF007AFF)
-    "cronjob" -> Color(0xFFFF9500)
-    "background_job" -> Color(0xFF64D2FF)
-    "get_screen_time" -> Color(0xFF64D2FF)
+    "shell_execute", "shell_exec", "agent_terminal" -> ToolPalette.Green
+    "file_read" -> ToolPalette.Cyan
+    "file_write" -> ToolPalette.Blue
+    "file_edit", "multi_edit" -> ToolPalette.Orange
+    "file_checkpoint" -> ToolPalette.Neutral
+    "browser_use" -> ToolPalette.Blue
+    "read_image", "ocr_image" -> ToolPalette.Purple
+    "memory_write", "memory_get" -> ToolPalette.Pink
+    "web_search" -> ToolPalette.Cyan    // iOS: .cyan for search
+    "web_fetch" -> ToolPalette.Blue
+    "grep", "grep_source" -> ToolPalette.Sky
+    "glob", "list_dir" -> ToolPalette.Cyan
+    "code_graph" -> ToolPalette.Indigo
+    "search_sessions", "read_session" -> ToolPalette.Sky
+    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> ToolPalette.Indigo
+    "agent_plan" -> ToolPalette.Indigo
+    "agent_report" -> ToolPalette.Teal
+    "update_goal" -> ToolPalette.Pink
+    "evolution" -> ToolPalette.Purple
+    "ask_user_question" -> ToolPalette.Blue
+    "ask_reasoning" -> ToolPalette.Orange
+    "execute_code" -> ToolPalette.Indigo
+    "su_exec" -> ToolPalette.Orange
+    "ssh_exec", "env_exec" -> ToolPalette.Cyan
+    "ui_read", "ui_action" -> ToolPalette.Sky
+    "invoke_skill", "ui_skill", "skill_manage" -> ToolPalette.Blue
+    "cronjob" -> ToolPalette.Orange
+    "background_job" -> ToolPalette.Sky
+    "get_screen_time" -> ToolPalette.Sky
     "present_file", "deliverable" -> Color(0xFF30D158)     // deliverable green
     else -> when {
-        toolName.startsWith("mcp__") -> Color(0xFF5856D6)   // server-provided tools
-        toolName.startsWith("online_") -> Color(0xFF007AFF)
-        else -> Color(0xFF8E8E93)                            // unknown = neutral gray
+        toolName.startsWith("mcp__") -> ToolPalette.Indigo   // server-provided tools
+        toolName.startsWith("online_") -> ToolPalette.Blue
+        else -> ToolPalette.Neutral                            // unknown = neutral gray
     }
 }
 
