@@ -168,13 +168,17 @@ class SshToolTest {
     }
 
     @Test
-    fun addHostResolvesEnvReference() {
+    fun addHostKeepsEnvReference() {
         val r = route(
             """{"action":"add_host","name":"web","hostname":"h","username":"u","auth_type":"password","password":"env:MY_PW"}""",
             envResolver = { if (it == "MY_PW") "s3cret" else null },
         )
         assertTrue(r.success)
-        assertEquals("s3cret", fake.store.credentialsFor("web")?.password)
+        // [T-ssh-credential-ref] The store keeps the REFERENCE, not the secret.
+        // Resolution happens on the connect path
+        // (SshConfigStore.resolveCredentialsFor), so rotating the environment
+        // variable needs no re-save and the secret never lands in hosts.json.
+        assertEquals("env:MY_PW", fake.store.credentialsFor("web")?.password)
         assertFalse(r.output.contains("s3cret"))
     }
 
