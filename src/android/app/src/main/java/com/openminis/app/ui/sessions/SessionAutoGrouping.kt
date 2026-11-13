@@ -109,7 +109,7 @@ internal fun parseAutoClassifyReply(
             if (!declared.add(name.lowercase())) continue
             if (existingFolderNames.any { it.trim().equals(name, ignoreCase = true) }) continue
             val desc = obj.optString("description").trim()
-                .takeIf { it.isNotEmpty() }?.take(SessionListViewModel.FOLDER_DESC_MAX_CHARS)
+                .takeIf { it.isNotEmpty() }?.take(SessionFolderMeta.DESC_MAX_CHARS)
             newFolders += GroupSuggestion.Create(name, desc)
         }
     }
@@ -480,7 +480,7 @@ internal suspend fun SessionListViewModel.runAutoClassify(): AutoClassifyState {
         val created = chatRepository.createFolder(
             name = newFolder.name,
             description = newFolder.description,
-            origin = SessionListViewModel.FOLDER_ORIGIN_AI,
+            origin = SessionFolderMeta.ORIGIN_AI,
         )
         folderIdByName[key] = created.id
         AppLogger.info(TAG, "[AutoClassify] created folder name=${created.name} id=${created.id}")

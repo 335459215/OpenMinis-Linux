@@ -35,9 +35,9 @@ import org.json.JSONObject
 
 @OptIn(FlowPreview::class)
 class SessionListViewModel(
-    private val chatRepository: ChatRepository,
-    private val providerRepository: ProviderRepository,
-    private val context: Context,
+    internal val chatRepository: ChatRepository,
+    internal val providerRepository: ProviderRepository,
+    internal val context: Context,
 ) : ViewModel() {
 
     companion object {
@@ -49,7 +49,7 @@ class SessionListViewModel(
          * exact string (plus null/blank), which is what keeps a user-typed
          * title from ever being overwritten.
          */
-        private const val NEW_CHAT_TITLE = "New Chat"
+        internal const val NEW_CHAT_TITLE = "New Chat"
 
         /**
          * [T-android-group-ai-suggest] Parse the sub model's JSON reply.

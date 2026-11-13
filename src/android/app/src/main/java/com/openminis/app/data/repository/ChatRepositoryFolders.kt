@@ -17,6 +17,22 @@ import java.util.UUID
  * section.
  */
 
+/**
+ * UI-facing mirror of the two folder constants that live on [FolderEntity].
+ *
+ * The architecture policy forbids `ui/` from importing Room entities, so the
+ * values the group screens actually need — the description cap and the AI
+ * origin tag — are re-exported here at the repository boundary instead of
+ * being reached for across layers.
+ */
+object SessionFolderMeta {
+    /** Description cap enforced by [ChatRepository.createFolder]. */
+    const val DESC_MAX_CHARS: Int = FolderEntity.DESC_MAX_CHARS
+
+    /** `origin` value marking a group created by AI auto-grouping. */
+    const val ORIGIN_AI: String = FolderEntity.ORIGIN_AI
+}
+
 fun ChatRepository.observeFolders(): Flow<List<FolderEntity>> = dao.observeFolders()
 
 suspend fun ChatRepository.listFolders(): List<FolderEntity> = dao.listFolders()
