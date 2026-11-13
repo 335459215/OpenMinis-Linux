@@ -5,7 +5,9 @@ import com.openminis.app.R
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Message
@@ -54,28 +56,43 @@ class A2aPanelActivity : Activity() {
             }
         }
 
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
+        // [T-a2a-chrome] 门面与 Compose 页面同一套语义色：夜/昼各一组，
+        // 圆角胶囊按钮 + 36dp 圆形返回位，彻底去掉 #F7F7F8 那种网页灰。
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        val bgColor = if (night) Color.parseColor("#141416") else Color.parseColor("#FAFAFB")
+        val barColor = if (night) Color.parseColor("#1A1A1D") else Color.parseColor("#FFFFFF")
+        val textColor = if (night) Color.parseColor("#ECECEF") else Color.parseColor("#1A1A1E")
+        val chipColor = if (night) Color.parseColor("#26262B") else Color.parseColor("#EFEFF3")
+        val accent = Color.parseColor("#5B8CFF")
+        val accentChip = if (night) Color.parseColor("#1E2A44") else Color.parseColor("#E8EFFF")
+
+        val root = FrameLayout(this).apply { setBackgroundColor(bgColor) }
 
         // ── 顶栏（会按状态栏高度下移）───────────────────────────
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#F7F7F8"))
-            setPadding(28, 0, 28, 0)
+            setBackgroundColor(barColor)
+            setPadding(dp(16), 0, dp(16), 0)
+            elevation = dp(2).toFloat()
         }
         header.addView(TextView(this).apply {
             text = "←"
-            textSize = 22f
-            setTextColor(Color.parseColor("#333333"))
-            setPadding(0, 0, 24, 0)
-            setOnClickListener {
-                if (!handlePanelBack()) finish()
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(textColor)
+            background = GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor(chipColor)
             }
-        })
+            setOnClickListener { if (!handlePanelBack()) finish() }
+        }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(12) })
         titleView = TextView(this).apply {
             text = getString(R.string.a2a_gateway_title)
             textSize = 16f
-            setTextColor(Color.parseColor("#333333"))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(textColor)
         }
         header.addView(
             titleView,
@@ -83,9 +100,14 @@ class A2aPanelActivity : Activity() {
         )
         header.addView(TextView(this).apply {
             text = getString(R.string.a2a_action_refresh)
-            textSize = 14f
-            setTextColor(Color.parseColor("#0A84FF"))
-            setPadding(0, 0, 0, 0)
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            setPadding(dp(14), dp(7), dp(14), dp(7))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(16).toFloat()
+                setColor(accentChip)
+            }
             setOnClickListener { webView?.reload() }
         })
 
