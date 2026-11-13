@@ -4,7 +4,9 @@ import com.openminis.app.R
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -39,37 +41,37 @@ class A2aSettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.WHITE) }
+        val scroll = ScrollView(this).apply { setBackgroundColor(bgColor()) }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(bgColor())
         }
         scroll.addView(root)
 
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_action_back)
             textSize = 15f
-            setTextColor(Color.parseColor("#0A84FF"))
+            setTextColor(accentColor())
             setPadding(0, 0, 0, 24)
             setOnClickListener { finish() }
         })
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_gateway_title)
             textSize = 22f
-            setTextColor(Color.parseColor("#222222"))
+            setTextColor(textColor())
         })
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_gateway_subtitle)
             textSize = 13f
-            setTextColor(Color.GRAY)
+            setTextColor(mutedColor())
             setPadding(0, 8, 0, 0)
         })
 
         statusView = TextView(this).apply {
             textSize = 15f
             setPadding(0, 28, 0, 0)
-            setTextColor(Color.DKGRAY)
+            setTextColor(textColor())
             setLineSpacing(8f, 1f)
         }
         root.addView(statusView)
@@ -93,7 +95,7 @@ class A2aSettingsActivity : Activity() {
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_section_background)
             textSize = 13f
-            setTextColor(Color.parseColor("#888888"))
+            setTextColor(mutedColor())
             setPadding(0, 32, 0, 4)
         })
 
@@ -114,7 +116,7 @@ class A2aSettingsActivity : Activity() {
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_keepalive_desc)
             textSize = 12f
-            setTextColor(Color.GRAY)
+            setTextColor(mutedColor())
             setPadding(0, 0, 0, 16)
         })
 
@@ -142,7 +144,7 @@ class A2aSettingsActivity : Activity() {
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_overlay_desc)
             textSize = 12f
-            setTextColor(Color.GRAY)
+            setTextColor(mutedColor())
             setPadding(0, 0, 0, 16)
         })
 
@@ -154,7 +156,7 @@ class A2aSettingsActivity : Activity() {
             text = getString(R.string.a2a_endpoints)
             textSize = 13f
             setPadding(0, 28, 0, 0)
-            setTextColor(Color.GRAY)
+            setTextColor(mutedColor())
             setLineSpacing(6f, 1f)
         })
 
@@ -171,12 +173,27 @@ class A2aSettingsActivity : Activity() {
         text = label
         isAllCaps = false
         textSize = 15f
+        setTextColor(Color.WHITE)
+        background = GradientDrawable().apply {
+            cornerRadius = 24f * resources.displayMetrics.density
+            setColor(accentColor())
+        }
         setOnClickListener { onClick() }
         layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = 10 }
     }
+
+    // [T-a2a-chrome] 与 Compose 页面同一组语义色：夜/昼双色板，圆角胶囊按钮。
+    private fun isNightChrome(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+
+    private fun bgColor(): Int = if (isNightChrome()) Color.parseColor("#141416") else Color.parseColor("#FAFAFB")
+    private fun textColor(): Int = if (isNightChrome()) Color.parseColor("#ECECEF") else Color.parseColor("#1A1A1E")
+    private fun mutedColor(): Int = if (isNightChrome()) Color.parseColor("#9A9AA3") else Color.parseColor("#6B6B73")
+    private fun accentColor(): Int = Color.parseColor("#5B8CFF")
 
     private fun canDrawOverlay(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
