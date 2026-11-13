@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +58,7 @@ import kotlinx.coroutines.withContext
  * keystore-backed store instead of keeping them in screen state longer than the
  * single save call.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SshHostsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
