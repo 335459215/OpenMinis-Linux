@@ -105,8 +105,6 @@ object Routes {
     // Encoding recipe: see navEnc() in FilePreviewRoute.kt.
     fun filePreview(path: String): String = "file_preview?path=${navEnc(path)}"
     const val ENV_VARS = "env_vars"
-    /** [T-android-ssh-settings] SSH host management screen. */
-    const val SSH_HOSTS = "ssh_hosts"
     const val SKILLS = "skills"
     const val MULTI_AGENT = "multi_agent"
     const val SKILL_DETAIL = "skill/{skillId}"

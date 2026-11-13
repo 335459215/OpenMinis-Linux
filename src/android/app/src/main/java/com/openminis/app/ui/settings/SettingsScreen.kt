@@ -95,7 +95,6 @@ fun SettingsScreen(
     // [port-upstream-1.16] Settings > Network (Routing / Tailscale / Proxies).
     onNetworkClick: () -> Unit = {},
     onEnvVarsClick: () -> Unit = {},
-    onSshClick: () -> Unit = {},
     onSkillsClick: () -> Unit = {},
     onMultiAgentClick: () -> Unit = {},
     onTerminalClick: () -> Unit = {},
@@ -340,15 +339,6 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
-                )
-                // [T-android-ssh-settings] Touch surface for the SSH/SFTP remote backend;
-                // before this the only entry point was the agent's add_host action.
-                SettingsRow(
-                    icon = Icons.Outlined.Terminal,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.ssh_hosts_title),
-                    subtitle = stringResource(R.string.settings_ssh_subtitle),
-                    onClick = onSshClick,
                     showDivider = false,
                 )
             }

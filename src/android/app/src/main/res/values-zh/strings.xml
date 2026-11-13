@@ -2720,5 +2720,4 @@
     <string name="ssh_host_test_fail">连接失败</string>
     <string name="ssh_host_save">保存</string>
     <string name="ssh_host_pinned">已固定主机密钥</string>
-    <string name="settings_ssh_subtitle">通过 SSH/SFTP 执行命令、传输文件</string>
 </resources>

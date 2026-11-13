@@ -465,7 +465,6 @@ fun AppNavigation(
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
                 onNetworkClick = { navController.safeNavigate(Routes.NETWORK) },
                 onEnvVarsClick = { navController.safeNavigate(Routes.ENV_VARS) },
-                onSshClick = { navController.safeNavigate(Routes.SSH_HOSTS) },
                 onSkillsClick = { navController.safeNavigate(Routes.SKILLS) },
                 onMultiAgentClick = { navController.safeNavigate(Routes.MULTI_AGENT) },
                 onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
@@ -532,8 +531,10 @@ fun AppNavigation(
         //   FileBrowserView(rootPath: dataPath, initialPath: dataPath/var/minis,
         //                   rootLabel: "/")
         // so the user can navigate up out of /var/minis into the broader rootfs.
-        composable(Routes.CHAT_FILES, arguments = listOf(
-            navArgument("sessionId") { type = NavType.StringType })) { backStackEntry ->
+        composable(
+            route = Routes.CHAT_FILES,
+            arguments = listOf(navArgument("sessionId") { type = NavType.StringType }),
+        ) { backStackEntry ->
             val context = androidx.compose.ui.platform.LocalContext.current
             val rootfs = RootfsManager.getInstance(context.applicationContext)
             val varMinis = java.io.File(rootfs.rootfsDir, "var/minis")
@@ -600,7 +601,6 @@ fun AppNavigation(
             ),
         ) { entry -> FilePreviewDestination(entry, navController) }
 
-        composable(Routes.SSH_HOSTS) { com.openminis.app.ui.ssh.SshHostsScreen(onBack = { navController.safePopBackStack() }) }
         composable(Routes.ENV_VARS) {
             if (envVarRepository != null) {
                 EnvironmentVariablesScreen(
