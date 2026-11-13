@@ -2899,4 +2899,5 @@
     <string name="ssh_host_test_fail">Connection failed</string>
     <string name="ssh_host_save">Save</string>
     <string name="ssh_host_pinned">Host key pinned</string>
+    <string name="settings_ssh_subtitle">Run commands and transfer files over SSH/SFTP</string>
 </resources>
