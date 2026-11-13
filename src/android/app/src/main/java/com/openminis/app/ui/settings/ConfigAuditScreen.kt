@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.StatusPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -287,7 +289,7 @@ private fun AuditRow(entry: ConfigAuditEntry, onRevert: () -> Unit) {
                 Text(
                     text = stringResource(R.string.logs_config_reverted_label),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF8E5CD9),
+                    color = StatusPalette.Reverted,
                 )
             }
             else -> Unit
@@ -312,10 +314,10 @@ private fun actorLabel(actor: ConfigAuditActor): String = when (actor) {
 @Composable
 private fun StatusBadge(status: ConfigAuditStatus) {
     val color = when (status) {
-        ConfigAuditStatus.APPLIED -> Color(0xFF388E3C)
-        ConfigAuditStatus.REJECTED -> Color(0xFF757575)
-        ConfigAuditStatus.TIMEOUT -> Color(0xFFE65100)
-        ConfigAuditStatus.REVERTED -> Color(0xFF8E5CD9)
+        ConfigAuditStatus.APPLIED -> StatusPalette.Applied
+        ConfigAuditStatus.REJECTED -> StatusPalette.Muted
+        ConfigAuditStatus.TIMEOUT -> StatusPalette.Sensitive
+        ConfigAuditStatus.REVERTED -> StatusPalette.Reverted
     }
     val label = when (status) {
         ConfigAuditStatus.APPLIED -> stringResource(R.string.logs_config_status_applied)

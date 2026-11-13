@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.StatusPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -193,7 +195,7 @@ private fun ConfirmRow(item: PendingConfigChangeItem, onToggle: (Boolean) -> Uni
             )
             ConfigRisk.SENSITIVE -> RiskHint(
                 text = stringResource(R.string.config_reversible),
-                color = Color(0xFFE65100),
+                color = StatusPalette.Sensitive,
             )
             else -> Unit
         }
@@ -204,10 +206,10 @@ private fun ConfirmRow(item: PendingConfigChangeItem, onToggle: (Boolean) -> Uni
 private fun VerbBadge(verb: String) {
     val color = when (verb.lowercase()) {
         "remove", "delete" -> MaterialTheme.colorScheme.error
-        "add", "create" -> Color(0xFF388E3C)
+        "add", "create" -> StatusPalette.Applied
         "hide" -> MaterialTheme.colorScheme.outline
-        "show" -> Color(0xFF1976D2)
-        "revert" -> Color(0xFF8E5CD9)
+        "show" -> StatusPalette.Info
+        "revert" -> StatusPalette.Reverted
         else -> MaterialTheme.colorScheme.primary
     }
     Box(
@@ -243,6 +245,6 @@ private fun RiskHint(text: String, color: Color) {
 @Composable
 private fun riskColor(risk: ConfigRisk): Color = when (risk) {
     ConfigRisk.DESTRUCTIVE -> MaterialTheme.colorScheme.error
-    ConfigRisk.SENSITIVE -> Color(0xFFE65100)
+    ConfigRisk.SENSITIVE -> StatusPalette.Sensitive
     ConfigRisk.NORMAL -> MaterialTheme.colorScheme.onSurface
 }

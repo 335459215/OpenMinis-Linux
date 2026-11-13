@@ -1,5 +1,7 @@
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.StatusPalette
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -288,10 +290,10 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
 }
 
 /** Apple-ish severity palette; readable on both light and dark surfaces. */
-private val LevelBlue = Color(0xFF3B82F6)
-private val LevelGreen = Color(0xFF34C759)
-private val LevelOrange = Color(0xFFFF9F0A)
-private val LevelRed = Color(0xFFFF3B30)
+private val LevelBlue = StatusPalette.LevelBlue
+private val LevelGreen = StatusPalette.Success
+private val LevelOrange = StatusPalette.LevelOrange
+private val LevelRed = StatusPalette.Danger
 
 @Composable
 private fun LogcatRow(line: LogcatLine) {

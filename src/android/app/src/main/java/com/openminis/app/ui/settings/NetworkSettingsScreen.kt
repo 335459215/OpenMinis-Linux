@@ -2,6 +2,8 @@
 // Adaptation [port-upstream-1.16]: collectAsState() -> collectAsStateWithLifecycle() (project forbiddenPatterns ratchet bans lifecycle-unaware collection).
 package com.openminis.app.ui.settings
 
+import com.openminis.app.ui.theme.StatusPalette
+
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -187,7 +189,7 @@ fun NetworkSettingsScreen(
                 SettingsRow(
                     title = stringResource(R.string.network_paused_title),
                     icon = Icons.Outlined.Restore,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = StatusPalette.Warning,
                     trailing = {
                         MinisTextButton(onClick = { NetworkHub.resume() }) {
                             Text(stringResource(R.string.network_turn_back_on))
@@ -344,7 +346,7 @@ fun NetworkSettingsScreen(
                     trailing = if (keepsFailing) ({
                         Text(
                             stringResource(R.string.network_alert_keeps_failing),
-                            color = Color(0xFFFF9500),
+                            color = StatusPalette.Warning,
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }) else null,
@@ -411,7 +413,7 @@ fun NetworkSettingsScreen(
             SettingsSection {
                 Text(
                     err,
-                    color = Color(0xFFFF9500),
+                    color = StatusPalette.Warning,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -540,7 +542,7 @@ fun NetworkSettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier.size(8.dp).background(
-                                    if (p.online) Color(0xFF34C759) else MaterialTheme.colorScheme.outline,
+                                    if (p.online) StatusPalette.Success else MaterialTheme.colorScheme.outline,
                                     CircleShape,
                                 ),
                             )
