@@ -189,7 +189,6 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 
-
 internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 
 // 16 categories matching iOS (ContentView.swift:1897-1916)
@@ -1933,7 +1932,6 @@ private fun SessionItemContent(
             }
         }
     }
-
 
 }
 
