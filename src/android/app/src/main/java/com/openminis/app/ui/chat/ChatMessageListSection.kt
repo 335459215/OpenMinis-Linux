@@ -81,6 +81,8 @@ internal fun ChatFlatItemRow(
     onToggleRun: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
+    // [T-plan-locate] 任务板点行 → 列表滚到对应工具调用行。
+    PlanLocateEffect(flatItems, viewModel.listState)
                         val isNewestItem = item == flatItems.lastOrNull()
                         // [T-android-search-jump] Pulse highlight for the
                         // search-focus row(s). A message flattens into several

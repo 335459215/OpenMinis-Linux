@@ -1380,19 +1380,6 @@ class ChatViewModel(
      */
     val listState: LazyListState = LazyListState(0, 0)
 
-    // [T-plan-locate] 任务板行点击后请求把聊天列表滚到创建该任务的那一行。
-    // UI 消费一次即清空，避免重组时重复滚动。
-    private val _locatePlanRequest = MutableStateFlow<String?>(null)
-    val locatePlanRequest: StateFlow<String?> = _locatePlanRequest.asStateFlow()
-
-    fun requestLocatePlan(title: String) {
-        if (title.isNotBlank()) _locatePlanRequest.value = title
-    }
-
-    fun consumeLocatePlanRequest() {
-        _locatePlanRequest.value = null
-    }
-
     fun setInputText(value: String) {
         _inputText.value = value
     }

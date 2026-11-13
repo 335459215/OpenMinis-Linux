@@ -3085,27 +3085,7 @@ fun ChatScreen(
                         if (action.loadOlder) viewModel.loadOlderMessages()
                     }
                 }
-                // [T-run-fold] 轮级折叠：默认展开，点助手消息头的箭头收起该轮全部运行记录。
-                val collapsedRunIds = remember(sessionId) { mutableStateOf(emptySet<String>()) }
-                val runRecordMap = remember(flatItems) { runRecordCounts(flatItems) }
-                val displayItems = remember(flatItems, collapsedRunIds.value) {
-                    applyRunCollapse(flatItems, collapsedRunIds.value)
-                }
-                // [T-plan-locate] 任务板点行 → 滚到当初那条工具调用。
-                val locatePlanRequest by viewModel.locatePlanRequest.collectAsStateWithLifecycle()
-                LaunchedEffect(locatePlanRequest) {
-                    val planTitle = locatePlanRequest ?: return@LaunchedEffect
-                    val targetIdx = flatItems.indexOfFirst { row ->
-                        val block = (row as? FlatChatItem.AssistantToolUse)?.block
-                        block != null &&
-                            (block.toolArgs.contains(planTitle) ||
-                                block.content.contains(planTitle))
-                    }
-                    if (targetIdx >= 0) {
-                        listState.animateScrollToItem((flatItems.size - 1 - targetIdx).coerceAtLeast(0))
-                    }
-                    viewModel.consumeLocatePlanRequest()
-                }
+                val runFold = rememberChatRunFold(flatItems, sessionId)
                 Box {
                 AlwaysStretchOverscrollBox { sharedEffect ->
                 LazyColumn(
@@ -3249,7 +3229,7 @@ fun ChatScreen(
                         }
                     }
                     itemsIndexed(
-                        items = displayItems.asReversed(),
+                        items = runFold.items.asReversed(),
                         key = { _, item -> item.key },
                         contentType = { _, item -> item.contentType },
                     ) { index, item ->
@@ -3258,14 +3238,14 @@ fun ChatScreen(
                         // oldest-first, rendered reversed under reverseLayout,
                         // so the older neighbour sits directly above this
                         // row). Applied as top padding on the row's Box.
-                        val rhythmGap = flatItemTopGap(displayItems.getOrNull(displayItems.size - 2 - index), item)
+                        val rhythmGap = flatItemTopGap(runFold.items.getOrNull(runFold.items.size - 2 - index), item)
                         // [Perf][LongCtx] T-android-long-ctx-reentry-perf:
                         // the newest message (index 0 in reverseLayout) is
                         // the first row painted in the viewport — its
                         // onPlaced is the moment the user actually sees
                         // content. SideEffect fires on first composition
                         // (before measure); onPlaced fires after layout.
-                        if (item == displayItems.lastOrNull()) {
+                        if (item == runFold.items.lastOrNull()) {
                             androidx.compose.runtime.SideEffect {
                                 if (perfFirstItemComposeFired.compareAndSet(false, true)) {
                                     com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "lazyColumn.firstItem.compose")
@@ -3338,15 +3318,7 @@ fun ChatScreen(
                             inputFocusRequester = inputFocusRequester,
                             previewFileOrBrowser = previewFileOrBrowser,
                             onOpenTerminalWithCommand = onOpenTerminalWithCommand,
-                            runRecordCounts = runRecordMap,
-                            collapsedRuns = collapsedRunIds.value,
-                            onToggleRun = { id ->
-                                collapsedRunIds.value = if (id in collapsedRunIds.value) {
-                                    collapsedRunIds.value - id
-                                } else {
-                                    collapsedRunIds.value + id
-                                }
-                            },
+                            runRecordCounts = runFold.counts, collapsedRuns = runFold.collapsed, onToggleRun = runFold.toggle,
                             onToggleProcessCard = { id ->
                                 if (id in expandedProcessIds) {
                                     expandedProcessIds = expandedProcessIds - id
@@ -3839,11 +3811,7 @@ fun ChatScreen(
 
                 // Live plan-board + goal card above the composer.
                 // [T-supervisor-status-bar] Composer header cluster lives in ChatComposerHeader.kt.
-                ChatComposerHeader(
-                    viewModel = viewModel,
-                    sessionId = sessionId,
-                    onLocatePlan = viewModel::requestLocatePlan,
-                )
+                ChatComposerHeader(viewModel, sessionId, PlanLocateBus::request)
 
                 // T13 banner moved INSIDE the LazyColumn so it renders at the
                 // visual end of the message list (mirrors iOS — see the
@@ -3866,7 +3834,6 @@ fun ChatScreen(
                     inputFocusRequester = inputFocusRequester,
                     keyboardController = keyboardController,
                 )
-
 
                 // Input box: iOS-style floating card — no visible border, separated
                 // from the backdrop by a symmetric soft shadow painted by hand
@@ -5593,7 +5560,6 @@ private data class HistoryEdgeVisible(
     val newestEdge: Boolean,
     val oldestEdge: Boolean,
 )
-
 
 // [T-android-split-chat] Message rows, assistant blocks, tool detail, composer
 // widgets, model picker and misc views live in their own Chat*UI / ChatMiscViews
