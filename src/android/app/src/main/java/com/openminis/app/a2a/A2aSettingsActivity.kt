@@ -179,6 +179,8 @@ class A2aSettingsActivity : Activity() {
     private fun mutedColor(): Int = if (isNightChrome()) Color.parseColor("#9A9AA3") else Color.parseColor("#6B6B73")
     private fun accentColor(): Int = Color.parseColor("#5B8CFF")
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     private fun canDrawOverlay(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(this) else true
 
