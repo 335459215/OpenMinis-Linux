@@ -123,7 +123,14 @@ jobs:
           sed -i 's|kotlin.daemon.jvmargs=.*|kotlin.daemon.jvmargs=-Xmx4g|' gradle.properties
           sed -i 's|org.gradle.workers.max=.*|org.gradle.workers.max=4|' gradle.properties
           chmod +x gradlew
-          ./gradlew :app:compileReleaseKotlin :app:testReleaseUnitTest --parallel --stacktrace
+          # [T-rootfs-asset-guard] This job never installs the rootfs — it is
+          # deliberately not in git, and only the APK job pulls it from the
+          # sandbox-assets artifact. But `testReleaseUnitTest` reaches
+          # mergeReleaseAssets, which is exactly where verifyRootfsAsset hangs,
+          # so this gate could never pass (it failed the same way on 8e3c13bd,
+          # before any of the current work). Use the escape hatch the guard's
+          # own message documents for compile-only jobs.
+          ./gradlew :app:compileReleaseKotlin :app:testReleaseUnitTest -Pminis.skipRootfsAssetGuard=true --parallel --stacktrace
 
   build:
     name: Build Minis Ultra APK
