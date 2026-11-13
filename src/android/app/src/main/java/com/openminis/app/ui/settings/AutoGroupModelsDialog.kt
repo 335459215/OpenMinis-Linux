@@ -7,10 +7,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,8 +54,18 @@ fun AutoGroupEntryButton(
     modifier: Modifier = Modifier,
 ) {
     var showDialog by remember { mutableStateOf(false) }
-    TextButton(onClick = { showDialog = true }, modifier = modifier) {
-        Text(stringResource(R.string.auto_group_models))
+    // [T-android-auto-group] Icon-only, deliberately identical to the session
+    // list's "magic" button: same Icons.Outlined.AutoAwesome, same 24.dp, same
+    // IconButton in the top-bar actions slot. Both are one-tap bulk actions, so
+    // they should read as the same affordance instead of one being a text
+    // button. The label moves to contentDescription — an icon-only control has
+    // no visible text left to name it for TalkBack.
+    IconButton(onClick = { showDialog = true }, modifier = modifier) {
+        Icon(
+            Icons.Outlined.AutoAwesome,
+            contentDescription = stringResource(R.string.auto_group_models),
+            modifier = Modifier.size(24.dp),
+        )
     }
     if (showDialog) {
         AutoGroupModelsDialog(
