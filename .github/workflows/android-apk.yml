@@ -17,8 +17,8 @@ concurrency:
 
 env:
   JAVA_VERSION: "17"
-  ANDROID_PLATFORM: "android-37.0"
-  ANDROID_BUILD_TOOLS: "37.0.0"
+  ANDROID_PLATFORM: "android-36"
+  ANDROID_BUILD_TOOLS: "35.0.0"
   ANDROID_CMAKE: "3.22.1"
   # Must match ndkVersion and minis-android-sdk-setup NDK_REV.
   ANDROID_NDK: "29.0.14206865"
