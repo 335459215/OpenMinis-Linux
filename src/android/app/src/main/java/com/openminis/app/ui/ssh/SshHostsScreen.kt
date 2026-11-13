@@ -68,8 +68,8 @@ fun SshHostsScreen(onBack: () -> Unit) {
     var showEditor by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<SshHostConfig?>(null) }
 
-    suspend fun reload() {
-        hosts = withContext(Dispatchers.IO) { store.list() }
+    fun reload() {
+        scope.launch { hosts = withContext(Dispatchers.IO) { store.list() } }
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -145,7 +145,7 @@ fun SshHostsScreen(onBack: () -> Unit) {
             existingIds = hosts.map { it.id }.toSet(),
             onDismiss = { showEditor = false },
             onSave = { config, password, privateKey, passphrase ->
-                label@ scope.launch {
+                scope.launch {
                     withContext(Dispatchers.IO) {
                         store.put(
                             config,
@@ -156,7 +156,7 @@ fun SshHostsScreen(onBack: () -> Unit) {
                             ),
                         )
                     }
-                    reload()
+                    hosts = withContext(Dispatchers.IO) { store.list() }
                     showEditor = false
                 }
             },
