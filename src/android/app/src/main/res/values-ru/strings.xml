@@ -2101,4 +2101,21 @@
     <string name="git_panel_no_branches">Нет веток</string>
     <string name="git_panel_no_stashes">Нет стэшей</string>
     <string name="git_panel_switch_branch">Переключить ветку</string>
+    <string name="auto_group_confirm_body">Группирует все видимые модели по провайдеру и модальности и создаёт по группе на каждое сочетание. Группы с одинаковым именем объединяются, созданные вручную не затрагиваются.</string>
+    <string name="auto_group_confirm_title">Автогруппировка моделей</string>
+    <string name="auto_group_done_toast">Готово — %1$d групп, %2$d записей.</string>
+    <string name="auto_group_empty_toast">Нет моделей для группировки.</string>
+    <string name="auto_group_merge_existing">Объединить</string>
+    <string name="auto_group_models">Автогруппировка</string>
+    <string name="auto_group_plan_summary">Будет создано или обновлено групп: %1$d.</string>
+    <string name="auto_group_rebuild">Перестроить</string>
+    <string name="group_magic">Автосортировка сессий</string>
+    <string name="group_magic_done">Пересортировано сессий: %1$d</string>
+    <string name="group_magic_failed">Не удалось разобрать — повторите попытку</string>
+    <string name="group_magic_no_sessions">Нет нераспределённых сессий для разбора</string>
+    <string name="group_magic_running">Разбираем…</string>
+    <string name="pool_mode_hint">Как выбираются дополнительные ключи</string>
+    <string name="pool_mode_random">Случайно</string>
+    <string name="pool_mode_round_robin">По кругу</string>
+    <string name="pool_mode_title">Режим использования ключей</string>
 </resources>

@@ -2177,4 +2177,21 @@
     <string name="git_panel_no_branches">沒有分支</string>
     <string name="git_panel_no_stashes">沒有暫存記錄</string>
     <string name="git_panel_switch_branch">切換分支</string>
+    <string name="auto_group_confirm_body">依服務商與能力把可見模型分桶，每個桶建立一個群組。同名群組直接合併，手動建立的群組不會被更動。</string>
+    <string name="auto_group_confirm_title">自動分組模型</string>
+    <string name="auto_group_done_toast">完成 —— %1$d 個群組，%2$d 個項目。</string>
+    <string name="auto_group_empty_toast">沒有可分組的模型。</string>
+    <string name="auto_group_merge_existing">合併</string>
+    <string name="auto_group_models">自動分組</string>
+    <string name="auto_group_plan_summary">將建立或更新 %1$d 個群組。</string>
+    <string name="auto_group_rebuild">重建</string>
+    <string name="group_magic">自動整理對話</string>
+    <string name="group_magic_done">已重新整理 %1$d 個對話</string>
+    <string name="group_magic_failed">整理失敗，請重試</string>
+    <string name="group_magic_no_sessions">沒有未分組的對話可整理</string>
+    <string name="group_magic_running">正在整理…</string>
+    <string name="pool_mode_hint">額外金鑰的挑選方式</string>
+    <string name="pool_mode_random">隨機</string>
+    <string name="pool_mode_round_robin">輪流</string>
+    <string name="pool_mode_title">金鑰使用模式</string>
 </resources>

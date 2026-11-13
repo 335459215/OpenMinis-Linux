@@ -2093,4 +2093,21 @@
     <string name="git_panel_no_branches">Walang branches</string>
     <string name="git_panel_no_stashes">Walang stash</string>
     <string name="git_panel_switch_branch">Lumipat ng branch</string>
+    <string name="auto_group_confirm_body">Pinagsasama-sama ang bawat nakikitang modelo ayon sa provider at modality, at gumagawa ng isang grupo sa bawat kombinasyon. Pinagsasama ang magkatulad na pangalan ng grupo; hindi ginagalaw ang mga manual na grupo.</string>
+    <string name="auto_group_confirm_title">Auto-group ng mga modelo</string>
+    <string name="auto_group_done_toast">Tapos — %1$d grupo, %2$d entry.</string>
+    <string name="auto_group_empty_toast">Walang modelong maaaring pangkatin.</string>
+    <string name="auto_group_merge_existing">Pagsamahin</string>
+    <string name="auto_group_models">Auto-group</string>
+    <string name="auto_group_plan_summary">%1$d grupo ang gagawin o ia-update.</string>
+    <string name="auto_group_rebuild">Muling buuin</string>
+    <string name="group_magic">Auto-organize ng mga session</string>
+    <string name="group_magic_done">Naayos muli ang %1$d session</string>
+    <string name="group_magic_failed">Hindi naayos — subukan muli</string>
+    <string name="group_magic_no_sessions">Walang session na hindi pa nakagrupo</string>
+    <string name="group_magic_running">Inaayos…</string>
+    <string name="pool_mode_hint">Paano pinipili ang dagdag na key</string>
+    <string name="pool_mode_random">Random</string>
+    <string name="pool_mode_round_robin">Halinhinan</string>
+    <string name="pool_mode_title">Mode ng paggamit ng key</string>
 </resources>

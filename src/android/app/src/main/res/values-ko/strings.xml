@@ -2090,4 +2090,21 @@
     <string name="git_panel_no_branches">브랜치 없음</string>
     <string name="git_panel_no_stashes">스태시 없음</string>
     <string name="git_panel_switch_branch">브랜치 전환</string>
+    <string name="auto_group_confirm_body">표시되는 모든 모델을 제공자와 모달리티로 분류하고 조합마다 그룹 하나를 만듭니다. 이름이 같은 그룹은 변경 없이 병합되며, 직접 만든 그룹은 건드리지 않습니다.</string>
+    <string name="auto_group_confirm_title">모델 자동 그룹화</string>
+    <string name="auto_group_done_toast">완료 — 그룹 %1$d개, 항목 %2$d개.</string>
+    <string name="auto_group_empty_toast">그룹화할 모델이 없습니다.</string>
+    <string name="auto_group_merge_existing">병합</string>
+    <string name="auto_group_models">자동 그룹화</string>
+    <string name="auto_group_plan_summary">그룹 %1$d개를 만들거나 갱신합니다.</string>
+    <string name="auto_group_rebuild">재구성</string>
+    <string name="group_magic">세션 자동 정리</string>
+    <string name="group_magic_done">세션 %1$d개를 다시 정리했습니다</string>
+    <string name="group_magic_failed">정리하지 못했습니다 — 다시 시도하세요</string>
+    <string name="group_magic_no_sessions">정리할 미분류 세션이 없습니다</string>
+    <string name="group_magic_running">정리 중…</string>
+    <string name="pool_mode_hint">추가 키를 고르는 방식</string>
+    <string name="pool_mode_random">무작위</string>
+    <string name="pool_mode_round_robin">순환</string>
+    <string name="pool_mode_title">키 사용 모드</string>
 </resources>

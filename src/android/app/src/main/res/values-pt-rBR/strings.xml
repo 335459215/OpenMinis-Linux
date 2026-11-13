@@ -2093,4 +2093,21 @@
     <string name="git_panel_no_branches">Sem branches</string>
     <string name="git_panel_no_stashes">Sem stashes</string>
     <string name="git_panel_switch_branch">Trocar de branch</string>
+    <string name="auto_group_confirm_body">Agrupa cada modelo visível por provedor e modalidade e cria um grupo por combinação. Grupos com o mesmo nome são mesclados; grupos criados à mão não são alterados.</string>
+    <string name="auto_group_confirm_title">Agrupar modelos automaticamente</string>
+    <string name="auto_group_done_toast">Concluído — %1$d grupos, %2$d entradas.</string>
+    <string name="auto_group_empty_toast">Nenhum modelo disponível para agrupar.</string>
+    <string name="auto_group_merge_existing">Mesclar</string>
+    <string name="auto_group_models">Agrupar automaticamente</string>
+    <string name="auto_group_plan_summary">%1$d grupos serão criados ou atualizados.</string>
+    <string name="auto_group_rebuild">Reconstruir</string>
+    <string name="group_magic">Organizar sessões automaticamente</string>
+    <string name="group_magic_done">%1$d sessões reorganizadas</string>
+    <string name="group_magic_failed">Não foi possível organizar — tente novamente</string>
+    <string name="group_magic_no_sessions">Nenhuma sessão sem grupo para organizar</string>
+    <string name="group_magic_running">Organizando…</string>
+    <string name="pool_mode_hint">Como as chaves extras são escolhidas</string>
+    <string name="pool_mode_random">Aleatório</string>
+    <string name="pool_mode_round_robin">Revezamento</string>
+    <string name="pool_mode_title">Modo de uso das chaves</string>
 </resources>

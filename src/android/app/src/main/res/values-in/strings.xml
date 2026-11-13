@@ -2098,4 +2098,21 @@
     <string name="git_panel_no_branches">Tidak ada cabang</string>
     <string name="git_panel_no_stashes">Tidak ada stash</string>
     <string name="git_panel_switch_branch">Ganti cabang</string>
+    <string name="auto_group_confirm_body">Mengelompokkan setiap model yang terlihat berdasarkan penyedia dan modalitas, lalu membuat satu grup per kombinasi. Grup bernama sama digabungkan; grup buatan manual tidak disentuh.</string>
+    <string name="auto_group_confirm_title">Grup otomatis model</string>
+    <string name="auto_group_done_toast">Selesai — %1$d grup, %2$d entri.</string>
+    <string name="auto_group_empty_toast">Tidak ada model untuk dikelompokkan.</string>
+    <string name="auto_group_merge_existing">Gabungkan</string>
+    <string name="auto_group_models">Grup otomatis</string>
+    <string name="auto_group_plan_summary">%1$d grup akan dibuat atau diperbarui.</string>
+    <string name="auto_group_rebuild">Bangun ulang</string>
+    <string name="group_magic">Atur sesi otomatis</string>
+    <string name="group_magic_done">%1$d sesi diatur ulang</string>
+    <string name="group_magic_failed">Gagal mengatur — coba lagi</string>
+    <string name="group_magic_no_sessions">Tidak ada sesi tanpa grup untuk diatur</string>
+    <string name="group_magic_running">Mengatur…</string>
+    <string name="pool_mode_hint">Cara memilih kunci tambahan</string>
+    <string name="pool_mode_random">Acak</string>
+    <string name="pool_mode_round_robin">Bergiliran</string>
+    <string name="pool_mode_title">Mode penggunaan kunci</string>
 </resources>

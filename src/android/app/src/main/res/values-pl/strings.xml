@@ -2100,4 +2100,21 @@
     <string name="git_panel_no_branches">Brak gałęzi</string>
     <string name="git_panel_no_stashes">Brak skrytek</string>
     <string name="git_panel_switch_branch">Zmień gałąź</string>
+    <string name="auto_group_confirm_body">Grupuje każdy widoczny model według dostawcy i modalności, tworząc jedną grupę na kombinację. Grupy o tej samej nazwie są scalane; grup utworzonych ręcznie nie zmieniamy.</string>
+    <string name="auto_group_confirm_title">Automatyczne grupowanie modeli</string>
+    <string name="auto_group_done_toast">Gotowe — %1$d grup, %2$d pozycji.</string>
+    <string name="auto_group_empty_toast">Brak modeli do grupowania.</string>
+    <string name="auto_group_merge_existing">Scal</string>
+    <string name="auto_group_models">Grupuj automatycznie</string>
+    <string name="auto_group_plan_summary">Zostanie utworzonych lub zaktualizowanych %1$d grup.</string>
+    <string name="auto_group_rebuild">Odbuduj</string>
+    <string name="group_magic">Automatyczne porządkowanie sesji</string>
+    <string name="group_magic_done">Uporządkowano ponownie %1$d sesji</string>
+    <string name="group_magic_failed">Nie udało się uporządkować — spróbuj ponownie</string>
+    <string name="group_magic_no_sessions">Brak niepogrupowanych sesji do uporządkowania</string>
+    <string name="group_magic_running">Porządkowanie…</string>
+    <string name="pool_mode_hint">Sposób wybierania dodatkowych kluczy</string>
+    <string name="pool_mode_random">Losowo</string>
+    <string name="pool_mode_round_robin">Naprzemiennie</string>
+    <string name="pool_mode_title">Tryb użycia kluczy</string>
 </resources>

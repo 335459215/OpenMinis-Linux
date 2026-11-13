@@ -2083,4 +2083,21 @@
     <string name="git_panel_no_branches">Sin ramas</string>
     <string name="git_panel_no_stashes">Sin stashes</string>
     <string name="git_panel_switch_branch">Cambiar rama</string>
+    <string name="auto_group_confirm_body">Agrupa cada modelo visible por proveedor y modalidad, y crea un grupo por cada combinación. Los grupos con el mismo nombre se fusionan; los grupos creados a mano no se tocan.</string>
+    <string name="auto_group_confirm_title">Agrupar modelos automáticamente</string>
+    <string name="auto_group_done_toast">Listo: %1$d grupos, %2$d entradas.</string>
+    <string name="auto_group_empty_toast">No hay modelos para agrupar.</string>
+    <string name="auto_group_merge_existing">Fusionar</string>
+    <string name="auto_group_models">Agrupar automáticamente</string>
+    <string name="auto_group_plan_summary">Se crearán o actualizarán %1$d grupos.</string>
+    <string name="auto_group_rebuild">Reconstruir</string>
+    <string name="group_magic">Organizar sesiones automáticamente</string>
+    <string name="group_magic_done">%1$d sesiones reorganizadas</string>
+    <string name="group_magic_failed">No se pudo organizar; inténtalo de nuevo</string>
+    <string name="group_magic_no_sessions">No hay sesiones sin grupo para organizar</string>
+    <string name="group_magic_running">Organizando…</string>
+    <string name="pool_mode_hint">Cómo se eligen las claves adicionales</string>
+    <string name="pool_mode_random">Aleatorio</string>
+    <string name="pool_mode_round_robin">Por turnos</string>
+    <string name="pool_mode_title">Modo de uso de claves</string>
 </resources>

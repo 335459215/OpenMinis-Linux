@@ -9,6 +9,7 @@ import com.openminis.app.data.SessionForkManager
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.data.repository.*
@@ -16,6 +17,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.ui.chat.ChatViewModelStore
+import com.openminis.app.ui.chat.TaskAnchor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,13 +50,6 @@ class SessionListViewModel(
          * title from ever being overwritten.
          */
         private const val NEW_CHAT_TITLE = "New Chat"
-
-        /**
-         * [T-android-group-ai-suggest] Verbatim from iOS `suggestFolder`, so
-         * both platforms constrain the sub model identically.
-         */
-        private const val GROUP_SUGGEST_SYSTEM_PROMPT =
-            "You organize chat sessions into folders. Respond with a single valid JSON object only."
 
         /**
          * [T-android-group-ai-suggest] Parse the sub model's JSON reply.
@@ -299,6 +294,44 @@ class SessionListViewModel(
         data class Create(val name: String, val description: String?) : GroupSuggestion
     }
 
+    // ─── 「魔术」：整表自动整理 ─────────────────────────────────────────────
+    // [T-android-group-auto-classify]
+
+    /**
+     * 模型给出的一条归属：哪条会话应该进哪个组（按**组名**，不是 id ——
+     * 组名才是模型看得见的东西；id 由我们自己在落库时解析/新建）。
+     */
+    data class AutoClassifyAssignment(val sessionId: String, val folderName: String)
+
+    /**
+     * 一次整理的全部结果。
+     *
+     * @param newFolders 需要新建的组，**已经过滤**成「确实被某条 assignment
+     *   引用到的」——模型习惯先列一批候选组名，再只用其中一个。
+     */
+    data class AutoClassifyPlan(
+        val assignments: List<AutoClassifyAssignment>,
+        val newFolders: List<GroupSuggestion.Create>,
+    )
+
+    /** 顶栏「魔术」按钮的状态机。 */
+    sealed interface AutoClassifyState {
+        /** 空闲：按钮可点，无任何提示。 */
+        data object Idle : AutoClassifyState
+
+        /** 正在扫描 + 调模型。按钮置灰，图标位换成转圈。 */
+        data object Running : AutoClassifyState
+
+        /** 完成。`count` 是真正落了库的会话数，可能是 0（模型觉得都放好了）。 */
+        data class Done(val count: Int) : AutoClassifyState
+
+        /**
+         * 失败。[reason] 是给用户看的一句话（已本地化），不是异常堆栈 ——
+         * 用户只有「再点一次」这一个动作，堆栈对他没有信息量。
+         */
+        data class Failed(val reason: String) : AutoClassifyState
+    }
+
     /** True while a suggestion request is in flight (drives the spinner). */
     val groupSuggesting = MutableStateFlow(false)
 
@@ -307,6 +340,15 @@ class SessionListViewModel(
 
     /** True when the last attempt failed — the button relabels to invite a retry. */
     val groupSuggestFailed = MutableStateFlow(false)
+
+    /**
+     * [T-android-group-auto-classify] 顶栏「魔术」按钮的进度与结果。
+     *
+     * 与 [groupSuggestion] 一样放在 VM 而不是组合项里：一次整理要几十秒，期间
+     * 用户可能切走再切回，进度必须活得比 composable 久。结果是一次性的，
+     * UI 弹完 toast 调 [clearAutoClassifyState] 复位，否则每次重组都会重复弹窗。
+     */
+    val autoClassifyState = MutableStateFlow<AutoClassifyState>(AutoClassifyState.Idle)
 
     // Multi-select
 
@@ -509,146 +551,48 @@ class SessionListViewModel(
         groupSuggestFailed.value = false
     }
 
-    private suspend fun runGroupSuggestion(sessionIds: List<String>): GroupSuggestion {
-        // [T-ios-folder-suggest-anchor-nondeterminism] Walk the selection in a
-        // STABLE (sorted) order and take the first session that actually
-        // resolves a usable model, instead of letting one arbitrary session
-        // decide whether the feature works. On iOS the ids arrived from a Set,
-        // so an unlucky first session with an unconfigured model made
-        // "AI Suggest" fail permanently for reasons the user could neither see
-        // nor influence. Ours is a List, but the same failure mode applies to
-        // whichever session happens to be first, and sorting also makes the
-        // sample below reproducible across launches.
-        val sorted = sessionIds.sorted()
+    // ─── 顶栏「魔术」按钮：整表自动整理 ──────────────────────────────────
 
-        val titleEligible = providerRepository.allVisibleEntries().filter { entry ->
-            val outs = entry.model.outputModalities
-            val outputsText = outs == null || outs.isEmpty() || outs.contains("text")
-            val idLower = entry.model.id.lowercase()
-            val nonChatId = listOf("tts", "voiceclone", "voicedesign", "embedding", "embed-", "whisper", "image", "video")
-                .any { idLower.contains(it) }
-            outputsText && !nonChatId
-        }
-        val subEntry = providerRepository.resolveTitleSubEntry()
-            ?.takeIf { sub -> titleEligible.any { it == sub } }
-        // Anchor on the first selected session whose bound model is usable,
-        // falling back to the dedicated sub-model and then anything eligible.
-        val anchorPrimary = sorted.firstNotNullOfOrNull { sid ->
-            val modelId = chatRepository.getSession(sid)?.modelId ?: return@firstNotNullOfOrNull null
-            titleEligible.firstOrNull { it.model.id == modelId }
-        }
-        val candidates = (listOfNotNull(subEntry, anchorPrimary) +
-            titleEligible.filter { it != subEntry && it != anchorPrimary })
-        if (candidates.isEmpty()) {
-            AppLogger.error(
-                TAG,
-                "[GroupSuggest] FAILED reason=no-sub-model-available " +
-                    "(no enabled+credentialed+title-eligible entry for ${sessionIds.size} session(s))",
-            )
-            throw IllegalStateException("No sub model available")
-        }
+    /**
+     * [T-android-group-auto-classify] 读全部组 + 全部**未归组**会话，让子模型
+     * 一次性给出归属方案，然后批量落库。
+     *
+     * ## 为什么只碰未归组的会话
+     *
+     * 手动分组是用户明确表达过的意图，而这是一个**批量**写操作：错一次就是
+     * 几十条会话被搬走，而且没有「撤销」。所以本方法只处理 `folderId == null`
+     * 的会话，已归组的一律不动 —— 写库时也用 [ChatRepository.setFolderIfUnfiled]
+     * （条件写在 UPDATE 里）再兜一层，即使有别的路径并发地把它归了组，也不会被
+     * 这里覆盖。
+     *
+     * ## 为什么先关联再调用
+     *
+     * `viewModelScope.launch` 里已经是一段长流程（几十秒的模型调用 + 多次写库），
+     * 所以扫描/读写全部压在 [Dispatchers.IO] 上，只有状态回写切回 Main：主线程
+     * 上跑 Room 查询会在这段最需要动画流畅的时刻掉帧。
+     */
+    fun autoClassifySessions() {
+        if (autoClassifyState.value == AutoClassifyState.Running) return
+        autoClassifyState.value = AutoClassifyState.Running
+        AppLogger.info(TAG, "[AutoClassify] START")
 
-        // Existing groups + up to 3 member titles each, deduped by name so two
-        // offline-created "Work" folders don't both bid for the merge.
-        val folders = chatRepository.listFolders()
-        val seenNames = mutableSetOf<String>()
-        val folderLines = mutableListOf<String>()
-        for (f in folders) {
-            if (!seenNames.add(f.name.lowercase())) continue
-            val memberTitles = chatRepository.sessionIdsInFolder(f.id).take(3)
-                .mapNotNull { chatRepository.getSession(it)?.title }
-            val descPart = f.description?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
-            folderLines += "- \"${f.name}\"$descPart: ${memberTitles.joinToString(" / ")}"
-        }
-
-        // Sorted + capped at 20 for the same reason as the anchor: an unsorted
-        // sample would send a different 20 sessions on each run.
-        val sessionLines = sorted.take(20).mapNotNull { sid ->
-            chatRepository.getSession(sid)?.let { s ->
-                "- ${s.title ?: "Untitled"} [${s.category ?: "other"}]"
-            }
-        }
-        if (sessionLines.isEmpty()) {
-            AppLogger.error(
-                TAG,
-                "[GroupSuggest] FAILED reason=no-sessions-found " +
-                    "(${sessionIds.size} id(s) selected, none resolved in the store)",
-            )
-            throw IllegalStateException("No sessions found")
-        }
-
-        val foldersBlock = if (folderLines.isEmpty()) "The user has no folders yet."
-        else "Existing folders with sample member titles:\n${folderLines.joinToString("\n")}"
-        val prompt = buildString {
-            append("The user selected these chat sessions to file into a folder:\n")
-            append(sessionLines.joinToString("\n"))
-            append("\n\n")
-            append(foldersBlock)
-            append("\n\n")
-            append("Decide: merge them into ONE existing group (only if they clearly fit it), ")
-            append("or propose ONE new group name (2-8 characters preferred, in the same language as the session titles). ")
-            append("For a new group also write \"description\": one sentence (under 100 characters, same language as the name) ")
-            append("describing what belongs in it — it will guide future automatic grouping.\n\n")
-            append("You MUST respond with valid JSON only. Examples:\n")
-            append("{\"decision\": \"merge\", \"folder\": \"Work\"}\n")
-            append("{\"decision\": \"create\", \"name\": \"Trip Planning\", \"description\": \"Flights, hotels and itineraries for upcoming trips\"}")
-        }
-
-        var lastError: Exception? = null
-        for (entry in candidates) {
-            val instance = providerRepository.instance(entry.providerInstanceId) ?: continue
-            // [T-credential-pool-x] Title suggestion is a send; rotate the pool so
-            // a 429'd slot cools precisely and the next candidate walks to a
-            // fresh key. Keyless self-hosted stays a candidate ("" forfeit).
-            var apiKey = providerRepository.requestCredential(instance)?.first ?: continue
-            if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {
-                try {
-                    val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
-                    val freshToken = manager?.validAccessToken()
-                    if (freshToken != null && freshToken != apiKey) {
-                        providerRepository.saveApiKey(instance.id, freshToken)
-                        apiKey = freshToken
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "GroupSuggest OAuth refresh failed: ${e.message}")
-                }
-            }
-            val provider = try {
-                ProviderFactory.create(instance, apiKey, entry.model, context)
-            } catch (e: Exception) {
-                Log.w(TAG, "GroupSuggest provider creation failed for ${entry.model.displayName}: ${e.message}")
-                continue
-            }
+        viewModelScope.launch(Dispatchers.IO) {
+            var state: AutoClassifyState
             try {
-                // Same budget shape as title-gen: a reasoning model needs room
-                // to finish thinking before it can emit the JSON, even with
-                // thinking explicitly OFF (which is a no-op on some models).
-                val maxTokens = if (entry.model.supportsReasoning == true) 2048 else 256
-                val response = provider.sendMessage(
-                    messages = listOf(LLMMessage(role = LLMMessage.Role.USER, content = prompt)),
-                    systemPrompt = GROUP_SUGGEST_SYSTEM_PROMPT,
-                    maxTokens = maxTokens,
-                    temperature = entry.overrides.temperature,
-                    thinkingLevel = ThinkingLevel.OFF,
-                )
-                val parsed = parseGroupSuggestion(response.text, folders)
-                if (parsed != null) {
-                    AppLogger.info(TAG, "[GroupSuggest] OK model=${entry.model.id} result=$parsed")
-                    return parsed
-                }
-                Log.w(
-                    TAG,
-                    "GroupSuggest empty/unparseable from ${entry.model.displayName}: " +
-                        "stopReason=${response.stopReason} raw=\"${response.text.take(160)}\"",
-                )
+                state = runAutoClassify()
             } catch (e: Exception) {
-                lastError = e
-                Log.w(TAG, "GroupSuggest via ${entry.model.displayName} failed: ${e.message}")
-                continue
+                AppLogger.error(TAG, "[AutoClassify] FAILED reason=exception error=${e.message}")
+                state = AutoClassifyState.Failed(
+                    context.getString(R.string.group_magic_failed),
+                )
             }
+            withContext(Dispatchers.Main) { autoClassifyState.value = state }
         }
-        AppLogger.error(TAG, "[GroupSuggest] FAILED reason=all-candidates-exhausted last=${lastError?.message}")
-        throw lastError ?: IllegalStateException("Unparseable suggestion")
+    }
+
+    /** UI 弹完 toast 后调用，把结果状态复位成 [AutoClassifyState.Idle]。 */
+    fun clearAutoClassifyState() {
+        autoClassifyState.value = AutoClassifyState.Idle
     }
 
     fun applyGroupChoice(choice: GroupChoice) {

@@ -2083,4 +2083,21 @@
     <string name="git_panel_no_branches">Keine Branches gefunden</string>
     <string name="git_panel_no_stashes">Keine Stashes</string>
     <string name="git_panel_switch_branch">Branch wechseln</string>
+    <string name="auto_group_confirm_body">Sortiert jedes sichtbare Modell nach Anbieter und Modalität und erstellt für jede Kombination eine Gruppe. Gleichnamige Gruppen werden zusammengeführt; von Hand erstellte Gruppen bleiben unangetastet.</string>
+    <string name="auto_group_confirm_title">Modelle automatisch gruppieren</string>
+    <string name="auto_group_done_toast">Fertig — %1$d Gruppen, %2$d Einträge.</string>
+    <string name="auto_group_empty_toast">Keine Modelle zum Gruppieren verfügbar.</string>
+    <string name="auto_group_merge_existing">Zusammenführen</string>
+    <string name="auto_group_models">Automatisch gruppieren</string>
+    <string name="auto_group_plan_summary">%1$d Gruppen werden erstellt oder aktualisiert.</string>
+    <string name="auto_group_rebuild">Neu aufbauen</string>
+    <string name="group_magic">Sitzungen automatisch ordnen</string>
+    <string name="group_magic_done">%1$d Sitzungen neu geordnet</string>
+    <string name="group_magic_failed">Ordnen fehlgeschlagen — erneut versuchen</string>
+    <string name="group_magic_no_sessions">Keine ungruppierten Sitzungen zum Ordnen</string>
+    <string name="group_magic_running">Wird geordnet…</string>
+    <string name="pool_mode_hint">Wie die zusätzlichen Schlüssel gewählt werden</string>
+    <string name="pool_mode_random">Zufällig</string>
+    <string name="pool_mode_round_robin">Reihum</string>
+    <string name="pool_mode_title">Schlüssel-Nutzungsmodus</string>
 </resources>

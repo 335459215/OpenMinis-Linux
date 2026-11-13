@@ -2093,4 +2093,21 @@
     <string name="git_panel_no_branches">Dal yok</string>
     <string name="git_panel_no_stashes">Stash yok</string>
     <string name="git_panel_switch_branch">Dal değiştir</string>
+    <string name="auto_group_confirm_body">Görünen her modeli sağlayıcıya ve modaliteye göre gruplar, her kombinasyon için bir grup oluşturur. Aynı adlı gruplar birleştirilir; elle oluşturulan gruplara dokunulmaz.</string>
+    <string name="auto_group_confirm_title">Modelleri otomatik grupla</string>
+    <string name="auto_group_done_toast">Bitti — %1$d grup, %2$d giriş.</string>
+    <string name="auto_group_empty_toast">Gruplanacak model yok.</string>
+    <string name="auto_group_merge_existing">Birleştir</string>
+    <string name="auto_group_models">Otomatik grupla</string>
+    <string name="auto_group_plan_summary">%1$d grup oluşturulacak veya güncellenecek.</string>
+    <string name="auto_group_rebuild">Yeniden oluştur</string>
+    <string name="group_magic">Oturumları otomatik düzenle</string>
+    <string name="group_magic_done">%1$d oturum yeniden düzenlendi</string>
+    <string name="group_magic_failed">Düzenleme başarısız — tekrar deneyin</string>
+    <string name="group_magic_no_sessions">Düzenlenecek gruplanmamış oturum yok</string>
+    <string name="group_magic_running">Düzenleniyor…</string>
+    <string name="pool_mode_hint">Ek anahtarların nasıl seçileceği</string>
+    <string name="pool_mode_random">Rastgele</string>
+    <string name="pool_mode_round_robin">Sırayla</string>
+    <string name="pool_mode_title">Anahtar kullanım modu</string>
 </resources>

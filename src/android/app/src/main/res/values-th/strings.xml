@@ -2093,4 +2093,21 @@
     <string name="git_panel_no_branches">ไม่มีบรานช์</string>
     <string name="git_panel_no_stashes">ไม่มีสแตช</string>
     <string name="git_panel_switch_branch">สลับบรานช์</string>
+    <string name="auto_group_confirm_body">จัดกลุ่มทุกโมเดลที่มองเห็นตามผู้ให้บริการและรูปแบบ แล้วสร้างหนึ่งกลุ่มต่อหนึ่งการรวมกัน กลุ่มชื่อซ้ำจะถูกรวมเข้าด้วยกัน กลุ่มที่สร้างเองจะไม่ถูกแตะต้อง</string>
+    <string name="auto_group_confirm_title">จัดกลุ่มโมเดลอัตโนมัติ</string>
+    <string name="auto_group_done_toast">เสร็จแล้ว — %1$d กลุ่ม, %2$d รายการ</string>
+    <string name="auto_group_empty_toast">ไม่มีโมเดลให้จัดกลุ่ม</string>
+    <string name="auto_group_merge_existing">รวม</string>
+    <string name="auto_group_models">จัดกลุ่มอัตโนมัติ</string>
+    <string name="auto_group_plan_summary">จะสร้างหรืออัปเดต %1$d กลุ่ม</string>
+    <string name="auto_group_rebuild">สร้างใหม่</string>
+    <string name="group_magic">จัดระเบียบบทสนทนาอัตโนมัติ</string>
+    <string name="group_magic_done">จัดระเบียบ %1$d บทสนทนาใหม่แล้ว</string>
+    <string name="group_magic_failed">จัดระเบียบไม่สำเร็จ — ลองอีกครั้ง</string>
+    <string name="group_magic_no_sessions">ไม่มีบทสนทนาที่ยังไม่ถูกจัดกลุ่มให้จัดระเบียบ</string>
+    <string name="group_magic_running">กำลังจัดระเบียบ…</string>
+    <string name="pool_mode_hint">วิธีเลือกคีย์เพิ่มเติม</string>
+    <string name="pool_mode_random">สุ่ม</string>
+    <string name="pool_mode_round_robin">วนตามลำดับ</string>
+    <string name="pool_mode_title">โหมดการใช้คีย์</string>
 </resources>

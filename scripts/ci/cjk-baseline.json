@@ -22,6 +22,8 @@
     "src/android/app/src/main/java/com/openminis/app/agent/ContextAssemblySnapshot.kt": 6,
     "src/android/app/src/main/java/com/openminis/app/agent/MessageTransformers.kt": 16,
     "src/android/app/src/main/java/com/openminis/app/agent/SoulStore.kt": 1,
+    "src/android/app/src/main/java/com/openminis/app/autogroup/AutoGroupPlanner.kt": 6,
+    "src/android/app/src/main/java/com/openminis/app/autogroup/AutoGroupPlannerSelfTest.kt": 16,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 3,
     "src/android/app/src/main/java/com/openminis/app/data/CapabilityRouter.kt": 6,
     "src/android/app/src/main/java/com/openminis/app/data/display/DisplayParts.kt": 1,
@@ -109,6 +111,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/StreamingMarkdownRenderBlock.kt": 4,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/TitlePromptLocale.kt": 5,
     "src/android/app/src/main/java/com/openminis/app/ui/markdown/MarkdownText.kt": 1,
+    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionAutoGrouping.kt": 10,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": 2,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/MultiAgentSettingsScreen.kt": 1
   }

@@ -65,6 +65,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Calculate
@@ -372,37 +373,6 @@ private fun groupSessionsByDate(sessions: List<ChatSessionEntity>): List<Pair<Da
         grouped[period]?.let { result.add(period to it) }
     }
     return result
-}
-
-private fun relativeDate(context: Context, timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(diff)
-    val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
-    val hours = TimeUnit.MILLISECONDS.toHours(diff)
-
-    if (seconds < 60) return context.getString(R.string.time_just_now)
-    if (minutes < 60) return context.getString(R.string.time_minutes_ago, minutes.toInt())
-    if (hours < 24) return context.getString(R.string.time_hours_ago, hours.toInt())
-
-    val dateCal = Calendar.getInstance().apply { time = Date(timestamp) }
-    val yesterdayCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
-    if (dateCal.get(Calendar.YEAR) == yesterdayCal.get(Calendar.YEAR) &&
-        dateCal.get(Calendar.DAY_OF_YEAR) == yesterdayCal.get(Calendar.DAY_OF_YEAR)
-    ) {
-        return context.getString(R.string.time_yesterday)
-    }
-
-    val days = TimeUnit.MILLISECONDS.toDays(diff)
-    if (days < 7) {
-        // T172: device-locale weekday names via java.text.DateFormatSymbols.
-        val dayNames = java.text.DateFormatSymbols(java.util.Locale.getDefault()).weekdays
-        return dayNames[dateCal.get(Calendar.DAY_OF_WEEK)]
-    }
-
-    val month = dateCal.get(Calendar.MONTH) + 1
-    val day = dateCal.get(Calendar.DAY_OF_MONTH)
-    return "$month/$day"
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -740,6 +710,35 @@ fun SessionListScreen(
             .map { list -> list.count { it.enabled } }
     }.collectAsStateWithLifecycle(initialValue = 0)
 
+    // [T-android-group-auto-classify] Top-bar "magic" button: one tap asks the
+    // sub model to file EVERY ungrouped session. The state lives on the VM so a
+    // scan survives navigation; the toast is fired here and the state is reset
+    // immediately after, because these flows are read during composition — a
+    // lingering Done/Failed would re-toast on every recomposition.
+    val autoClassifyState by viewModel.autoClassifyState.collectAsStateWithLifecycle()
+    val autoClassifyRunning = autoClassifyState == SessionListViewModel.AutoClassifyState.Running
+    LaunchedEffect(autoClassifyState) {
+        when (val s = autoClassifyState) {
+            is SessionListViewModel.AutoClassifyState.Done -> {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.group_magic_done, s.count),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                viewModel.clearAutoClassifyState()
+            }
+            is SessionListViewModel.AutoClassifyState.Failed -> {
+                android.widget.Toast.makeText(
+                    context,
+                    s.reason,
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                viewModel.clearAutoClassifyState()
+            }
+            else -> Unit
+        }
+    }
+
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -756,6 +755,30 @@ fun SessionListScreen(
                     }
                 },
                 actions = {
+                        // [T-android-group-auto-classify] The "magic" button sits
+                        // FIRST among the actions so a one-tap bulk action is not
+                        // the neighbour of the settings/search icons — the order
+                        // also matches the mental model "organize → then look".
+                        // While a scan runs it is disabled outright (not merely
+                        // greyed) so a second tap cannot queue a second batch
+                        // move over the first.
+                        IconButton(
+                            onClick = { viewModel.autoClassifySessions() },
+                            enabled = !autoClassifyRunning,
+                        ) {
+                            if (autoClassifyRunning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Outlined.AutoAwesome,
+                                    contentDescription = stringResource(R.string.group_magic),
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            }
+                        }
                         // [T-wave-e-home-search] Top-bar entry into the full
                         // conversation search (title + body, Room LIKE with a
                         // bound pattern; results carry snippets + jump anchors).
@@ -2711,94 +2734,6 @@ private fun DialogTextFieldFrame(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Box(modifier = Modifier.padding(horizontal = 12.dp)) { content() }
-    }
-}
-
-/**
- * Spinning arc overlaid on the session icon while the agent loop is active.
- * Mirrors iOS `SpinningRing` (ContentView.swift:2405): 1.5dp stroke at 30%
- * opacity, 30% arc length, full rotation every ~1 second. Uses
- * `withFrameNanos` instead of an `animate*` API so recomposition across
- * onAppear calls does not stack multiple rotation animations.
- */
-@Composable
-private fun SpinningRing(
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    var angle by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        val startNanos = withFrameNanos { it }
-        while (true) {
-            withFrameNanos { now ->
-                val elapsedSec = (now - startNanos) / 1_000_000_000f
-                angle = (elapsedSec * 360f) % 360f
-            }
-        }
-    }
-    Canvas(modifier = modifier.rotate(angle)) {
-        val stroke = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round)
-        drawArc(
-            color = color.copy(alpha = 0.8f),
-            startAngle = 0f,
-            sweepAngle = 360f * 0.3f,
-            useCenter = false,
-            size = Size(size.width, size.height),
-            style = stroke,
-        )
-    }
-}
-
-/**
- * [T-android-session-paused-badge] Corner overlay for [SessionBadgeStore]
- * states. Anchored bottom-end inside the 44dp icon Box. Mirrors where the
- * iOS iCloud-sync badge sits so future ICLOUD_SYNCING uses the same anchor.
- *
- * Sizing: 14dp circle, ~2/3 the size of the 20dp category icon — visible
- * but doesn't overwhelm the icon glyph. Translated 2dp down/right so the
- * badge sits *on* the icon edge instead of flush with the row padding
- * (matches the visual weight of iOS's badge offset).
- */
-@Composable
-private fun SessionBadgeOverlay(
-    state: com.openminis.app.service.SessionBadgeStore.SessionBadgeState,
-    modifier: Modifier = Modifier,
-) {
-    when (state) {
-        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.PAUSED -> {
-            Box(
-                modifier = modifier
-                    .offset(x = 2.dp, y = 2.dp)
-                    .size(14.dp)
-                    .background(
-                        // Solid system-orange. Picked over yellow so the
-                        // alert reads as "attention" rather than "info".
-                        color = Color(0xFFFF9500),
-                        shape = CircleShape,
-                    )
-                    .border(
-                        width = 1.5.dp,
-                        color = MaterialTheme.colorScheme.surface,
-                        shape = CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Pause glyph (⏸) — mirrors iOS's "pause.fill" badge so the
-                // cross-platform "this task was paused" affordance matches.
-                Icon(
-                    imageVector = Icons.Filled.Pause,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(9.dp),
-                )
-            }
-        }
-        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.ICLOUD_SYNCING -> {
-            // Reserved for the upcoming iCloud-equivalent sync surface;
-            // not produced yet. Render nothing rather than a placeholder
-            // so a stray persisted entry from a future build doesn't
-            // surface a debug-looking icon on the current build.
-        }
     }
 }
 

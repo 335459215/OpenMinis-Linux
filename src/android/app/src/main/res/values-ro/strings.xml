@@ -2097,4 +2097,21 @@
     <string name="git_panel_no_branches">Fără branch-uri</string>
     <string name="git_panel_no_stashes">Fără stash-uri</string>
     <string name="git_panel_switch_branch">Schimbă branch-ul</string>
+    <string name="auto_group_confirm_body">Grupează fiecare model vizibil după furnizor și modalitate, apoi creează un grup pentru fiecare combinație. Grupurile cu același nume sunt fuzionate; grupurile create manual nu sunt atinse.</string>
+    <string name="auto_group_confirm_title">Grupează automat modelele</string>
+    <string name="auto_group_done_toast">Gata — %1$d grupuri, %2$d intrări.</string>
+    <string name="auto_group_empty_toast">Niciun model de grupat.</string>
+    <string name="auto_group_merge_existing">Fuzionează</string>
+    <string name="auto_group_models">Grupează automat</string>
+    <string name="auto_group_plan_summary">%1$d grupuri vor fi create sau actualizate.</string>
+    <string name="auto_group_rebuild">Reconstruiește</string>
+    <string name="group_magic">Organizează automat sesiunile</string>
+    <string name="group_magic_done">%1$d sesiuni reorganizate</string>
+    <string name="group_magic_failed">Organizarea a eșuat — încearcă din nou</string>
+    <string name="group_magic_no_sessions">Nicio sesiune negrupată de organizat</string>
+    <string name="group_magic_running">Se organizează…</string>
+    <string name="pool_mode_hint">Cum sunt alese cheile suplimentare</string>
+    <string name="pool_mode_random">Aleatoriu</string>
+    <string name="pool_mode_round_robin">Pe rând</string>
+    <string name="pool_mode_title">Mod de utilizare a cheilor</string>
 </resources>
