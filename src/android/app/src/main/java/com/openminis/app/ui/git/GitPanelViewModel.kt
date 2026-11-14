@@ -290,17 +290,30 @@ class GitPanelViewModel(
      */
     fun switchBranch(name: String) {
         mutate {
+            val dir = hostDir
             if (!name.contains('/')) {
-                GitCli.execSimple(sessionId, "checkout", name, root = guestRoot) ?: "checked out $name"
+                if (dir != null && GitHostRepo.checkout(dir, name).isSuccess) {
+                    "checked out $name"
+                } else {
+                    GitCli.execSimple(sessionId, "checkout", name, root = guestRoot) ?: "checked out $name"
+                }
             } else {
                 val local = name.substringAfter('/')
                 val localExists = _state.value.branches.any { it.name == local && !it.name.contains('/') }
                 if (localExists) {
-                    GitCli.execSimple(sessionId, "checkout", local, root = guestRoot)
-                        ?: "checked out $local"
+                    if (dir != null && GitHostRepo.checkout(dir, local).isSuccess) {
+                        "checked out $local"
+                    } else {
+                        GitCli.execSimple(sessionId, "checkout", local, root = guestRoot)
+                            ?: "checked out $local"
+                    }
                 } else {
-                    GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
-                        ?: "created $local from $name"
+                    if (dir != null && GitHostRepo.checkout(dir, local, createFrom = name).isSuccess) {
+                        "created $local from $name"
+                    } else {
+                        GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
+                            ?: "created $local from $name"
+                    }
                 }
             }
         }

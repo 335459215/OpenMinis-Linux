@@ -751,11 +751,7 @@ object ThinkingRuleResolver {
         return if (adaptive) mapOf("disabled" to true) else emptyMap()
     }
 
-    /**
-     * [T-thinking-ultra-declared] 后端声明集字面含 `ultra` 时按字面发送：
-     * 声明了却只能发 `max`，等于用户选了 ULTRA 而线上没有任何区别。
-     * 未声明的后端保持 ULTRA→max 折叠（不动 400 防线）。
-     */
+    /** [T-thinking-ultra-declared] 声明集含 ultra 时按字面发，否则回落到 wireEffort。 */
     fun wireEffortForModel(level: ThinkingLevel, declared: List<String>?): String {
         if (level == ThinkingLevel.ULTRA &&
             declared?.any { it.equals("ultra", ignoreCase = true) } == true

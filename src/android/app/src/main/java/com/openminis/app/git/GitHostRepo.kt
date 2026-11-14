@@ -105,6 +105,19 @@ object GitHostRepo {
      * Maps JGit RevCommit onto [GitCli.GitCommit] so the ViewModel/UI stay
      * unchanged across the host/sandbox switch.
      */
+    /** [T-git-host-checkout] JGit 检出；失败时调用方回落沙盒路径。 */
+    fun checkout(dir: File, localName: String, createFrom: String? = null): Result<Unit> = runCatching {
+        val git = open(dir) ?: error("not a git repository")
+        git.use { g ->
+            val cmd = g.checkout().setName(localName).setForced(false)
+            if (createFrom != null) {
+                cmd.setCreateBranch(true).setStartPoint(createFrom)
+            }
+            cmd.call()
+        }
+        Unit
+    }
+
     fun logPage(dir: File, offset: Int, limit: Int): List<GitCli.GitCommit> {
         val git = open(dir) ?: return emptyList()
         git.use { g ->
@@ -512,9 +525,6 @@ object GitHostRepo {
         return null
     }
 
-
-
-
     // ── commit detail ───────────────────────────────────────────────────────
 
     /** Full metadata for the commit-detail sheet. */
@@ -572,8 +582,6 @@ object GitHostRepo {
         }
     }
 
-
-
     // ── diff of one file in one commit ──────────────────────────────────────
 
     /**
@@ -611,8 +619,6 @@ object GitHostRepo {
             }
         }
     }
-
-
 
     // ── diff of a working-tree file ─────────────────────────────────────────
 
@@ -674,7 +680,6 @@ object GitHostRepo {
         FileInputStream(file).use { it.readNBytes(buf, 0, cap) }
         return buf
     }
-
 
     // ── commit diff (whole commit) ──────────────────────────────────────────
 

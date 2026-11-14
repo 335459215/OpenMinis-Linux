@@ -170,6 +170,24 @@ object A2aGateway {
             // “尚未初始化”放行 /m。只保留对外请求用的 API Key。
             runCatching { clearPanelAdmin(dataDir) }
 
+            // [T-a2a-dns-probe] 双栈探针：只在解析不到 IPv4 时留痕，不阻塞启动。
+            // Android 的 DNS 走 netd（bionic），KSU 那套改 resolv.conf 的路径在这里
+            // 不存在；能做的等价兜底就是把「只有 IPv6」这件事记进网关日志。
+            runCatching {
+                Thread {
+                    runCatching {
+                        val addrs = java.net.InetAddress.getAllByName("api.github.com")
+                        val hasV4 = addrs.any { it is java.net.Inet4Address }
+                        if (!hasV4) {
+                            File(dataDir, "gateway.log").appendText(
+                                "[dns] ipv4 probe failed: " +
+                                    addrs.joinToString { it.hostAddress ?: "?" } + "\n",
+                            )
+                        }
+                    }
+                }.apply { isDaemon = true }.start()
+            }
+
             val binary = File(context.applicationInfo.nativeLibraryDir, "liba2a_server.so")
             if (!binary.isFile) {
                 return Result.failure(IllegalStateException("liba2a_server.so missing"))
