@@ -172,8 +172,18 @@ object GitHostRepo {
         }
     }
 
-    /** Ahead/behind vs the tracked upstream; (0,0,null) when none. */
-    private fun aheadBehind(repo: Repository): Triple<Int, Int, String?> {
+    /**
+     * [T-git-shallow-guard] Ahead/behind vs the tracked upstream.
+     *
+     * shallow clone 的 grafted 边界会让 RevWalk.parseCommit 抛
+     * MissingObjectException —— 整个 status() 一起失败，面板就成了「假干净树
+     * + 红条」。这里整段兜底：拿不到就回 (0,0,upstreamName)，状态照常渲染。
+     */
+    private fun aheadBehind(repo: Repository): Triple<Int, Int, String?> = runCatching {
+        aheadBehindUnsafe(repo)
+    }.getOrElse { Triple(0, 0, null) }
+
+    private fun aheadBehindUnsafe(repo: Repository): Triple<Int, Int, String?> {
         val branch = repo.branch ?: return Triple(0, 0, null)
         val remote = repo.config.getString("branch", branch, "remote")
         val merge = repo.config.getString("branch", branch, "merge")

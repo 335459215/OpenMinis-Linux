@@ -341,7 +341,7 @@ object ThinkingRuleResolver {
 
             is ThinkingWireFormat.ReasoningEffortNested -> {
                 if (!ctx.level.isEnabled) return null to null
-                val effort = wireEffort(ctx.level)
+                val effort = wireEffortForModel(ctx.level, ctx.declaredEffortValues)
                 body.put("reasoning", JSONObject().put("effort", effort))
                 effort to effort
             }
@@ -385,7 +385,7 @@ object ThinkingRuleResolver {
                     }
                 }
                 if (isOpenAINative) {
-                    val effort = clampEffortForModel(wireEffort(ctx.level), lid)
+                    val effort = clampEffortForModel(wireEffortForModel(ctx.level, ctx.declaredEffortValues), lid)
                     body.put("reasoning_effort", effort)
                     return effort to effort
                 }
@@ -427,7 +427,7 @@ object ThinkingRuleResolver {
                     return null to null
                 }
                 if (ctx.supportsReasoning == false) return null to null
-                val requested = clampEffortForModel(wireEffort(ctx.level), lid)
+                val requested = clampEffortForModel(wireEffortForModel(ctx.level, ctx.declaredEffortValues), lid)
                 val clamped = clampEffort(requested, ctx.declaredEffortValues)
                 body.put("reasoning_effort", clamped)
                 requested to clamped
@@ -435,7 +435,7 @@ object ThinkingRuleResolver {
 
             is ThinkingWireFormat.DeepSeekSibling -> {
                 if (ctx.level.isEnabled) {
-                    val requested = wireEffort(ctx.level)
+                    val requested = wireEffortForModel(ctx.level, ctx.declaredEffortValues)
                     val clamped = clampEffort(requested, ctx.declaredEffortValues)
                     body.put("thinking", JSONObject().put("type", "enabled"))
                     body.put("reasoning_effort", clamped)
@@ -751,6 +751,20 @@ object ThinkingRuleResolver {
         return if (adaptive) mapOf("disabled" to true) else emptyMap()
     }
 
+    /**
+     * [T-thinking-ultra-declared] 后端声明集字面含 `ultra` 时按字面发送：
+     * 声明了却只能发 `max`，等于用户选了 ULTRA 而线上没有任何区别。
+     * 未声明的后端保持 ULTRA→max 折叠（不动 400 防线）。
+     */
+    fun wireEffortForModel(level: ThinkingLevel, declared: List<String>?): String {
+        if (level == ThinkingLevel.ULTRA &&
+            declared?.any { it.equals("ultra", ignoreCase = true) } == true
+        ) {
+            return "ultra"
+        }
+        return wireEffort(level)
+    }
+
     /** UI level → wire tier, before any per-model clamp. */
     fun wireEffort(level: ThinkingLevel): String = when (level) {
         ThinkingLevel.OFF, ThinkingLevel.LOW -> "low"
@@ -773,13 +787,13 @@ object ThinkingRuleResolver {
     /** Snap a requested tier onto the model's declared set, walking DOWN then up. */
     fun clampEffort(effort: String, values: List<String>?): String {
         if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
-        val want = ladder.indexOf(effort)
+        if (values.any { it.equals(effort, ignoreCase = true) }) return effort.lowercase()
+        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+        val want = ladder.indexOf(effort.lowercase())
         if (want < 0) return effort
         val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
+            val i = ladder.indexOf(v.lowercase())
+            if (i >= 0) i to v.lowercase() else null
         }.sortedBy { it.first }
         if (declared.isEmpty()) return effort
         return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second

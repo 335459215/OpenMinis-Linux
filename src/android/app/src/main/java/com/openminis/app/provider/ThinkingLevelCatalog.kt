@@ -293,6 +293,9 @@ val LLMModel.selectableThinkingLevels: List<ThinkingLevel>
             "high" to ThinkingLevel.HIGH,
             "xhigh" to ThinkingLevel.XHIGH,
             "max" to ThinkingLevel.MAX,
+            // [T-thinking-ultra-declared] 后端字面声明 ultra 时才多给一档；
+            // 未声明的模型这张表里没有它，UI 也不会凭空多一档。
+            "ultra" to ThinkingLevel.ULTRA,
         )
         val set = declared.map { it.lowercase() }.toSet()
         val tiers = mapping.filter { set.contains(it.first) }.map { it.second }
