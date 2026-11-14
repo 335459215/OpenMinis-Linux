@@ -346,7 +346,8 @@ class MinisApp : Application(), ImageLoaderFactory {
         if (com.openminis.app.a2a.A2aPrefs.gatewayWanted(this) &&
             com.openminis.app.a2a.A2aPrefs.keepAlive(this)
         ) {
-            com.openminis.app.a2a.A2aKeepAliveService.start(this)
+            // 前台服务留到首个 Activity 可见后再拉（Android 12+ 后台限制），
+            // Application 阶段只起网关子进程。
             appCoroutineScopes.io.launch {
                 runCatching {
                     com.openminis.app.a2a.A2aGateway.ensureStarted(applicationContext)

@@ -766,5 +766,14 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.openminis.app.ui.HighRefreshRate.apply(this)
+        // [A2A-lifecycle] 前台服务只能在界面可见时拉起（Android 12+ 后台限制）。
+        // 用户点过停止（gatewayWanted=false）就不复活。
+        runCatching {
+            if (com.openminis.app.a2a.A2aPrefs.gatewayWanted(this) &&
+                com.openminis.app.a2a.A2aPrefs.keepAlive(this)
+            ) {
+                com.openminis.app.a2a.A2aKeepAliveService.start(this)
+            }
+        }
     }
 }

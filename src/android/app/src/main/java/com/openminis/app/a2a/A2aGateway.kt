@@ -242,8 +242,6 @@ object A2aGateway {
                         }
                     }
                     stopRequested = false
-                    // [T-a2a-snapshot] 启动成功留一份数据快照，供设置页回滚。
-                    runCatching { A2aSnapshot.snapshot(context) }
                     return Result.success(Unit)
                 }
                 if (!started.isAlive) break
