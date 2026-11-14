@@ -321,24 +321,16 @@ object GitHostRepo {
      */
     fun locate(workspaceDir: File): Pair<File, String>? {
         if (!workspaceDir.isDirectory) return null
-        if (File(workspaceDir, ".git").exists()) return workspaceDir to ""
-        val candidates = ArrayList<Pair<File, String>>()
-        val level1 = workspaceDir.listFiles(File::isDirectory) ?: emptyArray()
-        for (group in level1) {
-            val dotGit = File(group, ".git")
-            if (dotGit.exists()) candidates += group to group.name
-            val level2 = group.listFiles(File::isDirectory) ?: emptyArray()
-            for (repo in level2) {
-                if (File(repo, ".git").exists()) candidates += repo to "${group.name}/${repo.name}"
-            }
-        }
-        if (candidates.isEmpty()) return null
-        return candidates.maxByOrNull { (dir, _) ->
-            File(dir, ".git/HEAD").takeIf { it.isFile }?.lastModified() ?: 0L
-        }
+        // [T-git-host-discovery] 统一走 4 层发现（含 workspace 自身），
+        // 与沙盒侧 mindepth1/maxdepth5 覆盖同一集合；同层多仓时按 .git/HEAD
+        // 的 mtime 取最近活跃的那个。
+        val repos = GitHostRepoDiscovery.discover(workspaceDir, maxDepth = 4)
+        if (repos.isEmpty()) return null
+        val best = repos.maxByOrNull { File(it, ".git/HEAD").lastModified() } ?: return null
+        val relative = best.relativeTo(workspaceDir).path.replace('\\', '/')
+        return best to relative
     }
 
-    /** Guest-side absolute path of a repo discovered under the workspace. */
     fun guestPath(relative: String): String =
         if (relative.isBlank()) GUEST_WORKSPACE else "$GUEST_WORKSPACE/$relative"
 
