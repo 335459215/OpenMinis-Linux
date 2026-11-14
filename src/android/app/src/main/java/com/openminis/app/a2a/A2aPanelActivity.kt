@@ -131,7 +131,9 @@ class A2aPanelActivity : Activity() {
         // 状态栏内边距：不把标题顶到状态栏下面去。
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-            webParams.topMargin = top
+            // [T-a2a-edge] WebView 直接顶到状态栏下沿：面板自身有 safe-area
+            // padding，再叠一层状态栏高度会留下一条空白带。
+            webParams.topMargin = 0
             insets
         }
         ViewCompat.requestApplyInsets(root)
