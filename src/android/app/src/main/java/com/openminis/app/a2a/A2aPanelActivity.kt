@@ -472,8 +472,10 @@ class A2aPanelActivity : Activity() {
          * 其它路径一律 history.back()，并把判定结果回传给 Kotlin。
          */
         private const val PANEL_BACK_JS =
-            "(function(){var p=(location.pathname||'/')+(location.hash||'');" +
-                "if(p==='/'||p==='/#/'||p==='/index.html'){return 'root';}" +
+            "(function(){var p=(location.pathname||'/');var h=(location.hash||'');" +
+                "var atRoot=(p==='/m'||p==='/m/'||p==='/'||p==='/index.html');" +
+                "if(atRoot&&(h===''||h==='#/'||h==='#')){return 'root';}" +
+                "if(history.length<=1){return 'root';}" +
                 "history.back();return 'back';})()"
     }
 

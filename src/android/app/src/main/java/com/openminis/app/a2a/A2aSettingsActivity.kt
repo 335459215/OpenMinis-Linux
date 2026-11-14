@@ -167,6 +167,35 @@ class A2aSettingsActivity : Activity() {
         )
         root.addView(weakRow, sectionParams())
 
+        // [T-a2a-snapshot] 回滚：用最近快照覆盖配置与数据库，再重启网关。
+        root.addView(TextView(this).apply {
+            text = "回滚网关数据"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(mutedColor())
+            setPadding(0, dp(12), 0, 0)
+            setOnClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(this@A2aSettingsActivity)
+                    .setMessage("用最近一次快照覆盖网关配置与数据库？")
+                    .setPositiveButton("回滚") { _, _ ->
+                        A2aSnapshot.rollback(this@A2aSettingsActivity).fold(
+                            onSuccess = {
+                                A2aGateway.restart(applicationContext)
+                                Toast.makeText(this@A2aSettingsActivity, "已回滚并重启", Toast.LENGTH_SHORT).show()
+                            },
+                            onFailure = {
+                                Toast.makeText(this@A2aSettingsActivity, "回滚失败：${it.message}", Toast.LENGTH_SHORT).show()
+                            },
+                        )
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+            }
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ))
+
         root.addView(TextView(this).apply {
             text = getString(R.string.a2a_endpoints)
             textSize = 11f

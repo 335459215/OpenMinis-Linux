@@ -27,7 +27,7 @@ object A2aGateway {
      * 原实现只在 `index.html` 不存在时铺一次，导致 APK 里的 UI 更新永远
      * 到不了设备 —— 用户看到的还是旧页面。
      */
-    private const val UI_VERSION = "3.4.2-sw-mobile-editVJ-nologin"
+    private const val UI_VERSION = "3.4.2-sw-mobile-editVJ-loginbridge"
 
     /** UI 版本戳的短哈希，作为 URL 参数破缓存（Service Worker 也会按 URL 区分）。 */
     fun uiRevision(): String = UI_VERSION.hashCode().toUInt().toString(16)
@@ -224,6 +224,8 @@ object A2aGateway {
                         }
                     }
                     stopRequested = false
+                    // [T-a2a-snapshot] 启动成功留一份数据快照，供设置页回滚。
+                    runCatching { A2aSnapshot.snapshot(context) }
                     return Result.success(Unit)
                 }
                 if (!started.isAlive) break
