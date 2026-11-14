@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -646,6 +647,34 @@ internal fun ChatTopBarActions(
                             // and sends; off → the user is asked first. Lives
                             // beside Fast Mode because both are model-invocation
                             // controls the user flips mid-conversation.
+                            // [T-send-mode] 流式进行中再发送时：排队 / 插话 / 自动。
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val sendMode = com.openminis.app.data.ChatSendModePrefs.mode()
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "发送方式：" + when (sendMode) {
+                                            com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT -> "插话"
+                                            com.openminis.app.data.ChatSendModePrefs.MODE_AUTO -> "自动"
+                                            else -> "排队"
+                                        },
+                                    )
+                                },
+                                onClick = {
+                                    val next = when (sendMode) {
+                                        com.openminis.app.data.ChatSendModePrefs.MODE_QUEUE ->
+                                            com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT
+                                        com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT ->
+                                            com.openminis.app.data.ChatSendModePrefs.MODE_AUTO
+                                        else -> com.openminis.app.data.ChatSendModePrefs.MODE_QUEUE
+                                    }
+                                    com.openminis.app.data.ChatSendModePrefs.setMode(context, next)
+                                    showChatMenu.value = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Send, contentDescription = null)
+                                },
+                            )
                             val autoCompactOn by viewModel.autoCompactEnabled.collectAsStateWithLifecycle()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_auto_compact)) },

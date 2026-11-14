@@ -1235,7 +1235,7 @@ fun ChatScreen(
         viewModel.endSlashSessionForSend()
         viewModel.setInputText("")
         releaseComposerAfterSend()
-        viewModel.sendMessage(rawText)
+        viewModel.sendOrQueue(rawText)
         noteSendForInputModePref()
         scrollPolicy.pin()
         // SendFollowEffects: initial snap + await-the-row + settle pipeline.
@@ -4346,7 +4346,7 @@ fun ChatScreen(
                             lastSendTimeMs = System.currentTimeMillis()
                             viewModel.setInputText("")
                             releaseComposerAfterSend()
-                            viewModel.sendMessage(toSend)
+                            viewModel.sendOrQueue(toSend)
                             noteSendForInputModePref()
                             scrollPolicy.pin()
                             coroutineScope.launch {

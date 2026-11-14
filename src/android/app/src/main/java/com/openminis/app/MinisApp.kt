@@ -322,6 +322,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         MinisAppAsyncInit.startWarmup(appContainer)
 
         // T-android-safemode-lateinit-crash: UI deps are ready, so set the flag early — a late non-UI failure must not lock the user out.
+        runCatching { com.openminis.app.data.ChatSendModePrefs.prime(this) }
         subsystemsInitialized = true
             // backfillBlankPermissionModesToAsk moved to MinisAppAsyncInit post-init hook
             try {
