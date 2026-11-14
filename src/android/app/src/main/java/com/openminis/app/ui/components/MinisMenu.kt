@@ -68,7 +68,7 @@ fun MinisMenu(
     // Launcher shortcut popup's plumper corner language the user asked us to
     // mirror (the launcher itself sits near 28dp, but that reads bloated on a
     // dense 8-item list menu).
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedCornerShape(16.dp),
     // [T-android-popup-dark-bg] In dark mode bare `surface` is nearly the same
     // as the chat/list background, so these popups (session-row long-press menu,
     // top-bar tools menu, message-bubble menu) read as near-invisible light
@@ -87,7 +87,7 @@ fun MinisMenu(
     // Modifier.shadow with alpha-reduced ambient/spot colors (API 28+;
     // colors are ignored on 26/27, which just fall back to the default
     // tint at the same blur). Surface's own shadowElevation is left at 0.
-    shadowElevation: Dp = 24.dp,
+    shadowElevation: Dp = 16.dp,
     // Light mode now also gets a hairline (was null): with the launcher-style
     // soft halo replacing the old tight shadow, the popup's edge needs a
     // subtle line of its own to stay crisply bounded on light surfaces.
@@ -96,7 +96,7 @@ fun MinisMenu(
     } else {
         BorderStroke(0.5.dp, Color.Black.copy(alpha = 0.05f))
     },
-    minWidth: Dp = 180.dp,
+    minWidth: Dp = 200.dp,
     // T238: when true, anchor the menu's RIGHT edge to the anchor box's
     // right edge instead of Material3 DropdownMenu's default left-anchor
     // behaviour. Used by the user-message bubble menu so the popup tracks
@@ -181,7 +181,7 @@ fun MinisMenu(
                 // upper bound so a very long localised item can't span the screen.
                 modifier = modifier
                     .width(IntrinsicSize.Max)
-                    .widthIn(min = minWidth, max = 280.dp)
+                    .widthIn(min = minWidth, max = 264.dp)
                     // Launcher-style soft halo — see the shadowElevation note.
                     .shadow(
                         elevation = shadowElevation,
@@ -200,7 +200,7 @@ fun MinisMenu(
                 // Column inside the surface (scrollState preserved from the old
                 // DropdownMenu branch so long menus still scroll).
                 Column(
-                    modifier = Modifier.verticalScroll(scrollState),
+                    modifier = Modifier.verticalScroll(scrollState).padding(vertical = 6.dp),
                     content = content,
                 )
             }
@@ -238,13 +238,14 @@ fun MinisMenuSectionHeader(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 2.dp),
+        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = title,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.3.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

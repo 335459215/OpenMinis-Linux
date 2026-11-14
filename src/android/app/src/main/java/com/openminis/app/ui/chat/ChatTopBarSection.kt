@@ -384,30 +384,11 @@ internal fun ChatTopBarActions(
                         }
                     }
                     // iOS: "..." circle button → dropdown menu
-                    // [T-topbar-circle-menu] iOS 的 "..." 是圆形描边按钮；
-                    // 之前只裸放一个 IconButton，跟左侧快捷图标混成一条线，
-                    // 看不出「这是会话菜单」。这里补上 38dp 圆形容器：
-                    // surfaceContainerHigh 底 + outlineVariant 1dp 描边，
-                    // 与输入框的浮起卡片同一套材质层级。
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                shape = CircleShape,
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                                shape = CircleShape,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
+                    Box {
                         IconButton(onClick = { showChatMenu.value = true }) {
                             Icon(
                                 Icons.Outlined.MoreHoriz,
                                 contentDescription = stringResource(R.string.cd_more),
-                                modifier = Modifier.size(20.dp),
                             )
                         }
                         MinisMenu(
