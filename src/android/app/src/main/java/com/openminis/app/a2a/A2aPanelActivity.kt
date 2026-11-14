@@ -40,7 +40,6 @@ import kotlin.concurrent.thread
  */
 class A2aPanelActivity : Activity() {
     private var webView: WebView? = null
-    private var titleView: TextView? = null
     private var popupHost: FrameLayout? = null
     private var popupView: WebView? = null
     private var headerHeight: Int = 0
@@ -70,53 +69,9 @@ class A2aPanelActivity : Activity() {
         val root = FrameLayout(this).apply { setBackgroundColor(bgColor) }
 
         // ── 顶栏（会按状态栏高度下移）───────────────────────────
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(barColor)
-            setPadding(dp(16), 0, dp(16), 0)
-            elevation = dp(2).toFloat()
-        }
-        header.addView(TextView(this).apply {
-            text = "←"
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setTextColor(textColor)
-            background = GradientDrawable().apply {
-                cornerRadius = dp(18).toFloat()
-                setColor(chipColor)
-            }
-            setOnClickListener { if (!handlePanelBack()) finish() }
-        }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { marginEnd = dp(12) })
-        titleView = TextView(this).apply {
-            text = getString(R.string.a2a_gateway_title)
-            textSize = 16f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setTextColor(textColor)
-        }
-        header.addView(
-            titleView,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
-        )
-        header.addView(TextView(this).apply {
-            text = getString(R.string.a2a_action_refresh)
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(accent)
-            setPadding(dp(14), dp(7), dp(14), dp(7))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(16).toFloat()
-                setColor(accentChip)
-            }
-            setOnClickListener { webView?.reload() }
-        })
+        // [T-a2a-no-chrome] 原生页头整块删除：面板自己顶部已经有标题与刷新，
+        // 这一条只是重复占掉 52dp，还会跟 Web 端标题撞成两层。返回走系统手势。
 
-        val headerParams = FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            104,
-            Gravity.TOP,
-        )
-        root.addView(header, headerParams)
 
         // ── WebView ────────────────────────────────────────────
         val web = WebView(this)
@@ -176,9 +131,7 @@ class A2aPanelActivity : Activity() {
         // 状态栏内边距：不把标题顶到状态栏下面去。
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-            headerParams.topMargin = top
-            headerParams.height = dp(52)
-            webParams.topMargin = top + dp(52)
+            webParams.topMargin = top
             insets
         }
         ViewCompat.requestApplyInsets(root)
@@ -203,7 +156,6 @@ class A2aPanelActivity : Activity() {
                     }
                     web.loadUrl("http://127.0.0.1:${A2aGateway.PORT}/m?rev=${A2aGateway.uiRevision()}")
                 } else {
-                    titleView?.text = getString(R.string.a2a_gateway_start_failed)
                     web.loadDataWithBaseURL(
                         null,
                         failureHtml(result.exceptionOrNull()?.message ?: getString(R.string.a2a_error_unknown)),
@@ -489,6 +441,12 @@ class A2aPanelActivity : Activity() {
      *   2. 否则问页面自己在不在根路由：不在就 history.back()，在根才 finish()。
      * 顶栏的 "←" 与系统返回键走同一条路径，行为一致。
      */
+    /**
+     * [T-a2a-back-hash] 面板是 hash 路由（#home / #routing / …）。旧实现靠
+     * history.length 判断，hash 导航不产生历史时会直接退出应用，用户看到的就是
+     * 「点返回整块面板没了」。改成看当前 URL 的 fragment：不在首页就回首页，
+     * 已经在首页才退出；WebView 真有上一页（授权跳转）时优先回上一页。
+     */
     private fun handlePanelBack(): Boolean {
         if (closePopupIfAny()) return true
         val web = webView ?: return false
@@ -496,9 +454,13 @@ class A2aPanelActivity : Activity() {
             web.goBack()
             return true
         }
-        web.evaluateJavascript(PANEL_BACK_JS) { result ->
-            if (result?.contains("root") == true) finish()
+        val url = web.url ?: return false
+        val hash = android.net.Uri.parse(url).encodedFragment.orEmpty()
+        if (hash.isNotEmpty() && hash != "home" && hash != "/") {
+            web.evaluateJavascript("location.hash='#home'", null)
+            return true
         }
+        finish()
         return true
     }
 

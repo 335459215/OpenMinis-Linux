@@ -41,7 +41,9 @@ object AgentPlanStore {
      * Single source of truth: PlanGoalCard animates exactly this window and
      * [retireFinished] enforces it, so the card and the store cannot drift.
      */
-    const val DONE_LINGER_MS = 4_000L
+    // [T-plan-keep-done] 4 秒退休意味着用户回头就看不到「哪几项完成了」。
+    // 改成 10 分钟：足够看完，又不会让已完成板长期污染后续 prompt。
+    const val DONE_LINGER_MS = 10 * 60_000L
 
     /**
      * When each board became fully done, keyed like [memory]. Not persisted:

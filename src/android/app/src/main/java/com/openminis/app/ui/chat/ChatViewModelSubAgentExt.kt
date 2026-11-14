@@ -259,7 +259,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // add() must not abort the dispatch: runCatching, board stays
         // best-effort, the wave is the deliverable.
         val ownerSession = subAgentOwnerSid("", realSessionId, sessionId, activeSessionId)
-        val autoPlan = spawns.size > 1 || detached
+        val autoPlan = spawns.isNotEmpty() // [T-subagent-plan-always] 单任务也写板
         val planIds: List<String?> = if (autoPlan) {
             spawns.mapIndexed { i, s ->
                 runCatching {
