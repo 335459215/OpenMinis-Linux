@@ -41,7 +41,14 @@ internal object BackupUndoPaths {
         // importProviders / importEnvironmentVariables both land in prefs.
         BackupCategory.PROVIDERS -> listOf(PREFS_DIR)
         BackupCategory.ENVIRONMENT_VARIABLES -> listOf(PREFS_DIR)
-        BackupCategory.ROOTFS, BackupCategory.CACHE, BackupCategory.AGENT2API,
+        // importAgent2Api lands under ubuntu-rootfs; snapshot only the three
+        // subtrees it writes, never the whole rootfs (ROOTFS is not backupable).
+        BackupCategory.AGENT2API -> listOf(
+            "ubuntu-rootfs/opt/agent2api",
+            "ubuntu-rootfs/var/lib/agent2api",
+            "ubuntu-rootfs/usr/local/bin",
+        )
+        BackupCategory.ROOTFS, BackupCategory.CACHE,
         BackupCategory.VOICE_CORRECTIONS -> emptyList()
     }
 

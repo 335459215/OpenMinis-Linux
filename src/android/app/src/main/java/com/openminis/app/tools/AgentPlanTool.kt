@@ -403,7 +403,7 @@ object AgentPlanTool {
         description = "Maintain the working plan for this chat, shown to the user live above the composer. " +
             "The board is a full-list REPLACE on every change: use op=replace with the complete list of items " +
             "(ids are optional — reuse an item's id to keep it stable, omit it to mint one). " +
-            "Create the board for EVERY task, single-step included — a one-item board is correct when there is only one step; " +
+            "For work with 3+ steps the board is mandatory; create it for EVERY task, single-step included — a one-item board is correct when there is only one step; " +
             // [T-goal-created-with-plan] The board states the steps, the Goal
             // states what they are FOR. Creating a board without an objective
             // left the Goal card empty and the purpose only in the transcript.
