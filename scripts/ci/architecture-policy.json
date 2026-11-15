@@ -110,7 +110,7 @@
   "baseline": {
     "src/android/app/src/main/java/com/openminis/app/agent/PersonaPromptLibrary.kt": 858,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupExporter.kt": 815,
-    "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1166,
+    "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1161,
     "src/android/app/src/main/java/com/openminis/app/browser/BrowserTabPool.kt": 1388,
     "src/android/app/src/main/java/com/openminis/app/browser/BrowserUseManager.kt": 1873,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBridge.kt": 926,
@@ -165,6 +165,6 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1121,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 926,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1791,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1061
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1056
   }
 }

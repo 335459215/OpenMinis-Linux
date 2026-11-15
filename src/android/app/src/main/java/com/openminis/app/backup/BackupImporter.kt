@@ -221,10 +221,7 @@ class BackupImporter(
                             work, fileIndex, BackupCategory.CACHE,
                             context.cacheDir, "cache/",
                         )
-                        BackupCategory.AGENT2API -> importTree(
-                            work, fileIndex, BackupCategory.AGENT2API,
-                            File(context.filesDir, "ubuntu-rootfs"), "agent2api/",
-                        )
+                        BackupCategory.AGENT2API -> importAgent2Api(work, fileIndex)
                         BackupCategory.MEMORY -> importMemory(work)
                         BackupCategory.MCP_SERVERS -> importMcpServers(work)
                         BackupCategory.PROVIDERS -> {
@@ -605,6 +602,27 @@ class BackupImporter(
         applyFileResult(report, files)
         return report
     }
+    private fun importAgent2Api(work: File, fileIndex: List<BackupFileIndexEntry>): CategoryReport {
+        // [T-backup-a2a-real-paths] One destination per export root; the first
+        // carries agent2api.db (accounts + panel admin). See Agent2ApiBackupPaths.
+        val merged = CategoryReport(BackupCategory.AGENT2API.key)
+        for ((dest, prefix) in Agent2ApiBackupPaths.restoreTargets(context)) {
+            val r = importTree(work, fileIndex, BackupCategory.AGENT2API, dest, prefix)
+            merged.imported += r.imported
+            merged.updated += r.updated
+            merged.skipped += r.skipped
+            merged.unreadable += r.unreadable
+            merged.filesWritten += r.filesWritten
+            merged.bytesWritten += r.bytesWritten
+            merged.sizeSkippedInPackage += r.sizeSkippedInPackage
+            merged.notDownloadedInPackage += r.notDownloadedInPackage
+            merged.missingBlobs += r.missingBlobs
+            merged.rejectedPaths += r.rejectedPaths
+            if (merged.failed == null) merged.failed = r.failed
+        }
+        return merged
+    }
+
     private fun importTree(
         root: File,
         fileIndex: List<BackupFileIndexEntry>,
@@ -864,22 +882,11 @@ class BackupImporter(
     }
 
     /** Read + decode `secrets.json` from the work root; null if absent/unreadable. */
-    private fun readSecrets(root: File): BackupSecrets? {
-        val f = File(root, "secrets.json")
-        if (!f.isFile) return null
-        return runCatching {
-            BackupFormat.json.decodeFromString(BackupSecrets.serializer(), f.readText())
-        }.getOrNull()
-    }
+    private fun readSecrets(root: File): BackupSecrets? =
+        RestorePackagePlumbing.readSecrets(root)
 
-    private fun applyFileResult(report: CategoryReport, files: BackupRestoreFiles.Result) {
-        report.filesWritten += files.written
-        report.bytesWritten += files.bytes
-        report.missingBlobs += files.missingBlobs
-        report.sizeSkippedInPackage += files.sizeSkippedInPackage
-        report.notDownloadedInPackage += files.notDownloadedInPackage
-        report.rejectedPaths += files.rejectedPaths
-    }
+    private fun applyFileResult(report: CategoryReport, files: BackupRestoreFiles.Result) =
+        RestorePackagePlumbing.applyFileResult(report, files)
 
     // MARK: - Package plumbing
 
@@ -1025,30 +1032,18 @@ class BackupImporter(
 
         /**
          * [T-android-restore-provider-type-tolerance] Decode provider_config.json
-         * so that ONE malformed instance cannot destroy the rest of the file.
+         * so ONE malformed instance cannot destroy the rest of the file.
          *
-         * The failure this exists to prevent, observed in the field: an iOS package
-         * contained a provider whose `providerType` was `openAIResponses`, a case
-         * Android's enum did not have. kotlinx.serialization threw on that one
-         * value, the single whole-document `decodeFromString` aborted, and all
-         * EIGHT providers in the package were discarded — credentials included.
-         * The user saw "no API keys in this backup", which was never true; nothing
-         * had been read at all.
-         *
-         * Two independent layers, because the enum fix alone is not enough — the
-         * next iOS-only type would reproduce it exactly:
-         *
-         *  1. `providerType` values this build doesn't know are rewritten to
-         *     `unsupported` BEFORE decoding, so the instance survives as a visible
-         *     (unusable) row rather than taking the file down. Mirrors iOS's
-         *     `ProviderType.decoded`, which has always been forgiving here.
-         *  2. Anything still undecodable — a genuinely malformed object, a missing
-         *     required field — is dropped individually and counted, leaving every
-         *     sibling instance intact.
-         *
-         * Top-level fields (modelEntries, groups, default pointers) are decoded
-         * from the same object with the instances array replaced, so a bad instance
-         * costs only that instance.
+         * Field failure: an iOS package carried `providerType: openAIResponses`,
+         * which this enum lacked; kotlinx.serialization threw on that one value,
+         * the whole-document decode aborted, and all EIGHT providers were
+         * discarded — the user was told "no API keys in this backup", which was
+         * never true. Two independent layers:
+         *  1. unknown `providerType` → `unsupported` BEFORE decoding, so the row
+         *     survives visibly instead of taking the file down (mirrors iOS).
+         *  2. anything still undecodable is dropped individually and counted.
+         * Top-level fields decode from the same object with the instances array
+         * replaced, so a bad instance costs only that instance.
          */
         internal fun parseProviderConfigLeniently(text: String): LenientProviderConfig {
             val root = BackupFormat.json.parseToJsonElement(text).jsonObject

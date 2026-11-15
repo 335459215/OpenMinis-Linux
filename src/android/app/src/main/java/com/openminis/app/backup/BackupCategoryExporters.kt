@@ -12,7 +12,21 @@ import java.io.File
 internal fun exportAgent2ApiCategory(context: Context, trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
     var files = 0
     var bytes = 0L
+    // [T-backup-a2a-real-paths] The gateway's LIVE data lives under
+    // `files/a2a-gateway/data` (A2aGateway.dataDir): that is where agent2api.db
+    // sits — accounts, panel admin, plugin state. The old root list pointed at
+    // `ubuntu-rootfs/opt/agent2api` / `var/lib/agent2api`, which this build no
+    // longer uses, so a "successful" backup carried NO account data at all.
+    // That is exactly the gap the user hit (U18: "备份到底有没有包含我的
+    // Agent2 API").
+    //
+    // Kept the legacy roots in the list as a migration courtesy: an old device
+    // that still has them gets them backed up too, and the importer writes
+    // everything back under the same relative layout.
     val roots = listOf(
+        // Live data first — this is the one that matters.
+        com.openminis.app.a2a.A2aGateway.dataDir(context) to "agent2api/gateway/data",
+        // Legacy / secondary locations, kept for older installs.
         File(context.filesDir, "ubuntu-rootfs/opt/agent2api") to "agent2api/opt",
         File(context.filesDir, "ubuntu-rootfs/var/lib/agent2api") to "agent2api/var/lib/agent2api",
         File(context.filesDir, "ubuntu-rootfs/usr/local/bin") to "agent2api/usr/local/bin",

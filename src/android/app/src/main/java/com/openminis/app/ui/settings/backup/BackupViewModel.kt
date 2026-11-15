@@ -59,12 +59,21 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     private var exportJob: kotlinx.coroutines.Job? = null
 
     /**
+     * [T-backup-survives-leaving-screen] 备份不能跟着页面一起死。
+     * exportJob 以前挂在 viewModelScope：退出备份页 → onCleared → 作用域取消
+     * → 写包协程被抛 CancellationException，包当成失败（U20）。改用进程级
+     * SupervisorJob；stopExport() 仍能直接 cancel(job)。
+     */
+    private val backupScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+    )
+
+    /**
      * Stop the running backup.
      *
-     * Cancels at the next suspension point rather than killing mid-write. The
-     * package under construction is left where it is; Start Backup begins a
-     * NEW run of the data as it stands then, matching iOS (which only resumes
-     * a stopped run from its own history row).
+     * Cancels at the next suspension point rather than killing mid-write; the
+     * partial package stays where it is. Start Backup begins a NEW run of the
+     * data as it stands then (iOS parity).
      */
     fun stopExport() {
         val job = exportJob ?: return
@@ -91,18 +100,13 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Re-read configured destinations. Call on screen resume.
      *
-     * Lists ALL remotes, not just the enabled ones (iOS parity). Filtering to
-     * `enabledRemotes` here made a disabled destination vanish from the screen
-     * entirely — the user could neither see that it still existed nor switch it
-     * back on, which is the opposite of what disabling is for: it keeps the
-     * server and its credential precisely so skipping one for a while costs
-     * nothing to undo.
+     * Lists ALL remotes, not just the enabled ones (iOS parity): filtering to
+     * `enabledRemotes` made a disabled destination vanish from the screen, so
+     * the user could neither see it still existed nor switch it back on.
      *
-     * [T-android-sessionlist-prefs-io] suspend: RcloneRemoteStore's first
-     * touch parses + decrypts the prefs file and PhoneBackupFolderStore reads
-     * its prefs — both main-thread work before. Callers run it on IO (the
-     * screen wraps it in withContext(Dispatchers.IO); the internal callers
-     * below sit in launch(Dispatchers.IO) blocks).
+     * [T-android-sessionlist-prefs-io] suspend: RcloneRemoteStore's first touch
+     * parses + decrypts prefs and PhoneBackupFolderStore reads its own — both
+     * were main-thread work. Callers run it on IO.
      */
     suspend fun refreshDestinations() {
         _destinations.value = runCatching {
@@ -190,9 +194,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         _selected.value = _selected.value.toMutableSet().apply {
             if (on) add(category) else remove(category)
         }
-        prefs.edit().putString(
-            KEY_CATEGORIES, _selected.value.joinToString(",") { it.key }
-        ).apply()
+        BackupCategoryPrefs.save(prefs, _selected.value)
     }
 
     fun setEncrypt(on: Boolean) {
@@ -253,7 +255,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         _lastResult.value = null
         _statusText.value = getApplication<Application>()
             .getString(com.openminis.app.R.string.backup_status_starting)
-        exportJob = viewModelScope.launch {
+        exportJob = backupScope.launch {
             // [T-android-backup-destination-gate] Refuse to produce a package
             // that can only land in our own sandbox. Re-read here rather than
             // trusting the cached list: the user may have removed the last
@@ -1029,14 +1031,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // -- Persistence helpers ---------------------------------------------
-    private fun loadSelectedCategories(): Set<BackupCategory> {
-        // 共享文件默认不勾：它通常有几个 GB，新用户不该为默认值等十几分钟。
-        val defaults = BackupCategory.backupable.toSet() - BackupCategory.SHARED_FILES
-        val raw = prefs.getString(KEY_CATEGORIES, null) ?: return defaults
-        val restored = raw.split(",").mapNotNull(BackupCategory::fromKey)
-            .filter { it in BackupCategory.backupable }.toSet()
-        return restored.ifEmpty { defaults }
-    }
+    private fun loadSelectedCategories(): Set<BackupCategory> =
+        BackupCategoryPrefs.load(prefs)
 
     /** [T-android-human-bytes-one-place] One formatter only; see [humanBytes]. */
     private fun humanBytesPlain(bytes: Long): String = humanBytes(bytes)
@@ -1054,7 +1050,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
          * persisted, so it must not be locale-dependent.
          */
         const val STOPPED_MARKER = "stopped"
-        private const val KEY_CATEGORIES = "selectedCategories"
         private const val KEY_ENCRYPT = "encrypt"
         private const val KEY_MAX_FILE_MB = "maxFileSizeMB"
     }
