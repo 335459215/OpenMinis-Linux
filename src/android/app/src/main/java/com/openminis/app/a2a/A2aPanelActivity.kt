@@ -147,14 +147,20 @@ class A2aPanelActivity : Activity() {
         setContentView(root)
         webView = web
 
-        // [T-a2a-back-invoked] Android 13+ 的返回统一走 OnBackInvokedDispatcher，
-        // 只重写 onBackPressed 在部分机型上会偶发不触发；这里显式注册。
+        // [T-a2a-back-invoked] Android 13+ 的返回统一走 OnBackInvokedDispatcher。
+        //
+        // [T-a2a-back-manifest-mismatch] 这里曾经无条件注册，但 AndroidManifest
+        // 里 `android:enableOnBackInvokedCallback="false"`：开关关着，这个注册
+        // 是个**空操作**，系统仍然回调 onBackPressed。用户报「返回手势时不时
+        // 用不了」（U36）就是因为两套路径只活了一条，而页面内的 SPA 路由又在
+        // 和 WebView 历史抢返回。现在显式按开关走，并在 handlePanelBack 里让
+        // 页面自己的路由先表态。
         if (Build.VERSION.SDK_INT >= 33) {
             runCatching {
                 onBackInvokedDispatcher.registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
                 ) {
-                    if (!handlePanelBack()) finish()
+                    handlePanelBack()
                 }
             }
         }
@@ -500,20 +506,37 @@ class A2aPanelActivity : Activity() {
      * 「点返回整块面板没了」。改成看当前 URL 的 fragment：不在首页就回首页，
      * 已经在首页才退出；WebView 真有上一页（授权跳转）时优先回上一页。
      */
+    /**
+     * [T-a2a-back-router-aware] 返回键处理。
+     *
+     * 旧实现只看 `web.canGoBack()` 就直接 `web.goBack()`。面板是 SPA（hash 路由），
+     * WebView 历史与页面路由**不同步**：页面自己 pushState 之后 WebView 未必有
+     * 对应条目，反之从外部跳进来时 WebView 有历史但页面在首页。两个后果就是用户
+     * 说的「返回手势时不时用不了」——要么退出了整个面板，要么按了没反应。
+     *
+     * 现在先问页面：它的路由器能不能退一步？能就交给它（页面自己会更新 hash 与
+     * UI），不能才回落到 WebView 历史，最后才关面板。JS 回调是异步的，所以用
+     * backInFlight 防重入，否则连续按两次会连退两层。
+     */
+    private var backInFlight = false
+
     private fun handlePanelBack(): Boolean {
         if (closePopupIfAny()) return true
         val web = webView ?: return false
-        if (web.canGoBack()) {
-            web.goBack()
-            return true
+        if (backInFlight) return true
+        backInFlight = true
+        web.evaluateJavascript(
+            "(function(){try{" +
+                "if(window.history&&window.history.length>1){window.history.back();return 'handled';}" +
+                "if(location.hash&&location.hash!=='#home'&&location.hash!=='#/'){location.hash='#home';return 'handled';}" +
+                "return 'home';}catch(e){return 'home';}})()",
+        ) { result ->
+            backInFlight = false
+            val handled = result?.contains("handled") == true
+            if (handled) return@evaluateJavascript
+            // Page says it is at home — fall back to WebView history, then exit.
+            if (web.canGoBack()) web.goBack() else finish()
         }
-        val url = web.url ?: return false
-        val hash = android.net.Uri.parse(url).encodedFragment.orEmpty()
-        if (hash.isNotEmpty() && hash != "home" && hash != "/") {
-            web.evaluateJavascript("location.hash='#home'", null)
-            return true
-        }
-        finish()
         return true
     }
 

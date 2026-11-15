@@ -2510,7 +2510,7 @@ class ChatViewModel(
         else ApprovalGate.resetSessionAllowAll(sid)
     }
 
-    private fun activeOverrides(): com.openminis.app.data.model.ModelOverrides? {
+    internal fun activeOverrides(): com.openminis.app.data.model.ModelOverrides? {
         val id = _activeEntryId.value ?: return null
         return providerRepository.config.value.modelEntries.find { it.id == id }?.overrides
     }
