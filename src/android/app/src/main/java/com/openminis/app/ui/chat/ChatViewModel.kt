@@ -93,6 +93,19 @@ class ChatViewModel(
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
+
+    /**
+     * [T-session-key-observable] Observable mirror of [realSessionId].
+     *
+     * `realSessionId` is a plain `var`, so anything that keys on
+     * `activeSessionId` (the plan board card, the goal card, session-scoped
+     * sheets) reads a value Compose cannot observe: after a draft is promoted
+     * by [ensureSession], the card keeps its `remember(sid)` snapshot for the
+     * DRAFT key and renders an empty board even though the tool wrote the plans
+     * under the real id. That is the "清单 0/3 但列表空" symptom.
+     */
+    internal val _sessionKeyFlow = MutableStateFlow(if (isDraft) "" else sessionId)
+    internal val sessionKeyFlow: StateFlow<String> = _sessionKeyFlow.asStateFlow()
     /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null
@@ -1857,8 +1870,21 @@ class ChatViewModel(
     private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(text)
 
     /** max(real usage, estimate) so a stale-but-real reading always wins. */
-    internal fun contextTokensForPolicy(): Int =
-        maxOf(_lastTurnContextTokens.value, estimateAgentHistoryTokens())
+    internal fun contextTokensForPolicy(): Int {
+        val estimate = estimateAgentHistoryTokens()
+        val reported = _lastTurnContextTokens.value
+        // [T-context-stale-reported] The provider-reported number describes the
+        // payload of the LAST call and INCLUDES the system prompt + tool schemas,
+        // which are not part of `agentHistory` — so a reported value somewhat
+        // above the history estimate is normal, not stale. Only a grossly larger
+        // reading (1.5x) can be a leftover from before a compaction shrank the
+        // projection; that is the case this guard exists for.
+        return if (estimate > 0 && reported > 0 && reported > estimate * 1.5) {
+            estimate
+        } else {
+            maxOf(reported, estimate)
+        }
+    }
 
     /**
      * Latest compact summary for the current session, loaded from the DB on
@@ -2916,6 +2942,18 @@ class ChatViewModel(
      */
     fun refreshContextUsage() {
         val reported = _lastTurnContextTokens.value
+        // [T-context-ring-no-full-walk] The provider-reported number is
+        // authoritative, but the old body walked the ENTIRE effective history
+        // to build an estimate it then threw away whenever `reported > 0`.
+        // On a 750K-token session that walk is tens of milliseconds, and it
+        // runs on every `messages` emission (ComposerContextGlow collects it)
+        // plus at every turn boundary — a measurable slice of the "every reply
+        // is much slower now" regression. Short-circuit on the real number.
+        if (reported > 0) {
+            val windowNow = currentModelContextWindow?.toLong() ?: 0L
+            contextUsage.value = com.openminis.app.data.model.ContextUsage(reported.toLong(), windowNow)
+            return
+        }
         var usedChars = 0L
         for (msg in effectiveAgentHistoryUncounted()) {
             for (part in msg.contentParts) {

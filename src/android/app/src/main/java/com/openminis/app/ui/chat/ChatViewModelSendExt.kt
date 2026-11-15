@@ -227,8 +227,6 @@ internal fun ChatViewModel.sendMessage(
     // slip past the entry guard during DB/OAuth setup. See retryFromMessage.
     AppLogger.info(ChatViewModel.TAG_STREAM, "send _isStreaming=true (sync, sid=$activeSessionId)")
     _isStreaming.value = true
-    // 新发送也要登记活动，否则会话列表的 SpinningRing 永远不亮。
-    SessionActivityTracker.setActive(activeSessionId, onStop = { cancelStream() })
 
     // [T-android-instant-thinking] REMOVED: the placeholder inserted here
     // was meant to give instant "thinking" feedback before DB writes complete,
@@ -267,6 +265,17 @@ internal fun ChatViewModel.sendMessage(
         try {
         // Ensure session exists in DB (creates on first message for draft sessions)
         val activeSessionId = ensureSession()
+        // [T-android-session-running-ring] Register the run against the
+        // PERSISTED id, immediately after promotion and before any slow work.
+        //
+        // The session list renders its running ring from
+        // SessionActivityTracker.activeSessions. The pre-existing registration
+        // sat after `SessionConcurrencyManager.acquireSlot()`, so a turn queued
+        // behind the 5-slot cap showed nothing at all — and a registration made
+        // under the draft `__new__…` key would never be cleared by the finally
+        // block (which clears the real id), leaving a ring spinning forever on a
+        // session that no longer exists.
+        SessionActivityTracker.setActive(activeSessionId, onStop = { cancelStream() })
 
         // [T-android-action-guard] A new user turn clears this session's loop
         // guard state — repeat/no-effect/re-read/failure ladders and pacing

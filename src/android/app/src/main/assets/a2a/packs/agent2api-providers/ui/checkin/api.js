@@ -176,7 +176,25 @@ export async function request(path, options = {}) {
   try {
     response = await fetch(path, init);
   } catch (error) {
-    throw new Error(`无法连接网关：${error instanceof Error ? error.message : String(error)}`);
+    // ── 自愈 ───────────────────────────────────────────────────
+    // 「面板活着、网关却 Failed to fetch」是这个壳里最常见的一种故障：
+    // WebView 早已加载完（所以页面照常渲染「网关运行中」），而网关子
+    // 进程被系统回收 / 正在重启 / 端口被上一轮残留占着。原实现只把错
+    // 抛给页面画一条红条，用户除了杀 App 没有任何办法恢复。
+    //
+    // 这里加一次退避重试（网关 watchdog 的探活周期是 15s，重试窗口要
+    // 跨过它），仍失败再向宿主请求重启网关，最后才把错误抛出去。
+    const recovered = await retryOnce(path, init, 2500);
+    if (recovered) {
+      response = recovered;
+    } else {
+      requestGatewayRestart(error);
+      const again = await retryOnce(path, init, 6000);
+      if (!again) {
+        throw new Error(`无法连接网关：${error instanceof Error ? error.message : String(error)}`);
+      }
+      response = again;
+    }
   }
   const text = await response.text();
   let payload = null;
@@ -191,6 +209,48 @@ export async function request(path, options = {}) {
   if (error) throw new Error(error);
   if (!response.ok) throw new Error(`请求失败（HTTP ${response.status}）`);
   return data;
+}
+
+/** 单次退避重试；网络层错误返回 null，HTTP 错误照常返回响应。 */
+async function retryOnce(path, init, delayMs) {
+  await new Promise(resolve => window.setTimeout(resolve, delayMs));
+  try {
+    return await fetch(path, init);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 请求宿主重启网关。
+ *
+ * 宿主（Android 壳 / 桌面壳）监听 `agent2api:restart-gateway`；不支持的
+ * 宿主静默忽略，页面行为与改动前一致。同一页面会话内最多请求一次，避免
+ * 连续失败的接口把网关重启风暴打出来。
+ */
+let restartRequested = false;
+function requestGatewayRestart(cause) {
+  if (restartRequested) return;
+  restartRequested = true;
+  // 1) Android 壳：直接挂在 WebView 上的 JS 桥（见 A2aPanelActivity.PanelHostBridge）。
+  //    面板页是顶层文档、不是 iframe，postMessage 只能打到自己，所以必须有这条。
+  try {
+    if (window.MinisHost && typeof window.MinisHost.restartGateway === 'function') {
+      window.MinisHost.restartGateway();
+      return;
+    }
+  } catch {
+    /* 桥不可用：继续走 postMessage */
+  }
+  // 2) 桌面壳 / iframe 形态：交给父窗口。
+  try {
+    window.parent?.postMessage(
+      { type: 'agent2api:restart-gateway', reason: String(cause?.message || cause || 'fetch failed') },
+      '*',
+    );
+  } catch {
+    /* 父窗口不可达：宿主不支持该消息，保持原行为 */
+  }
 }
 
 /* ─── 具体端点（页面只调这一层，不直接拼 URL）────────────── */

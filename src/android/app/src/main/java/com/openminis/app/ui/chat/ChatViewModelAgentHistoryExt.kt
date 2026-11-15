@@ -230,12 +230,20 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         val keepStart = agentHistory.indexOfFirst { it.dbMessageId == firstKeptId }
         if (keepStart >= 0) {
             val snap = agentHistory.toList()
-            return buildList(snap.size - keepStart + 1) {
-                add(summaryHead)
-                if (keepStart < snap.size) {
-                    addAll(snap.subList(keepStart, snap.size))
-                }
-            }
+            // [T-context-budget-enforcer] v1 used to return here without passing
+            // through the projection pipeline, so a legacy marker could ship a
+            // summary + unbounded tail and never be shrunk. The *boundary* stays
+            // frozen (v1 contract), but the size guarantee is not optional: without
+            // it this branch is one more way into the same "compacts forever,
+            // never gets smaller" deadlock.
+            return progressivelyTrimmed(
+                buildList(snap.size - keepStart + 1) {
+                    add(summaryHead)
+                    if (keepStart < snap.size) {
+                        addAll(snap.subList(keepStart, snap.size))
+                    }
+                },
+            )
         }
         // Fall through to safety net.
     } else {
@@ -244,17 +252,24 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
             agentHistory.indexOfLast { it.dbMessageId == id }
         } ?: -1
         val postCompactStart = lcmIdx + 1
-        return buildList(agentHistory.size - postCompactStart + 1) {
-            add(summaryHead)
-            val snap = agentHistory.toList()
-            if (postCompactStart < snap.size) {
-                addAll(snap.subList(postCompactStart, snap.size))
-            }
-        }
+        return progressivelyTrimmed(
+            buildList(agentHistory.size - postCompactStart + 1) {
+                add(summaryHead)
+                val snap = agentHistory.toList()
+                if (postCompactStart < snap.size) {
+                    addAll(snap.subList(postCompactStart, snap.size))
+                }
+            },
+        )
     }
 
     Log.w(ChatViewModel.TAG, "[Compact] effectiveAgentHistory: marker ${marker.id.take(8)} unresolvable in agentHistory (size=${agentHistory.size}); returning full history")
-    return agentHistory.toList()
+    // [T-context-budget-enforcer] The safety-net path used to hand back the raw
+    // history — unmeasured and unshrunk. That is exactly the session shape that
+    // deadlocks: an unresolvable marker means the summary is being ignored, so
+    // the payload is the whole transcript, and it never shrinks. Route it through
+    // the same projection pipeline as every other branch.
+    return progressivelyTrimmed(agentHistory.toList())
 }
 
 /**
@@ -269,24 +284,57 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
  * frozen by contract ("original behavior preserved unchanged").
  */
 internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LLMMessage> {
-    if (list.size <= ProgressiveTrim.PROTECTED_RECENT_MESSAGES) return list
+    // [T-context-budget-enforcer] The window is the only thing that can make
+    // the projection measurable; without it there is nothing to enforce against.
     val window = effectiveContextWindowTokens() ?: return list
     val untrimmed = estimateMessagesTokens(list)
     val level = ProgressiveTrim.levelFor(untrimmed, window)
-    if (level == ProgressiveTrim.Level.NONE) return list
-    // [T-wave-e-progressive-reclaim] L2 offloads old big tool outputs into
-    // the session workspace so the stub can offer a `file_read` path back;
-    // without a session to hang the file on the stub tells the truth instead.
-    val offloadSessionId = realSessionId.ifBlank { sessionId }
-    val offloader = ProgressiveTrim.Offloader { content, toolId, _ ->
-        com.openminis.app.tools.ToolOutputSpill.offloadForTrim(
-            context = context.applicationContext,
-            sessionId = offloadSessionId,
-            toolId = toolId,
-            content = content,
-        )
+
+    // Two conditions used to return the list untouched — `size <= 40` and
+    // `level == NONE`. Both are wrong on a tool-heavy session: 40 messages can
+    // carry half a megabyte of tool output, and `levelFor` only measures the
+    // TIER, not whether the payload still fits. They now fall through to the
+    // enforcer instead of skipping it.
+    val trimmed = if (list.size <= ProgressiveTrim.PROTECTED_RECENT_MESSAGES ||
+        level == ProgressiveTrim.Level.NONE
+    ) {
+        list
+    } else {
+        // [T-wave-e-progressive-reclaim] L2 offloads old big tool outputs into
+        // the session workspace so the stub can offer a `file_read` path back;
+        // without a session to hang the file on the stub tells the truth instead.
+        val offloadSessionId = realSessionId.ifBlank { sessionId }
+        val offloader = ProgressiveTrim.Offloader { content, toolId, _ ->
+            com.openminis.app.tools.ToolOutputSpill.offloadForTrim(
+                context = context.applicationContext,
+                sessionId = offloadSessionId,
+                toolId = toolId,
+                content = content,
+            )
+        }
+        ProgressiveTrim.trim(list, level, offloader)
     }
-    val trimmed = ProgressiveTrim.trim(list, level, offloader)
+    // [T-context-budget-enforcer] ProgressiveTrim never removes a message and
+    // hard-protects the last 40 entries + the whole current round, so a
+    // tool-heavy session can stay above the window forever no matter how many
+    // times it compacts. This is the missing hard guarantee.
+    //
+    // Target = the compact threshold minus a 3-point margin. Using a fixed
+    // fraction of the window was wrong: the observed deadlock sat at 75.1% of a
+    // 1M window — just over the 75% compact line, nowhere near the ceiling — so
+    // an 80% target would never have fired and the session would keep asking
+    // for compaction that has nothing left to fold.
+    val targetFraction = ((effectiveCompactPercent() - 3).coerceIn(40, 90)) / 100.0
+    val trimmedEst = if (trimmed === list) untrimmed else estimateMessagesTokens(trimmed)
+    val enforced = ContextBudgetEnforcer.enforce(trimmed, window, targetFraction, trimmedEst)
+    if (enforced !== trimmed) {
+        AppLogger.info(
+            ChatViewModel.TAG,
+            "[ContextBudget] window=$window force-shrunk ${trimmed.size} → ${enforced.size} messages " +
+                "(est ${estimateMessagesTokens(trimmed)} → ${estimateMessagesTokens(enforced)} tokens)",
+        )
+        return enforced
+    }
     if (trimmed !== list) {
         AppLogger.info(
             ChatViewModel.TAG,

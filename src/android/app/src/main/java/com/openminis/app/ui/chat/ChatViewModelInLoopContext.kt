@@ -58,7 +58,32 @@ internal suspend fun ChatViewModel.inLoopContextCheck(compactionsSoFar: Int): In
                 iconKind = "compact",
             )
             val ok = awaitCompaction()
-            if (!ok) return InLoopContextAction.STOP
+            if (!ok) {
+                // [T-compact-noop-recovery] A false return no longer means
+                // "the turn is dead": it can also be a no-op compact (nothing
+                // left to fold) or a transient provider failure. Re-measure the
+                // payload the next request would actually carry; if it is back
+                // under the threshold, proceed instead of stopping the turn.
+                // This is the second half of the livelock fix: the first half
+                // is ChatViewModelCompactExt reporting already-compacted as
+                // success, this one covers every other false path.
+                _lastTurnContextTokens.value = 0
+                val after = contextTokensForPolicy()
+                if (after > 0 && policy.check(after, window) != ContextPolicy.CheckResult.OK) {
+                    AppLogger.warning(
+                        ChatViewModel.TAG,
+                        "[AutoCompact] compaction returned false and the payload is still " +
+                            "$after / $window — stopping",
+                    )
+                    return InLoopContextAction.STOP
+                }
+                AppLogger.info(
+                    ChatViewModel.TAG,
+                    "[AutoCompact] compaction returned false but the payload is now " +
+                        "$after / $window — proceeding",
+                )
+                return InLoopContextAction.COMPACTED
+            }
             // [T-android-auto-compact-inloop] Invalidate the stale reading.
             // `_lastTurnContextTokens` is only refreshed by a usage chunk,
             // which needs a COMPLETED API call — but this path compacts and

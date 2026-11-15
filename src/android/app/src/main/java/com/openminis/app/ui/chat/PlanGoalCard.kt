@@ -136,7 +136,13 @@ internal fun PlanGoalCard(
     showBoard: Boolean = true,
 ) {
     val context = LocalContext.current
-    val sid = viewModel.activeSessionId
+    // [T-session-key-observable] Read the OBSERVABLE key, not the plain
+    // `activeSessionId` var: on a draft session the plan tool writes under the
+    // real id the moment `ensureSession()` promotes it, but a plain var gives
+    // Compose no invalidation, so `remember(sid)` kept the draft snapshot and
+    // the board rendered empty (badge "清单 0/3", list blank).
+    val sidFlow by viewModel.sessionKeyFlow.collectAsStateWithLifecycle()
+    val sid = sidFlow.ifEmpty { viewModel.activeSessionId }
     val planVersion by AgentPlanStore.version.collectAsStateWithLifecycle()
     val goalVersion by GoalManager.version.collectAsStateWithLifecycle()
     val plans = remember(planVersion, sid) {

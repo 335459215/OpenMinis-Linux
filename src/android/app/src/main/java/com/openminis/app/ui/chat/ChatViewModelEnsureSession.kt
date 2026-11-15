@@ -17,6 +17,9 @@ internal suspend fun ChatViewModel.ensureSession(): String {
         permissionMode = _permissionMode.value.name,
     )
     realSessionId = session.id
+    // [T-session-key-observable] Publish the promoted id so Compose readers
+    // (plan board / goal card) re-key instead of keeping their draft snapshot.
+    _sessionKeyFlow.value = session.id
     // [T-draft-approval-key-drift] Carry any session-scoped gate state the
     // user granted under the draft key (allow-all, per-tool grants, in-flight
     // approval requests) over to the persisted id BEFORE the first tool call

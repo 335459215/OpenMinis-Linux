@@ -227,8 +227,21 @@ internal fun Modifier.composerContextGlow(
     // structural `messages` change (the canonical flow is quiet per token —
     // the streaming side-channel carries that churn), so the glow reacts to
     // the same signal the session-menu ring would show after a refresh.
+    // [T-glow-refresh-cost] Guard added after the 2.0.91 lag report: a burst of
+    // structural changes (tool cards landing one after another) used to queue one
+    // full projection walk per emission, and the walks fell behind the stream.
+    // `messages` is a StateFlow, which is already conflated — only the newest
+    // value is ever delivered — so the debounce is what actually helps: the ring
+    // is cosmetic, nobody perceives sub-250ms resolution, and this removes the
+    // walk for every intermediate emission.
+    // The walk itself runs on Main, which is fine at this cadence:
+    // refreshContextUsage() short-circuits on the provider-reported number, and
+    // the full scan only happens before the first API call of a session.
     androidx.compose.runtime.LaunchedEffect(viewModel) {
-        viewModel.messages.collect { viewModel.refreshContextUsage() }
+        viewModel.messages.collect {
+            kotlinx.coroutines.delay(250)
+            viewModel.refreshContextUsage()
+        }
     }
     val intensity = composerGlowIntensity(usage.ratio)
     if (intensity <= 0f) return this

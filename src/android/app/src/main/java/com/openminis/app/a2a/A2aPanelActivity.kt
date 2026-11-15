@@ -76,6 +76,15 @@ class A2aPanelActivity : Activity() {
         // ── WebView ────────────────────────────────────────────
         val web = WebView(this)
         configure(web)
+        // [T-a2a-panel-selfheal] 页面侧的 fetch 失败自愈需要一个能被页面调用的
+        // 原生入口。面板页是**直接加载**在 WebView 里的（不是 iframe），所以
+        // api.js 里的 `window.parent.postMessage` 打到的是它自己，宿主收不到。
+        //
+        // 只挂在主面板 WebView 上，**不挂在弹窗**：弹窗加载的是外部授权页
+        // （发卡方站点），把重启网关的能力暴露给第三方页面等于给它一个
+        // 拒绝服务的按钮。主 WebView 只加载 127.0.0.1 的面板页，桥面也只
+        // 暴露一个无参动作。
+        runCatching { web.addJavascriptInterface(PanelHostBridge(), "MinisHost") }
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView,
@@ -216,6 +225,26 @@ class A2aPanelActivity : Activity() {
 
     private fun isLocal(url: String): Boolean =
         url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")
+
+    /**
+     * [T-a2a-panel-selfheal] 页面可见的最小原生面。
+     *
+     * 只做一件事：重启网关子进程。JS 线程不能等（restart 内部会 destroy +
+     * 重新起进程，最长 20s），所以立即返回、后台线程干活；页面侧靠重试
+     * 循环去观察结果。
+     */
+    private inner class PanelHostBridge {
+        @android.webkit.JavascriptInterface
+        fun restartGateway() {
+            val ctx = applicationContext
+            A2aLog.write(ctx, "panel: restartGateway requested from page")
+            thread(name = "a2a-panel-restart") {
+                runCatching { A2aGateway.restart(ctx) }
+                    .onFailure { A2aLog.write(ctx, "panel: restartGateway failed: ${it.message}") }
+                    .onSuccess { A2aLog.write(ctx, "panel: restartGateway ok") }
+            }
+        }
+    }
 
     /**
      * 面板里 `window.open(authUrl)` 的落点。

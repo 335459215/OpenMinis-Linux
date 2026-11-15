@@ -55,6 +55,15 @@ class A2aKeepAliveService : Service() {
      * `ensureStarted` 内部有锁且最长等待 20s，放主线程会卡住悬浮球。
      */
     private val watchdog = Handler(Looper.getMainLooper())
+
+    /** [T-a2a-probe-backoff] Consecutive probe failures (0 = healthy). */
+    @Volatile
+    private var consecutiveFailures: Int = 0
+
+    /** [T-a2a-probe-backoff] Delay before the next watchdog tick. */
+    @Volatile
+    private var nextDelayMs: Long = WATCHDOG_INTERVAL_MS
+
     private val watchdogTick = object : Runnable {
         override fun run() {
             if (A2aGateway.stopRequested) return
@@ -64,24 +73,35 @@ class A2aKeepAliveService : Service() {
             Thread {
                 // 用户点过停止后绝不能拉起——否则网关会被 watchdog 在下个周期复活。
                 if (A2aGateway.stopRequested) return@Thread
-                // 连续两次失败才算「掉了」：单次 isRunning 只有 800ms 超时，
-                // 网关正忙（大批量请求/模型刷新）时会短暂探活失败，误判会
-                // 触发一次没必要的重启。
+                // [T-a2a-probe-backoff] 连续失败计数改为带指数退避：
+                // 原实现每 15s 无条件重探，网关在批量刷新（9 个账号）时
+                // 每次探活都撞超时，watchdog 反复判定 offline 并重复
+                // ensureStarted()，而 ensureStarted 又拿锁 + 等 20s，
+                // 结果是「网关明明在跑，面板一直 Failed to fetch」。
+                // 现在：失败一次 → 30s 后再试；失败两次 → 60s；上限 5min。
+                // 连续三次失败才视为真的挂了并触发重启。
                 val alive = A2aGateway.isRunning() || run {
                     Thread.sleep(1200)
                     A2aGateway.isRunning()
                 }
                 if (A2aGateway.stopRequested) return@Thread
-                if (!alive) {
-                    if (A2aGateway.stopRequested) return@Thread
-                    if (A2aGateway.isStartingNow()) return@Thread
-                    log("watchdog: gateway offline, respawning")
-                    if (A2aGateway.stopRequested) return@Thread
-                    if (A2aGateway.isStartingNow()) return@Thread
-                    runCatching { A2aGateway.ensureStarted(applicationContext) }
+                if (alive) {
+                    consecutiveFailures = 0
+                    nextDelayMs = WATCHDOG_INTERVAL_MS
+                } else {
+                    consecutiveFailures++
+                    nextDelayMs = (WATCHDOG_INTERVAL_MS * (1L shl (consecutiveFailures - 1).coerceIn(0, 3)))
+                        .coerceAtMost(MAX_BACKOFF_MS)
+                    log("watchdog: probe failed x$consecutiveFailures, next attempt in ${nextDelayMs}ms")
+                    if (consecutiveFailures >= 3 && !A2aGateway.isStartingNow()) {
+                        log("watchdog: gateway offline after $consecutiveFailures probes, respawning")
+                        runCatching { A2aGateway.ensureStarted(applicationContext) }
+                        consecutiveFailures = 0
+                        nextDelayMs = WATCHDOG_INTERVAL_MS
+                    }
                 }
             }.start()
-            watchdog.postDelayed(this, WATCHDOG_INTERVAL_MS)
+            watchdog.postDelayed(this, nextDelayMs)
         }
     }
 
@@ -404,6 +424,9 @@ class A2aKeepAliveService : Service() {
 
         /** 网关探活间隔。15s：掉线能及时发现，又不至于把电池拖垮。 */
         private const val WATCHDOG_INTERVAL_MS = 15_000L
+
+        /** [T-a2a-probe-backoff] Ceiling for the exponential retry ladder. */
+        private const val MAX_BACKOFF_MS = 300_000L
         @Suppress("DEPRECATION")
         private const val LEGACY_PHONE_TYPE = WindowManager.LayoutParams.TYPE_PHONE
 

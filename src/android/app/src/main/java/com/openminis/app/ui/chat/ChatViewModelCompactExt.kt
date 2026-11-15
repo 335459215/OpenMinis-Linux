@@ -140,7 +140,22 @@ private inline fun ChatViewModel.compactAllImpl(
         else prevIdx
     }
     if (effectiveStartIdx > anchorIdx) {
+        // [T-compact-idempotent-noop] Nothing new to fold: every entry up to the
+        // anchor is already covered by the current summary.
+        //
+        // This used to `return` WITHOUT calling markStarted(), so compactAll()'s
+        // wrapper fired onFinished(false) (see the `if (!started)` tail). The
+        // in-loop guard read false as "compaction failed" and STOPped the turn.
+        // The user taps Continue, the payload re-measures to the identical
+        // number, the guard asks for compaction again, this same branch fires
+        // again — a livelock no amount of tapping can break.
+        //
+        // An already-compacted range is a SUCCESS (the folding work is done),
+        // not a failure. Report true so the caller can proceed; the payload size
+        // itself is handled by ContextBudgetEnforcer on the projection path.
         appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
+        markStarted()
+        onFinished?.invoke(true)
         return
     }
     val toCompact = history.subList(effectiveStartIdx, anchorIdx + 1)

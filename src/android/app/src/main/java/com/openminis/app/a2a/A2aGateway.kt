@@ -85,8 +85,15 @@ object A2aGateway {
     fun isRunning(): Boolean {
         val ok = try {
             val connection = URL("http://$HOST:$PORT/health").openConnection() as HttpURLConnection
-            connection.connectTimeout = 800
-            connection.readTimeout = 800
+            // [T-a2a-probe-timeout] 800ms was too tight for a gateway doing
+            // account refresh / model sync: a healthy server under load routinely
+            // needs longer to answer /health, the watchdog read the timeout as
+            // "gateway offline", and the panel (which judges liveness from this
+            // same probe cache) rendered "无法连接网关: Failed to fetch" while the
+            // gateway was in fact up and serving. 3s still bounds a dead socket —
+            // connecting to 127.0.0.1 either succeeds immediately or fails fast.
+            connection.connectTimeout = 3_000
+            connection.readTimeout = 3_000
             val code = connection.responseCode
             connection.disconnect()
             code in 200..299
