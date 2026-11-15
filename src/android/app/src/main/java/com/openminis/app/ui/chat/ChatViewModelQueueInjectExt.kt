@@ -205,7 +205,30 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
 internal fun ChatViewModel.hasQueuedPromptDuringPureThinking(
     toolCalls: List<*>,
     turnTextSb: CharSequence,
-): Boolean = toolCalls.isEmpty() && turnTextSb.isEmpty() && _promptQueue.value.isNotEmpty()
+): Boolean = toolCalls.isEmpty() && turnTextSb.isEmpty() &&
+    // [T-send-mode-semantics] Only a STEER prompt may cut a running model.
+    // A plain queued (排队) prompt used to cut here too, which made “排队”
+    // indistinguishable from an interrupt: the model was stopped mid-reasoning
+    // and the answer restarted.
+    _promptQueue.value.any { it.steer }
+
+/**
+ * [T-send-mode-semantics] Should the post-tool boundary hand over to the queue?
+ *
+ *  - a steer prompt always does (插话 asks to reach the turn as soon as a tool
+ *    result completes);
+ *  - any queued prompt does while the mode is not 排队 — that is what makes
+ *    自动 different from 排队 without cutting a running generation.
+ *
+ * 排队 mode returns false and lets the post-loop drain handle it.
+ */
+internal fun ChatViewModel.shouldInjectQueuedAtBoundary(): Boolean {
+    val queue = _promptQueue.value
+    if (queue.isEmpty()) return false
+    if (queue.any { it.steer }) return true
+    return com.openminis.app.data.ChatSendModePrefs.mode() !=
+        com.openminis.app.data.ChatSendModePrefs.MODE_QUEUE
+}
 
 /**
  * [T-android-queued-message-interrupt-*] Shared drain for both mid-loop

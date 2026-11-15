@@ -152,6 +152,17 @@ data class QueuedPrompt(
     val id: String,
     val text: String,
     val attachments: List<InputAttachment> = emptyList(),
+    /**
+     * [T-send-mode-semantics] True when the user asked to STEER the running
+     * turn (插话) rather than wait for it to finish (排队).
+     *
+     * Only a steer prompt may cut the model while it is still in a pure-thinking
+     * phase, and only a steer prompt is guaranteed to land at the next tool
+     * boundary regardless of the configured mode. A plain queued prompt drains
+     * when the turn ends — that is the whole difference between the two modes,
+     * and before this flag both behaved like an interrupt.
+     */
+    val steer: Boolean = false,
 )
 
 /**

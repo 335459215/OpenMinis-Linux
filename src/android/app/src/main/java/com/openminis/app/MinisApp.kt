@@ -176,6 +176,8 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
+        // [T-retry-prefs] Context-free reads on the agent-loop retry path.
+        com.openminis.app.data.RetryPrefs.prime(this)
         com.openminis.app.data.PlanDiscussionPrefs.prime(this)
         com.openminis.app.data.ToolLimitPrefs.prime(this)
         com.openminis.app.data.ContextSaverPrefs.prime(this) // [T-tool-result-aging] send path reads it per request

@@ -1159,7 +1159,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
                     val retryAfter = (actual as? com.openminis.app.data.model.LLMError.RateLimited)?.retryAfterSeconds
                     val delaySec = com.openminis.app.provider.HttpRetryAfter.delaySeconds(
-                        retryAttempt, retryAfter, ChatViewModel.AUTO_RETRY_DELAYS_SEC,
+                        retryAttempt, retryAfter, com.openminis.app.data.RetryPrefs.schedule(),
                     )
                     retryAttempt += 1
                     val errDesc = actual.message ?: actual.javaClass.simpleName
@@ -1950,10 +1950,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
-        // [T-android-queued-message-interrupt-on-toolclose] At the post-tool-
-        // result boundary a queued prompt abandons the running plan and
-        // starts a standalone turn. See drainQueueIntoStandaloneTurn.
-        if (_promptQueue.value.isNotEmpty()) {
+        // [T-send-mode-semantics] Gated: 排队 must NOT cut here — it waits for
+        // the turn to finish. steer (插话) and non-排队 modes inject here.
+        if (shouldInjectQueuedAtBoundary()) {
             AppLogger.info(
                 ChatViewModel.TAG_STREAM,
                 "📨[QueueInterrupt] turn=$turn ${_promptQueue.value.size} queued prompt(s) — interrupting after current tool call to start a standalone turn",

@@ -147,8 +147,21 @@ object SubAgentRunner {
                 // Compact accumulated history before it can blow the context
                 // window; the freshest tool results stay verbatim.
                 val sendHistory = SubAgentHistoryCompactor.compact(history)
-                val textSb = StringBuilder()
-                val toolCalls = mutableListOf<Triple<String, String, JSONObject>>()
+                var textSb = StringBuilder()
+                var toolCalls = mutableListOf<Triple<String, String, JSONObject>>()
+                // [T-subagent-retry / T-subagent-resume] An LLM call that dies on a
+                // dropped connection must not kill the lane. The sub-agent keeps its
+                // whole conversation (`sendHistory`) and its tracker entry; only this
+                // one request is retried, so when the gateway comes back the lane
+                // continues from where it was instead of vanishing from the UI.
+                var llmAttempt = 0
+                val llmMaxAttempts = if (com.openminis.app.data.RetryPrefs.isEnabled()) {
+                    com.openminis.app.data.RetryPrefs.maxAttempts()
+                } else {
+                    0
+                }
+                while (true) {
+                try {
                 provider.streamMessage(
                     messages = sendHistory,
                     systemPrompt = system,
@@ -210,6 +223,27 @@ object SubAgentRunner {
                         }
                         else -> Unit
                     }
+                }
+                break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val transient = e is java.io.IOException ||
+                        e is com.openminis.app.data.model.LLMError.NetworkError ||
+                        e.cause is java.io.IOException
+                    if (!transient || llmAttempt >= llmMaxAttempts) throw e
+                    llmAttempt++
+                    runCatching {
+                        onUi(UiEvent.Phase("连接中断，重试 $llmAttempt/$llmMaxAttempts"))
+                    }
+                    kotlinx.coroutines.delay(
+                        com.openminis.app.data.RetryPrefs.intervalSec() * 1000L,
+                    )
+                    // Discard only the partial stream of the failed attempt; the
+                    // conversation itself (sendHistory) is untouched.
+                    textSb = StringBuilder()
+                    toolCalls = mutableListOf()
+                }
                 }
 
                 val text = textSb.toString().trim()

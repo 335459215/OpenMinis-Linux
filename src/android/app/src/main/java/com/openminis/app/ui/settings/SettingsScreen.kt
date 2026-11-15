@@ -21,6 +21,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.Replay
+import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
@@ -158,6 +161,12 @@ fun SettingsScreen(
         mutableStateOf(com.openminis.app.data.AutoCompactPrefs.autoNewSessionThreshold())
     }
     var showAutoNewSessionDialog by remember { mutableStateOf(false) }
+    // [T-retry-prefs] Mirrors the persisted values so the rows re-render on change.
+    var retryEnabled by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.isEnabled()) }
+    var retryAttempts by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.maxAttempts()) }
+    var retryIntervalSec by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.intervalSec()) }
+    var showRetryAttemptsDialog by remember { mutableStateOf(false) }
+    var showRetryIntervalDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -322,6 +331,52 @@ fun SettingsScreen(
                     trailing = { Text("$compactThreshold%") },
                     onClick = { showCompactThresholdDialog = true },
                 )
+                SettingsSwitchRow(
+                    title = stringResource(R.string.settings_auto_retry),
+                    subtitle = stringResource(
+                        if (retryEnabled) R.string.settings_auto_retry_subtitle
+                        else R.string.settings_auto_retry_off_subtitle,
+                    ),
+                    checked = retryEnabled,
+                    onCheckedChange = { enabled ->
+                        retryEnabled = enabled
+                        com.openminis.app.data.RetryPrefs.setEnabled(context, enabled)
+                    },
+                    icon = Icons.Outlined.Autorenew,
+                    iconColor = IosTeal,
+                )
+                if (retryEnabled) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Replay,
+                        iconColor = IosTeal,
+                        title = stringResource(R.string.settings_auto_retry_attempts),
+                        subtitle = null,
+                        trailing = {
+                            Text(
+                                stringResource(
+                                    R.string.settings_auto_retry_attempts_value,
+                                    retryAttempts,
+                                ),
+                            )
+                        },
+                        onClick = { showRetryAttemptsDialog = true },
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.Timer,
+                        iconColor = IosTeal,
+                        title = stringResource(R.string.settings_auto_retry_interval),
+                        subtitle = null,
+                        trailing = {
+                            Text(
+                                stringResource(
+                                    R.string.settings_auto_retry_interval_value,
+                                    retryIntervalSec,
+                                ),
+                            )
+                        },
+                        onClick = { showRetryIntervalDialog = true },
+                    )
+                }
                 SettingsSwitchRow(
                     title = stringResource(R.string.settings_auto_new_session),
                     subtitle = stringResource(R.string.settings_auto_new_session_subtitle),
@@ -522,83 +577,55 @@ fun SettingsScreen(
         }
     }
 
+    // [T-arch-extract-retry-ui] Compaction + retry dialogs live in
+    // RetrySettingsDialogs.kt: SettingsScreen.kt is capped at 800 lines.
     if (showCompactThresholdDialog) {
-        AlertDialog(
-            onDismissRequest = { showCompactThresholdDialog = false },
-            title = { Text(stringResource(R.string.settings_compact_threshold)) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.settings_compact_threshold_dialog_body))
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = "$compactThreshold%",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Slider(
-                        value = compactThreshold.toFloat(),
-                        onValueChange = { compactThreshold = it.toInt().coerceIn(50, 95) },
-                        valueRange = 50f..95f,
-                        steps = 44,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    com.openminis.app.data.AutoCompactPrefs.setThresholdPercent(context, compactThreshold)
-                    showCompactThresholdDialog = false
-                }) { Text(stringResource(R.string.common_save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCompactThresholdDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
+        CompactThresholdDialog(
+            value = compactThreshold,
+            onValueChange = { compactThreshold = it },
+            onDismiss = { showCompactThresholdDialog = false },
+            onConfirm = {
+                com.openminis.app.data.AutoCompactPrefs.setThresholdPercent(context, compactThreshold)
+                showCompactThresholdDialog = false
             },
         )
     }
 
     if (showAutoNewSessionDialog) {
-        AlertDialog(
-            onDismissRequest = { showAutoNewSessionDialog = false },
-            title = { Text(stringResource(R.string.settings_auto_new_session_threshold)) },
-            text = {
-                Column {
-                    Text(stringResource(R.string.settings_auto_new_session_dialog_body))
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(
-                            R.string.settings_auto_new_session_times,
-                            autoNewSessionThreshold,
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Slider(
-                        value = autoNewSessionThreshold.toFloat(),
-                        onValueChange = {
-                            autoNewSessionThreshold = it.toInt().coerceIn(
-                                com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD,
-                                com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD,
-                            )
-                        },
-                        valueRange = com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD
-                            .toFloat()..com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD.toFloat(),
-                        steps = com.openminis.app.data.AutoCompactPrefs.MAX_AUTO_NEW_SESSION_THRESHOLD -
-                            com.openminis.app.data.AutoCompactPrefs.MIN_AUTO_NEW_SESSION_THRESHOLD - 1,
-                    )
-                }
+        AutoNewSessionThresholdDialog(
+            value = autoNewSessionThreshold,
+            onValueChange = { autoNewSessionThreshold = it },
+            onDismiss = { showAutoNewSessionDialog = false },
+            onConfirm = {
+                com.openminis.app.data.AutoCompactPrefs
+                    .setAutoNewSessionThreshold(context, autoNewSessionThreshold)
+                showAutoNewSessionDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    com.openminis.app.data.AutoCompactPrefs
-                        .setAutoNewSessionThreshold(context, autoNewSessionThreshold)
-                    showAutoNewSessionDialog = false
-                }) { Text(stringResource(R.string.common_save)) }
+        )
+    }
+
+    // [T-arch-extract-retry-ui] Both retry dialogs live in RetrySettingsDialogs.kt:
+    // SettingsScreen.kt is capped at 800 lines.
+    if (showRetryAttemptsDialog) {
+        RetryAttemptsDialog(
+            value = retryAttempts,
+            onValueChange = { retryAttempts = it },
+            onDismiss = { showRetryAttemptsDialog = false },
+            onConfirm = {
+                com.openminis.app.data.RetryPrefs.setMaxAttempts(context, retryAttempts)
+                showRetryAttemptsDialog = false
             },
-            dismissButton = {
-                TextButton(onClick = { showAutoNewSessionDialog = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
+        )
+    }
+
+    if (showRetryIntervalDialog) {
+        RetryIntervalDialog(
+            value = retryIntervalSec,
+            onValueChange = { retryIntervalSec = it },
+            onDismiss = { showRetryIntervalDialog = false },
+            onConfirm = {
+                com.openminis.app.data.RetryPrefs.setIntervalSec(context, retryIntervalSec)
+                showRetryIntervalDialog = false
             },
         )
     }

@@ -47,6 +47,35 @@ object A2aGateway {
     /** 正在启动中（进程已起但 health 未就绪），供面板判断是否应踢保活服务。 */
     fun isStartingNow(): Boolean = isStarting || process != null
 
+    /**
+     * [T-a2a-respawn-gate] 进程真的死了、且没有在重启中 —— watchdog 唯一该重拉的时机。
+     *
+     * 之前 watchdog 用的是 `!isStartingNow()`，而 isStartingNow 把
+     * `process != null` 也算成“在启动”。protocol 一旦成功起过一次，句柄就
+     * 永远不为空，于是这个门禁**永不成立**：网关挂了之后 watchdog 只会一路
+     * 报 `probe failed xN`，从不重启。设备日志里连续 5 次 probe failed 却
+     * 没有一行 respawning，就是这个原因。
+     */
+    fun canRespawn(): Boolean {
+        if (isStarting) return false
+        val handle = process ?: return true     // 句柄为空：遗留进程，交给探活判断
+        return !handle.isAlive                   // 句柄在但进程已死 → 该重拉
+    }
+
+    /**
+     * [T-a2a-dead-handle] 把已死的句柄清掉，让下一次 ensureStarted 能重新建进程。
+     * 不清的话 isRunningFast() 会一直读这个死句柄，悬浮球与面板都判死。
+     */
+    fun dropDeadHandle(): Boolean {
+        val handle = process ?: return false
+        if (handle.isAlive) return false
+        synchronized(lock) {
+            if (process === handle) process = null
+        }
+        probeOk = false
+        return true
+    }
+
     private val lock = Any()
 
     /** 网关根目录；服务与日志也用它。 */

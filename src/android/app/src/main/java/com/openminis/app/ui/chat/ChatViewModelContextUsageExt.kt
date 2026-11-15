@@ -71,3 +71,20 @@ fun ChatViewModel.refreshContextUsage() {
     val estTokens = (usedChars / 3.5).toLong()
     contextUsage.value = com.openminis.app.data.model.ContextUsage(estTokens, windowNow)
 }
+
+/**
+ * [T-arch-extract-retry] How many automatic retries a transient failure gets.
+ *
+ * Extracted out of `ChatViewModel.kt` (per-file line ceiling). The user-facing
+ * knobs live in [com.openminis.app.data.RetryPrefs]:
+ *   - master switch off  → 0 attempts, the error surfaces immediately;
+ *   - otherwise the per-model override is clamped to the user's ceiling
+ *     (1..5), because a model override written before the setting existed must
+ *     not silently exceed what the UI now advertises.
+ */
+internal fun ChatViewModel.effectiveMaxRetries(): Int {
+    if (!com.openminis.app.data.RetryPrefs.isEnabled()) return 0
+    val userCap = com.openminis.app.data.RetryPrefs.maxAttempts()
+    val configured = activeOverrides()?.maxRetries ?: userCap
+    return minOf(configured, userCap).coerceIn(0, com.openminis.app.data.RetryPrefs.MAX_ATTEMPTS)
+}

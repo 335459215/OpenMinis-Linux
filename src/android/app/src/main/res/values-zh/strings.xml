@@ -176,6 +176,15 @@
     <string name="settings_section_appearance">外观</string>
     <string name="settings_appearance_subtitle">主题、字号与显示</string>
     <string name="settings_section_agent_runtime">Agent 运行时</string>
+    <string name="settings_auto_retry">断线自动重试</string>
+    <string name="settings_auto_retry_subtitle">网关或模型连接失败时自动重试，不用手动重发</string>
+    <string name="settings_auto_retry_off_subtitle">已关闭，失败后直接显示错误</string>
+    <string name="settings_auto_retry_attempts">重试次数</string>
+    <string name="settings_auto_retry_attempts_value">%1$d 次</string>
+    <string name="settings_auto_retry_interval">重试间隔</string>
+    <string name="settings_auto_retry_interval_value">%1$d 秒</string>
+    <string name="settings_auto_retry_attempts_dialog_body">最多重试几次。上限 5 次：再多会让一个失败的回合干等几分钟。</string>
+    <string name="settings_auto_retry_interval_dialog_body">每次重试之间等多久。网关重启通常需要几秒，间隔太短只是在撞同一个断口。</string>
     <string name="settings_skills">技能</string>
     <string name="settings_skills_subtitle">管理 Minis Ultra Agent 的技能与指令</string>
     <string name="settings_multi_agent">多智能体</string>

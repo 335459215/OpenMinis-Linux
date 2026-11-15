@@ -2522,10 +2522,9 @@ class ChatViewModel(
         (activeOverrides()?.compactThresholdPercent ?: com.openminis.app.data.AutoCompactPrefs.thresholdPercent())
             .coerceIn(50, 95)
 
-    internal fun effectiveMaxRetries(): Int =
-        (activeOverrides()?.maxRetries
-            ?: com.openminis.app.provider.HttpRetryAfter.DEFAULT_MAX_RETRIES)
-            .coerceIn(0, 8)
+    // [T-arch-extract-retry] effectiveMaxRetries() moved to
+    // ChatViewModelContextUsageExt.kt (same package) to stay under the per-file
+    // line ceiling. Behaviour unchanged.
 
     fun submitUserQuestionAnswers(selections: List<List<String>>) {
         val questions = _pendingUserQuestions.value ?: return
@@ -4836,7 +4835,7 @@ class ChatViewModel(
      * current agent loop finishes, drainQueuedPrompts() consumes the queue.
      * Mirrors iOS AIChatViewModel.enqueuePrompt().
      */
-    fun enqueuePrompt(text: String) {
+    fun enqueuePrompt(text: String, steer: Boolean = false) {
         val trimmed = text.trim()
         val pendingAttachments = _attachments.value
         if ((trimmed.isBlank() && pendingAttachments.isEmpty()) || !_isStreaming.value) return
@@ -4845,6 +4844,7 @@ class ChatViewModel(
             id = "queued_${System.currentTimeMillis()}_${(Math.random() * 1_000_000).toInt()}",
             text = trimmed,
             attachments = pendingAttachments,
+            steer = steer,
         )
         _promptQueue.update { it + prompt }
 

@@ -90,12 +90,23 @@ class A2aKeepAliveService : Service() {
                     nextDelayMs = WATCHDOG_INTERVAL_MS
                 } else {
                     consecutiveFailures++
+                    // [T-a2a-dead-handle] The handle outlives the process. Clearing it
+                    // here is what lets the NEXT ensureStarted build a real process and
+                    // what lets isRunningFast() stop reporting a corpse as alive.
+                    A2aGateway.dropDeadHandle()
                     nextDelayMs = (WATCHDOG_INTERVAL_MS * (1L shl (consecutiveFailures - 1).coerceIn(0, 3)))
                         .coerceAtMost(MAX_BACKOFF_MS)
                     log("watchdog: probe failed x$consecutiveFailures, next attempt in ${nextDelayMs}ms")
-                    if (consecutiveFailures >= 3 && !A2aGateway.isStartingNow()) {
+                    // [T-a2a-respawn-gate] `canRespawn()` (dead process + not already
+                    // starting) instead of `!isStartingNow()`: the latter was true
+                    // forever after the first successful start, so this branch NEVER
+                    // respawned — the device log shows five consecutive failures with
+                    // no respawning line at all.
+                    if (consecutiveFailures >= 2 && A2aGateway.canRespawn()) {
                         log("watchdog: gateway offline after $consecutiveFailures probes, respawning")
-                        runCatching { A2aGateway.ensureStarted(applicationContext) }
+                        val result = runCatching { A2aGateway.ensureStarted(applicationContext) }
+                        result.onSuccess { log("watchdog: respawn ok") }
+                            .onFailure { log("watchdog: respawn failed: ${it.message}") }
                         consecutiveFailures = 0
                         nextDelayMs = WATCHDOG_INTERVAL_MS
                     }

@@ -209,6 +209,15 @@
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_appearance_subtitle">Theme, font size, and display</string>
     <string name="settings_section_agent_runtime">Agent Runtime</string>
+    <string name="settings_auto_retry">Auto-retry on disconnect</string>
+    <string name="settings_auto_retry_subtitle">Retry automatically when the gateway or model connection drops</string>
+    <string name="settings_auto_retry_off_subtitle">Off — errors surface immediately</string>
+    <string name="settings_auto_retry_attempts">Retry attempts</string>
+    <string name="settings_auto_retry_attempts_value">%1$d×</string>
+    <string name="settings_auto_retry_interval">Retry interval</string>
+    <string name="settings_auto_retry_interval_value">%1$ds</string>
+    <string name="settings_auto_retry_attempts_dialog_body">How many times to retry. Capped at 5 — more turns a failed turn into minutes of waiting.</string>
+    <string name="settings_auto_retry_interval_dialog_body">Delay between attempts. A gateway restart takes a few seconds; retrying faster just hits the same hole.</string>
     <string name="settings_skills">Skills</string>
     <string name="settings_skills_subtitle">Manage Minis Ultra Agent skills and instructions</string>
     <string name="settings_multi_agent">Multi-agent</string>
