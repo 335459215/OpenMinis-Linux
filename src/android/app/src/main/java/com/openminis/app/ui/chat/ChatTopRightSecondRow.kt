@@ -1,8 +1,5 @@
 package com.openminis.app.ui.chat
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,13 +36,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.service.SubAgentActivityTracker
 import com.openminis.app.tools.AgentPlanStore
 
 /**
  * 顶栏第二排：清单 / 子代理，两个都是抽屉式，默认折叠。
- * 折叠态只显示数量，点开在下方展开列表，再点收起。
+ *
+ * [T-topright-second-row-in-topbar] 用户要求「四个按钮上下对齐、左右对称」：
+ * 第一行是发送模式胶囊 + 三点菜单，这一行是清单 + 子代理，两行共享右边缘。
+ * 所以本组件**不再**占满一行宽度（`fillMaxWidth` 已去掉），而是作为一个
+ * 紧凑的右对齐 Column 嵌进顶栏的 actions 槽里（见 ChatTopBarActions）。
+ *
+ * 展开列表用 [Popup] 而不是就地展开：顶栏是 SubcomposeLayout，就地长高会
+ * 让整条顶栏跳动，并把下面的消息列表推下去。Popup 挂在胶囊下方，与胶囊
+ * 右边缘对齐，顶栏高度不变。
+ *
+ * 无内容时不渲染（清单空且无子代理），保持「有活才有条」的语义。
  */
 @Composable
 internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
@@ -62,98 +70,132 @@ internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
     var planOpen by rememberSaveable(sid) { mutableStateOf(false) }
     var subOpen by rememberSaveable(sid) { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp),
-        horizontalAlignment = Alignment.End,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DrawerPill(
-                text = "清单 ${plans.count { it.status == "done" }}/${plans.size}",
-                expanded = planOpen,
-            ) { planOpen = !planOpen }
-            Spacer(Modifier.width(8.dp))
-            DrawerPill(text = "子代理 ${mine.size}", expanded = subOpen) { subOpen = !subOpen }
-        }
+    // Nothing to show → take no vertical space at all.
+    if (plans.isEmpty() && mine.isEmpty()) {
+        if (planOpen) planOpen = false
+        if (subOpen) subOpen = false
+        return
+    }
 
-        AnimatedVisibility(visible = planOpen, enter = expandVertically(), exit = shrinkVertically()) {
-            Column(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .widthIn(max = 320.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (plans.isEmpty()) {
-                    Text("暂无任务", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    plans.forEach { p ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                            Text(statusMark(p.status), fontSize = 11.sp, modifier = Modifier.width(16.dp))
-                            Text(
-                                p.title,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+    Column(horizontalAlignment = Alignment.End) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                DrawerPill(
+                    text = "清单 ${plans.count { it.status == "done" }}/${plans.size}",
+                    expanded = planOpen,
+                ) { planOpen = !planOpen }
+                if (planOpen) {
+                    Popup(
+                        onDismissRequest = { planOpen = false },
+                        alignment = Alignment.TopEnd,
+                        properties = PopupProperties(focusable = true),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .widthIn(max = 320.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            if (plans.isEmpty()) {
+                                Text(
+                                    "暂无任务",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                plans.forEach { p ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(vertical = 2.dp),
+                                    ) {
+                                        Text(
+                                            statusMark(p.status),
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.width(16.dp),
+                                        )
+                                        Text(
+                                            p.title,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
-
-        AnimatedVisibility(visible = subOpen, enter = expandVertically(), exit = shrinkVertically()) {
-            Column(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .widthIn(max = 340.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                if (mine.isEmpty()) {
-                    Text("当前没有子代理", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    mine.forEach { m ->
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                            Box(
-                                Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(phaseColor(m.phase)),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                m.title.ifBlank { m.role ?: "子代理" },
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                m.phase.ifBlank { "思考中" } +
-                                    if (m.currentTool.isNotBlank()) " · ${m.currentTool}" else "",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.widthIn(max = 120.dp),
-                            )
-                            IconButton(
-                                onClick = { SubAgentActivityTracker.stop(m.id) },
-                                modifier = Modifier.size(26.dp),
-                            ) {
-                                Icon(
-                                    Icons.Default.Stop,
-                                    contentDescription = "停止",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(13.dp),
+            Spacer(Modifier.width(8.dp))
+            Box {
+                DrawerPill(text = "子代理 ${mine.size}", expanded = subOpen) { subOpen = !subOpen }
+                if (subOpen) {
+                    Popup(
+                        onDismissRequest = { subOpen = false },
+                        alignment = Alignment.TopEnd,
+                        properties = PopupProperties(focusable = true),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .widthIn(max = 340.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            if (mine.isEmpty()) {
+                                Text(
+                                    "当前没有子代理",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            } else {
+                                mine.forEach { m ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(vertical = 2.dp),
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(phaseColor(m.phase)),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            m.title.ifBlank { m.role ?: "子代理" },
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 140.dp),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            m.phase.ifBlank { "思考中" } +
+                                                if (m.currentTool.isNotBlank()) " · ${m.currentTool}" else "",
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 110.dp),
+                                        )
+                                        IconButton(
+                                            onClick = { SubAgentActivityTracker.stop(m.id) },
+                                            modifier = Modifier.size(26.dp),
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Stop,
+                                                contentDescription = "停止",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(13.dp),
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

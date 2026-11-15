@@ -1939,22 +1939,27 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    ChatTopBarActions(
-                        viewModel = viewModel,
-                        memoryRepository = memoryRepository,
-                        skillRepository = skillRepository,
-                        mcpRepository = mcpRepository,
-                        restorableCount = restorableCount,
-                        showChatMenu = showChatMenuState,
-                        onShowRestoreDialog = { showRestoreDialog = true },
-                        onShowSkillsSheet = { showSkillsSheet = true },
-                        onShowMcpsSheet = { showMcpsSheet = true },
-                        onShowTokenUsageSheet = { showTokenUsageSheet = true },
-                        onShowEnhancedCacheDialog = { showEnhancedCacheDialog = true },
-                        onOpenTerminal = onOpenTerminal,
-                        onBrowseChatFiles = onBrowseChatFiles,
-                        onOpenGitPanel = onOpenGitPanel,
-                    )
+                    // [T-topright-second-row-in-topbar] 两行共享右边缘：第一行快捷图标+
+                    // 发送模式胶囊+三点菜单，第二行清单+子代理。
+                    Column(horizontalAlignment = Alignment.End) {
+                        ChatTopBarActions(
+                            viewModel = viewModel,
+                            memoryRepository = memoryRepository,
+                            skillRepository = skillRepository,
+                            mcpRepository = mcpRepository,
+                            restorableCount = restorableCount,
+                            showChatMenu = showChatMenuState,
+                            onShowRestoreDialog = { showRestoreDialog = true },
+                            onShowSkillsSheet = { showSkillsSheet = true },
+                            onShowMcpsSheet = { showMcpsSheet = true },
+                            onShowTokenUsageSheet = { showTokenUsageSheet = true },
+                            onShowEnhancedCacheDialog = { showEnhancedCacheDialog = true },
+                            onOpenTerminal = onOpenTerminal,
+                            onBrowseChatFiles = onBrowseChatFiles,
+                            onOpenGitPanel = onOpenGitPanel,
+                        )
+                        ChatTopRightSecondRow(viewModel)
+                    }
                 },
                 windowInsets = WindowInsets.statusBars,
                 colors = androidx.compose.material3.TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -1996,7 +2001,6 @@ fun ChatScreen(
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
-            ChatTopRightSecondRow(viewModel)
             ScheduledCountdownPill(currentSessionId = { viewModel.realSessionId.ifBlank { sessionId } })
             ChatGateBanners(
                 approvals = pendingApprovals,
@@ -5072,20 +5076,11 @@ fun ChatScreen(
                             // [T-android-read-replies-pill-metrics] Sizing mirrors
                             // iOS readAloudToolbarToggle: 10/6 padding around a
                             // 5pt-spaced icon+label, on a capsule that HUGS its
-                            // content (iOS pins it with .fixedSize()).
-                            //
-                            // Two Compose-specific corrections are needed to land
-                            // on the same result:
-                            //  • wrapContentWidth() + centered arrangement — this
-                            //    pill sits between weight(1f) spacers, so without
-                            //    hugging it absorbs slack and the un-arranged Row
-                            //    packed icon+text against the start edge, which is
-                            //    what read as "not horizontally centered".
-                            //  • the label's line height is pinned to the font size
-                            //    and its font padding disabled. Compose Text
-                            //    otherwise reserves the font's full ascent/descent
-                            //    leading on top of the 6dp padding, making the pill
-                            //    visibly taller than iOS's for the same numbers.
+                            // content (iOS pins it with .fixedSize()). Two Compose
+                            // corrections: wrapContentWidth()+centered (else it
+                            // absorbs the weight(1f) slack), and a pinned line
+                            // height with font padding off (else the reserved
+                            // ascent/descent makes it taller than iOS's).
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.Center,
@@ -5297,14 +5292,9 @@ fun ChatScreen(
                                     if (!streamingNow && live == null) replyTts.flush()
                                 }
                             }
-                            // [T-android-read-replies-pill-metrics] Balancing
-                            // spacer. There is a weight(1f) spacer BEFORE the
-                            // pill but the trailing side only had a fixed 8dp,
-                            // so all the row's slack collected on the left and
-                            // pushed the pill right of the bar's centre (measured
-                            // +59px on a 1080px screen). Matching weights on both
-                            // sides centre it between the leading (+, /) and
-                            // trailing (keyboard, mic/send) button groups.
+                            // [T-android-read-replies-pill-metrics] Balancing spacer:
+                            // a weight(1f) before the pill and only 8dp after pushed
+                            // it right of centre (+59px on 1080px). Match both sides.
                             Spacer(modifier = Modifier.weight(1f))
                         }
 
