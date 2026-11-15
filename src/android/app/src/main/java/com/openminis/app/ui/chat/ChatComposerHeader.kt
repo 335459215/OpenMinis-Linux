@@ -19,7 +19,7 @@ internal fun ChatComposerHeader(
     sessionId: String,
     onLocatePlan: ((String) -> Unit)? = null,
 ) {
-    PlanGoalCard(viewModel, onLocate = onLocatePlan)
+    PlanGoalCard(viewModel, onLocate = onLocatePlan, showBoard = false)
     GoalSheet(viewModel)
     // [T-supervisor-status-bar] Live supervisor-worker phase bar.
     // Render-side sessionId gating lives inside the bar; the halt button

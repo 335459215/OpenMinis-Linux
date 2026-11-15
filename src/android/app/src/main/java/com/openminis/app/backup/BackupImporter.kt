@@ -222,6 +222,10 @@ class BackupImporter(
                             work, fileIndex, BackupCategory.CACHE,
                             context.cacheDir, "cache/",
                         )
+                        BackupCategory.AGENT2API -> importTree(
+                            work, fileIndex, BackupCategory.AGENT2API,
+                            File(context.filesDir, "ubuntu-rootfs"), "agent2api/",
+                        )
                         BackupCategory.MEMORY -> importMemory(work)
                         BackupCategory.MCP_SERVERS -> importMcpServers(work)
                         BackupCategory.PROVIDERS -> {
@@ -1122,6 +1126,7 @@ class BackupImporter(
             BackupCategory.SHARED_FILES,
             BackupCategory.SKILLS,
             BackupCategory.ROOTFS,
+            BackupCategory.AGENT2API,
             BackupCategory.CACHE,
             BackupCategory.MEMORY,
             BackupCategory.MCP_SERVERS,

@@ -51,6 +51,24 @@ class CompactResilienceTest {
     }
 
     @Test
+    fun `a trailing tool result is not used as the quality probe`() {
+        // Agent loops append tool output as a USER message. Before the fix the
+        // gate picked that message, demanded the summary echo a build log, and
+        // rejected every compaction of a tool-heavy (i.e. long) session.
+        val msgs = listOf(
+            user("please refactor the notification pipeline"),
+            assistant("working"),
+            user("[Tool result: zzzqqq 12345]"),
+        )
+        assertTrue(
+            ChatViewModel.isCompactSummaryAcceptable(
+                longSummary("notification pipeline summary "),
+                msgs,
+            ),
+        )
+    }
+
+    @Test
     fun `quality check tolerates a degenerate history with no user turn`() {
         val msgs = listOf(assistant("tool output only"))
         // No user probe at all: nothing to require an echo of.

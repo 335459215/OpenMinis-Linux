@@ -85,9 +85,93 @@ class CompactBudgetTest {
     }
 
     @Test
-    fun `worst-case wall clock is bounded to minutes, not tens of minutes`() {
-        // The regression this whole change exists to prevent.
+    fun `worst-case wall clock stays under the provider read timeout`() {
+        // The regression this change exists to prevent is the open-ended run.
+        // The ceiling is now 9 minutes (to cover a 500k-token history split
+        // into ~11 leaves), still inside the providers' 10-minute readTimeout.
         val worstMs = ChatViewModel.COMPACT_TIMEOUT_MAX_MS
-        assertTrue("must be under 6 minutes", worstMs <= 6 * 60 * 1000L)
+        assertTrue("must be under 10 minutes", worstMs <= 10 * 60 * 1000L)
+        assertTrue("must leave margin under the provider read timeout", worstMs <= 9 * 60 * 1000L)
+    }
+
+    @Test
+    fun `large history gets a call budget that can finish the job`() {
+        // The failure this pins: a 500k-token history at a 48k segment budget
+        // needs 11 leaves, but the fixed budget of 6 threw at call 7 and every
+        // stage failed. The budget must scale with segments, still bounded.
+        val budget = ChatViewModel.compactCallBudgetFor(500_000, 96_000)
+        assertTrue("budget must cover all 6 segments", budget >= 6)
+        assertTrue(
+            "budget must stay under the ceiling",
+            budget <= ChatViewModel.MAX_COMPACT_LLM_CALLS_CEILING,
+        )
+        assertEquals(
+            ChatViewModel.MAX_COMPACT_LLM_CALLS,
+            ChatViewModel.compactCallBudgetFor(10_000, 96_000),
+        )
+    }
+
+    @Test
+    fun `split depth grows for a large history and stays bounded`() {
+        assertEquals(
+            ChatViewModel.COMPACT_SPLIT_DEPTH_FLOOR,
+            ChatViewModel.compactMaxDepthFor(10_000, 96_000),
+        )
+        assertTrue(
+            "6 segments need at least depth 3 (8 leaves)",
+            ChatViewModel.compactMaxDepthFor(500_000, 96_000) >= 3,
+        )
+        assertEquals(
+            ChatViewModel.COMPACT_SPLIT_DEPTH_CEILING,
+            ChatViewModel.compactMaxDepthFor(100_000_000, 8_000),
+        )
+    }
+
+    @Test
+    fun `segment budget follows the model window, not a fixed number`() {
+        // The budget is a RATIO of the model window. A 200K model gets 150K;
+        // a 1M model gets 750K, not the 200K model's slice. Locking a literal
+        // number here would make a 1M model compact in 200K-sized pieces.
+        assertEquals(
+            200_000 * ChatViewModel.COMPACT_SEGMENT_WINDOW_NUMERATOR /
+                ChatViewModel.COMPACT_SEGMENT_WINDOW_DENOMINATOR,
+            ChatViewModel.compactSegmentTokenBudget(200_000),
+        )
+        assertEquals(
+            1_000_000 * ChatViewModel.COMPACT_SEGMENT_WINDOW_NUMERATOR /
+                ChatViewModel.COMPACT_SEGMENT_WINDOW_DENOMINATOR,
+            ChatViewModel.compactSegmentTokenBudget(1_000_000),
+        )
+    }
+
+    @Test
+    fun `a 1M model is not capped at a 200K model's slice`() {
+        val small = ChatViewModel.compactSegmentTokenBudget(200_000)
+        val large = ChatViewModel.compactSegmentTokenBudget(1_000_000)
+        assertTrue("1M budget must scale past 200K", large >= small * 3)
+        assertTrue(
+            "a 130k-token history must fit one call even on 200K",
+            130_000 <= small,
+        )
+    }
+
+    @Test
+    fun `leaves run two at a time`() {
+        // [T-android-compact-parallel] The halves of a split are independent
+        // calls; two in flight halves the wall clock without flooding the
+        // local gateway. The per-run call budget still bounds the total.
+        assertEquals(2, ChatViewModel.COMPACT_LEAF_CONCURRENCY)
+    }
+
+    @Test
+    fun `chinese text is not underestimated by four chars per token`() {
+        // 400 CJK chars are ≈400 tokens, not 100. Under-counting kept the
+        // proactive split from firing on Chinese-heavy sessions.
+        val chinese = "安卓会话压缩失败".repeat(50)
+        val ascii = "a".repeat(chinese.length)
+        val cjkTokens = ChatViewModel.estimateCompactTokens(chinese)
+        val asciiTokens = ChatViewModel.estimateCompactTokens(ascii)
+        assertTrue("CJK must be counted near 1 token/char", cjkTokens >= chinese.length * 9 / 10)
+        assertTrue("ASCII stays at ~4 chars/token", asciiTokens <= ascii.length / 3)
     }
 }

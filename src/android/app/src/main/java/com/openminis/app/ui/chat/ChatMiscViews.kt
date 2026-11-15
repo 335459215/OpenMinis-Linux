@@ -500,42 +500,11 @@ private fun CompactSummarySheet(
             }
         },
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            androidx.compose.foundation.text.selection.SelectionContainer(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text(
-                    text = summary,
-                    fontSize = 14.sp,
-                    color = ChatColors.primaryText,
-                    lineHeight = 20.sp,
-                )
-            }
-            if (onRevert != null) {
-                HorizontalDivider(color = ChatColors.separator)
-                MinisTextButton(
-                    onClick = { showRevertConfirm = true },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                ) {
-                    Icon(
-                        imageVector = m3Icon(Icons.Default.Refresh),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(R.string.chat_compact_revert_action),
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-        }
+        CompactSummaryBody(
+            summary = summary,
+            hasRevert = onRevert != null,
+            onRequestRevert = { showRevertConfirm = true },
+        )
     }
 
     if (showRevertConfirm && onRevert != null) {
@@ -551,6 +520,56 @@ private fun CompactSummarySheet(
             },
             isDestructive = true,
         )
+    }
+}
+
+/**
+ * [T-android-compile-oom] Body split out of `CompactSummarySheet`: keeping the
+ * whole sheet in one composable made the Kotlin backend run out of heap while
+ * transforming the generated `invoke(Composer, int)` method (ASM frame
+ * analysis), which blocked every release build. Same tree, two smaller methods.
+ */
+@Composable
+private fun CompactSummaryBody(
+    summary: String,
+    hasRevert: Boolean,
+    onRequestRevert: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.text.selection.SelectionContainer(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Text(
+                text = summary,
+                fontSize = 14.sp,
+                color = ChatColors.primaryText,
+                lineHeight = 20.sp,
+            )
+        }
+        if (hasRevert) {
+            HorizontalDivider(color = ChatColors.separator)
+            MinisTextButton(
+                onClick = onRequestRevert,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            ) {
+                Icon(
+                    imageVector = m3Icon(Icons.Default.Refresh),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.chat_compact_revert_action),
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 

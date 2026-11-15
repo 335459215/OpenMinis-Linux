@@ -55,6 +55,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +71,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -174,17 +178,101 @@ class ChatViewModel(
         // Compaction had no ceiling: only the provider readTimeout (10m) and a 1+2+4+8=15
         // sequential-leaf retry. Three ceilings now bound it — call budget, wall-clock, depth.
 
-        /** Leaf LLM calls one compaction may issue in total; the depth-3 cap alone permits 15, this cuts the worst case to 6 while allowing a full first split plus one rescue. */
+        /** Floor for a compaction's leaf-call budget. A short transcript needs at most one split plus a rescue. */
         internal const val MAX_COMPACT_LLM_CALLS = 6
 
+        /**
+         * [T-android-compact-large-history] Ceiling for the dynamic leaf-call
+         * budget. The old fixed budget of 6 made any history larger than
+         * ~6 segments fail deterministically: the 7th leaf threw
+         * "compaction exceeded its budget", every stage died, and the session
+         * fell back to truncation. A 500k-token history needs ~11 segments at
+         * the 48k segment budget; this ceiling still bounds the worst case.
+         */
+        internal const val MAX_COMPACT_LLM_CALLS_CEILING = 24
+
         internal const val COMPACT_SEGMENT_MIN_TOKENS = 8_000
-        internal const val COMPACT_SEGMENT_MAX_TOKENS = 32_000
 
-        internal fun estimateCompactTokens(text: String): Int =
-            (text.length / 4).coerceAtLeast(1)
+        /**
+         * [T-android-compact-single-shot] Share of the model window a single
+         * summary request may occupy. This is a RATIO, not a number: the
+         * budget must follow the model (200K -> 150K, 1M -> 750K). A fixed
+         * ceiling made a 1M-window model compact at a 200K model's pace.
+         */
+        internal const val COMPACT_SEGMENT_WINDOW_NUMERATOR = 3
+        internal const val COMPACT_SEGMENT_WINDOW_DENOMINATOR = 4
 
-        internal fun compactSegmentTokenBudget(contextWindow: Int): Int =
-            (contextWindow / 5).coerceIn(COMPACT_SEGMENT_MIN_TOKENS, COMPACT_SEGMENT_MAX_TOKENS)
+        /** Room kept for the summary text and the system prompt. */
+        internal const val COMPACT_SEGMENT_OUTPUT_RESERVE_TOKENS = 16_000
+
+        /**
+         * [T-android-compact-parallel] Leaves that may be in flight at once.
+         * Two covers the left/right halves of a split without hammering the
+         * local gateway; the per-run call budget still bounds the total.
+         */
+        internal const val COMPACT_LEAF_CONCURRENCY = 2
+
+        internal const val COMPACT_SPLIT_DEPTH_FLOOR = 3
+
+        /** 2^5 = 32 leaves, enough for ~1.5M tokens at the segment budget. */
+        internal const val COMPACT_SPLIT_DEPTH_CEILING = 5
+
+        /**
+         * CJK-aware token estimate. `length / 4` assumes ~4 chars per token,
+         * which under-counts Chinese by 3-4x: on a Chinese-heavy transcript
+         * the proactive split never fired, the whole history went to the
+         * provider as one request, and the resulting context-length error was
+         * mis-read as an unretryable failure.
+         */
+        internal fun estimateCompactTokens(text: String): Int {
+            var cjk = 0
+            for (ch in text) {
+                val c = ch.code
+                if (c in 0x2E80..0x9FFF || c in 0xF900..0xFAFF ||
+                    c in 0x3000..0x303F || c in 0xFF00..0xFFEF
+                ) {
+                    cjk++
+                }
+            }
+            val other = text.length - cjk
+            return (cjk + other / 4).coerceAtLeast(1)
+        }
+
+        /**
+         * [T-android-compact-single-shot] Cline's agentic compaction triggers at
+         * ~81% of the window and then makes ONE summarizer call; OpenHands folds
+         * the oldest slice in one call while keeping the first N events. The old
+         * 20% budget here split any transcript past a fifth of the window into
+         * 2-8 sequential calls, so the same model took 4-8x longer than the
+         * desktop builds for the same history. 75% leaves room for the summary
+         * and the system prompt, and a single call covers almost every session.
+         */
+        internal fun compactSegmentTokenBudget(contextWindow: Int): Int {
+            val window = contextWindow.coerceAtLeast(1)
+            val byRatio = window * COMPACT_SEGMENT_WINDOW_NUMERATOR / COMPACT_SEGMENT_WINDOW_DENOMINATOR
+            val roomForOutput = window - COMPACT_SEGMENT_OUTPUT_RESERVE_TOKENS
+            return minOf(byRatio, roomForOutput).coerceAtLeast(COMPACT_SEGMENT_MIN_TOKENS)
+        }
+
+        /** Leaf calls needed to cover [estimatedTokens] at [tokenBudget] per segment, plus one rescue. */
+        internal fun compactCallBudgetFor(estimatedTokens: Int, tokenBudget: Int): Int {
+            if (tokenBudget <= 0) return MAX_COMPACT_LLM_CALLS
+            val segments = (estimatedTokens + tokenBudget - 1) / tokenBudget
+            return (segments + 2).coerceIn(MAX_COMPACT_LLM_CALLS, MAX_COMPACT_LLM_CALLS_CEILING)
+        }
+
+        /** Split depth that yields at least one leaf per segment, within the depth ceiling. */
+        internal fun compactMaxDepthFor(estimatedTokens: Int, tokenBudget: Int): Int {
+            if (tokenBudget <= 0) return COMPACT_SPLIT_DEPTH_FLOOR
+            val segments = (estimatedTokens + tokenBudget - 1) / tokenBudget
+            var depth = 0
+            var leaves = 1
+            while (leaves < segments && depth < COMPACT_SPLIT_DEPTH_CEILING) {
+                leaves = leaves shl 1
+                depth++
+            }
+            return depth.coerceAtLeast(COMPACT_SPLIT_DEPTH_FLOOR)
+        }
 
         internal fun shouldProactivelySplit(
             messageCount: Int,
@@ -192,11 +280,13 @@ class ChatViewModel(
             tokenBudget: Int,
             depth: Int,
             callsAlreadySpent: Int,
+            callBudget: Int = MAX_COMPACT_LLM_CALLS,
+            maxDepth: Int = COMPACT_SPLIT_DEPTH_FLOOR,
         ): Boolean =
             messageCount >= 2 &&
-                depth < 3 &&
+                depth < maxDepth &&
                 estimatedTokens > tokenBudget &&
-                callsAlreadySpent + 2 <= MAX_COMPACT_LLM_CALLS
+                callsAlreadySpent + 2 <= callBudget
 
         internal fun isFirstByteTimeout(error: Throwable): Boolean {
             val detail = when (error) {
@@ -228,7 +318,17 @@ class ChatViewModel(
         internal fun isCompactSummaryAcceptable(summary: String, messages: List<LLMMessage>): Boolean {
             val trimmed = summary.trim()
             if (trimmed.length < MIN_ACCEPTABLE_SUMMARY_CHARS) return false
-            val lastUser = messages.lastOrNull { it.role == LLMMessage.Role.USER } ?: return true
+            // [T-android-compact-tool-probe] Agent loops inject tool output as
+            // a USER message ("[Tool result: ...]"). Picking that as the probe
+            // makes the quality gate demand the summary echo a build log or a
+            // grep dump — which no faithful summary does — so compaction was
+            // rejected on exactly the long, tool-heavy sessions that need it.
+            // Prefer the newest real user turn; fall back to the raw last user
+            // message only when the range contains nothing else.
+            val lastUser = messages.lastOrNull {
+                it.role == LLMMessage.Role.USER &&
+                    !it.content.trimStart().startsWith("[Tool result:")
+            } ?: messages.lastOrNull { it.role == LLMMessage.Role.USER } ?: return true
             val probe = lastUser.content.trim()
             if (probe.length < 4) return true
             val lower = trimmed.lowercase()
@@ -429,7 +529,7 @@ class ChatViewModel(
          * Added per 10k characters of transcript, so a long first compaction is
          * not cut off by a limit tuned for a short one.
          */
-        internal const val COMPACT_TIMEOUT_PER_10K_CHARS_MS = 30_000L
+        internal const val COMPACT_TIMEOUT_PER_10K_CHARS_MS = 15_000L
 
         /**
          * Hard ceiling. Deliberately under the providers' 10-minute
@@ -437,7 +537,7 @@ class ChatViewModel(
          * released and a clear message — rather than sitting on a socket that
          * may never answer.
          */
-        internal const val COMPACT_TIMEOUT_MAX_MS = 300_000L
+        internal const val COMPACT_TIMEOUT_MAX_MS = 540_000L
 
         /**
          * Wall-clock budget for compacting a transcript of [transcriptChars].
@@ -1975,6 +2075,21 @@ class ChatViewModel(
     internal val compactCallsIssued = java.util.concurrent.atomic.AtomicInteger(0)
 
     /**
+     * [T-android-compact-large-history] Per-run leaf-call budget and split
+     * depth, sized from the transcript by the split recursion at depth 0.
+     * Defaults keep short compactions on the old fixed budget.
+     */
+    internal var compactCallBudget: Int = ChatViewModel.MAX_COMPACT_LLM_CALLS
+    internal var compactMaxSplitDepth: Int = ChatViewModel.COMPACT_SPLIT_DEPTH_FLOOR
+
+    /**
+     * [T-android-compact-parallel] Caps concurrent leaf summaries. Created per
+     * compaction at depth 0; null keeps the historical serial behaviour for
+     * callers that bypass the split recursion.
+     */
+    internal var compactLeafGate: Semaphore? = null
+
+    /**
      * The running compaction's job, so the UI can offer a Cancel affordance.
      * Cancelling routes through the same `finally` that clears the lock, so a
      * user-cancelled compaction leaves no state behind.
@@ -3499,13 +3614,18 @@ class ChatViewModel(
         messages: List<LLMMessage>,
         previousSummary: String?,
         depth: Int,
-    ): String {
+    ): String = coroutineScope {
         val mid = messages.size / 2
         val firstHalf = messages.subList(0, mid).toList()
         val secondHalf = messages.subList(mid, messages.size).toList()
-        val summary1 = generateCompactSummaryWithSplitting(firstHalf, previousSummary, depth + 1)
-        val summary2 = generateCompactSummaryWithSplitting(secondHalf, null, depth + 1)
-        return summary1 + "\n\n" + summary2
+        // [T-android-compact-parallel] The two halves are independent model
+        // calls; running them one after the other doubled wall-clock for no
+        // semantic gain (the join is still oldest-first). compactLeafGate
+        // bounds the real concurrency, so a depth-4 tree does not fan out to
+        // eight simultaneous requests.
+        val first = async { generateCompactSummaryWithSplitting(firstHalf, previousSummary, depth + 1) }
+        val second = async { generateCompactSummaryWithSplitting(secondHalf, null, depth + 1) }
+        first.await() + "\n\n" + second.await()
     }
 
     internal data class CompactAttempt(
@@ -3517,9 +3637,9 @@ class ChatViewModel(
         val temperature: Double? = null,
     ) {
         fun maxOutFor(userMessage: String): Int {
-            val estimatedInput = userMessage.length / 4
+            val estimatedInput = ChatViewModel.estimateCompactTokens(userMessage)
             val window = model.contextWindow?.takeIf { it > 0 } ?: 128_000
-            return maxOf(1024, minOf(8192, window - estimatedInput))
+            return (window - estimatedInput - 1_024).coerceIn(512, 8_192)
         }
     }
 

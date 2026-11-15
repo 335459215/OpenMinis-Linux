@@ -57,14 +57,20 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
         for ((index, stage) in stages.withIndex()) {
             val stageNo = index + 1
             compactLeafAttempt = stage
+            // [T-android-compact-large-history] Each stage gets its own leaf
+            // budget: a session stage that burned every call on splits used to
+            // leave the retry/fallback stage with nothing, so the walk was a
+            // guaranteed double failure. Time is still bounded by
+            // stageTimeout per stage.
+            compactCallsIssued.set(0)
             _compactProgress.value = _compactProgress.value?.copy(
                 stage = stageNo,
                 stageBudget = stages.size,
                 stageKind = stage.kind,
                 modelLabel = stage.label,
                 nextHint = stage.nextHint,
-                callsIssued = stageNo,
-                callBudget = stages.size,
+                callsIssued = compactCallsIssued.get(),
+                callBudget = compactCallBudget,
             )
             val headline = when (stage.kind) {
                 "fallback" -> "Compressing ($stageNo/${stages.size}) with fallback model ${stage.label}."
@@ -79,7 +85,7 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
                 appendSystemInfo(headline, "compact")
             }
             try {
-                val stageTimeout = minOf(timeoutMs, 120_000L)
+                val stageTimeout = minOf(timeoutMs, 240_000L)
                 val text = withTimeout(stageTimeout) {
                     generateCompactSummaryWithSplitting(input, existing, 0)
                 }.trim()

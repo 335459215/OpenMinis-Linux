@@ -76,6 +76,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.ProjectRepo
 import com.openminis.app.BuildConfig
@@ -83,6 +84,17 @@ import com.openminis.app.R
 import com.openminis.app.knowledge.AppNotes
 import com.openminis.app.knowledge.AppNotesStore
 import com.openminis.app.ui.components.openExternalUrl
+
+@Composable
+private fun SettingsGroupLabel(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,6 +191,8 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            SettingsGroupLabel("常用")
+
             // -- LLM Providers --
             SettingsSection(
                 header = stringResource(R.string.settings_section_llm_providers),
@@ -233,6 +247,8 @@ fun SettingsScreen(
                     showDivider = false,
                 )
             }
+
+            SettingsGroupLabel("Agent")
 
             // -- Agent Runtime --
             SettingsSection(header = stringResource(R.string.settings_section_agent_runtime)) {
@@ -379,6 +395,41 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsGroupLabel("工具与权限")
+
+            // -- Permissions --
+            SettingsSection(header = stringResource(R.string.settings_section_permissions)) {
+                SettingsRow(
+                    icon = Icons.Outlined.Shield,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.settings_section_permissions),
+                    subtitle = stringResource(R.string.settings_permissions_subtitle),
+                    // [T-settings-single-permissions-entry] One entry: the
+                    // permissions page also carries the OS-level grants
+                    // (a11y repair, OEM keep-alive, voice-correction consent)
+                    // that used to live on a separate screen.
+                    onClick = onPermissionsClick,
+                    showDivider = false,
+                )
+            }
+
+            // -- Background & Notifications (T50) --
+            SettingsSection(
+                header = stringResource(R.string.bg_section_header),
+                footer = stringResource(R.string.bg_section_footer),
+            ) {
+                SettingsRow(
+                    icon = Icons.Outlined.BatteryFull,
+                    iconColor = IosOrange,
+                    title = stringResource(R.string.bg_section_header),
+                    subtitle = stringResource(R.string.bg_section_subtitle),
+                    onClick = onBackgroundClick,
+                    showDivider = false,
+                )
+            }
+
+            SettingsGroupLabel("数据")
+
             // -- Storage --
             SettingsSection(header = stringResource(R.string.settings_section_storage)) {
                 SettingsRow(
@@ -412,6 +463,8 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsGroupLabel("网络")
+
             // -- Network [port-upstream-1.16] --
             SettingsSection(header = stringResource(R.string.settings_network_title)) {
                 SettingsRow(
@@ -424,36 +477,7 @@ fun SettingsScreen(
                 )
             }
 
-            // -- Permissions --
-            SettingsSection(header = stringResource(R.string.settings_section_permissions)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Shield,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_section_permissions),
-                    subtitle = stringResource(R.string.settings_permissions_subtitle),
-                    // [T-settings-single-permissions-entry] One entry: the
-                    // permissions page also carries the OS-level grants
-                    // (a11y repair, OEM keep-alive, voice-correction consent)
-                    // that used to live on a separate screen.
-                    onClick = onPermissionsClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Background & Notifications (T50) --
-            SettingsSection(
-                header = stringResource(R.string.bg_section_header),
-                footer = stringResource(R.string.bg_section_footer),
-            ) {
-                SettingsRow(
-                    icon = Icons.Outlined.BatteryFull,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.bg_section_header),
-                    subtitle = stringResource(R.string.bg_section_subtitle),
-                    onClick = onBackgroundClick,
-                    showDivider = false,
-                )
-            }
+            SettingsGroupLabel("系统")
 
             // -- Logs --
             SettingsSection(header = stringResource(R.string.settings_section_logs)) {

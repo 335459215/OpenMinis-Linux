@@ -31,8 +31,8 @@ class CompactFallbackPolicyTest {
     @Test
     fun segmentBudgetClampsAndTriggersOnlyWhenOverBudget() {
         assertEquals(8_000, ChatViewModel.compactSegmentTokenBudget(20_000))
-        assertEquals(32_000, ChatViewModel.compactSegmentTokenBudget(1_000_000))
-        assertEquals(25_600, ChatViewModel.compactSegmentTokenBudget(128_000))
+        assertEquals(750_000, ChatViewModel.compactSegmentTokenBudget(1_000_000))
+        assertEquals(96_000, ChatViewModel.compactSegmentTokenBudget(128_000))
         assertTrue(
             ChatViewModel.shouldProactivelySplit(
                 messageCount = 40,

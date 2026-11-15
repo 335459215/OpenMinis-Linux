@@ -69,6 +69,11 @@ class BackupFileTreeExporter(
 
             val rel = entry.relativeTo(base).path.replace(File.separatorChar, '/')
             if (rel.isEmpty()) continue
+            // Never follow symbolic links. A doc tree with a cyclic link
+            // (node-resolve -> ../node-resolve) turns walkTopDown into an
+            // infinite path; the index grew to 13 GB before this guard.
+            if (java.nio.file.Files.isSymbolicLink(entry.toPath())) continue
+
             val logicalPath = "$logicalPrefix/$rel"
 
             // Never package a backup artifact — see isBackupArtifact.

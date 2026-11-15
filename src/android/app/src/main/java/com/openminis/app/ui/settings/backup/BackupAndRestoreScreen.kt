@@ -1613,9 +1613,6 @@ private fun CategorySwitchRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .then(
-                    if (enabled) Modifier.clickable { onCheckedChange(!checked) } else Modifier,
-                )
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1688,6 +1685,7 @@ internal fun categoryNameRes(cat: BackupCategory): Int = when (cat) {
     BackupCategory.VOICE_CORRECTIONS -> R.string.backup_category_voice
     BackupCategory.ROOTFS -> R.string.backup_category_rootfs
     BackupCategory.CACHE -> R.string.backup_category_cache
+    BackupCategory.AGENT2API -> R.string.backup_category_agent2api
 }
 
 /**
@@ -1706,6 +1704,7 @@ private fun categoryIcon(cat: BackupCategory): ImageVector = when (cat) {
     BackupCategory.VOICE_CORRECTIONS -> Icons.Outlined.RecordVoiceOver // waveform
     BackupCategory.ROOTFS -> Icons.Outlined.Storage
     BackupCategory.CACHE -> Icons.Outlined.FolderZip
+    BackupCategory.AGENT2API -> Icons.Outlined.Dns
 }
 
 /** Tint per category, mirroring iOS BackupCategoryIcon.tint(for:). */
@@ -1720,6 +1719,7 @@ private fun categoryTint(cat: BackupCategory): Color = when (cat) {
     BackupCategory.VOICE_CORRECTIONS -> IosPurple // purple
     BackupCategory.ROOTFS -> IosGreen             // green
     BackupCategory.CACHE -> IosGray              // gray
+    BackupCategory.AGENT2API -> IosIndigo        // indigo
 }
 
 /**

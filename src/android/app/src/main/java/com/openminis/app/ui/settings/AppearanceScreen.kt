@@ -130,7 +130,7 @@ fun autoGroupingEnabled(context: Context): Boolean = getAppearancePrefs(context)
 fun showChatTitleEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_SHOW_CHAT_TITLE, true)
 
 /** [T-thinking-auto-expand-toggle] Default ON: a new streaming thinking block opens expanded. */
-fun autoExpandThinkingEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
+fun autoExpandThinkingEnabled(context: Context): Boolean = getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, false)
 
 /** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
 // [T-android-app-icon-tile-max-width] Upper bound for one icon tile (matches the 192px rasterization; uncapped tiles blurred at ~380dp on tablets).

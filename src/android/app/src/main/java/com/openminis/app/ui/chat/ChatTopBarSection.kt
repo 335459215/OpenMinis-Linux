@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -383,6 +388,37 @@ internal fun ChatTopBarActions(
                         IconButton(onClick = onBrowseChatFiles) {
                             Icon(m3Icon(Icons.Default.Description), contentDescription = stringResource(R.string.chat_menu_browse_chat_files))
                         }
+                    }
+                    // [T-send-mode-pill] 排队 / 插话 / 自动：常驻胶囊，点一下循环切换。
+                    val sendModeCtx = LocalContext.current
+                    var sendModeNow by remember { mutableStateOf(com.openminis.app.data.ChatSendModePrefs.mode()) }
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable {
+                                val next = when (sendModeNow) {
+                                    com.openminis.app.data.ChatSendModePrefs.MODE_QUEUE ->
+                                        com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT
+                                    com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT ->
+                                        com.openminis.app.data.ChatSendModePrefs.MODE_AUTO
+                                    else -> com.openminis.app.data.ChatSendModePrefs.MODE_QUEUE
+                                }
+                                com.openminis.app.data.ChatSendModePrefs.setMode(sendModeCtx, next)
+                                sendModeNow = next
+                            }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = when (sendModeNow) {
+                                com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT -> "插话"
+                                com.openminis.app.data.ChatSendModePrefs.MODE_AUTO -> "自动"
+                                else -> "排队"
+                            },
+                            fontSize = 10.sp,
+                        )
                     }
                     // iOS: "..." circle button → dropdown menu
                     Box {

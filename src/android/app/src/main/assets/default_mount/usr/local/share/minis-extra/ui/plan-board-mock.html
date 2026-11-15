@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{--bg:#0f1115;--card:#1a1d24;--line:#2a2f3a;--text:#e6e8ee;--muted:#8b93a3;--accent:#5b8cff;--done:#39c07a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,Roboto,"Noto Sans SC",sans-serif;padding:18px 14px 40px}
+  h2{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;margin:18px 0 8px}
+  .phone{width:380px;border:1px solid var(--line);border-radius:14px;padding:12px;background:#12151b;margin-bottom:6px}
+  .composer{height:44px;border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:12px;display:flex;align-items:center;padding:0 12px;margin-top:10px}
+  /* 现状：折叠也占满整行、两行文字、大内边距 */
+  .old{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .old .dot{width:8px;height:8px;border-radius:4px;background:var(--accent)}
+  .old .t{font-size:13px;line-height:17px}
+  .old .bar{flex:1;height:3px;background:#2b3240;border-radius:2px;overflow:hidden;margin-top:6px}
+  .old .bar i{display:block;height:100%;width:33%;background:var(--accent)}
+  .old .cnt{font-size:11px;color:var(--muted)}
+  /* 新版：26dp 胶囊，最大 168dp */
+  .new{display:inline-flex;align-items:center;gap:6px;height:26px;max-width:168px;padding:0 8px;background:var(--card);border:1px solid var(--line);border-radius:13px}
+  .new .dot{width:6px;height:6px;border-radius:3px;background:var(--accent);flex:none}
+  .new .t{font-size:11px;line-height:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .new .cnt{font-size:10px;color:var(--muted);flex:none}
+  .done .dot{background:var(--done)}
+  /* 展开面板 */
+  .panel{width:320px;background:#161a21;border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px}
+  .panel .pbar{height:2px;background:#2b3240;border-radius:1px;overflow:hidden}
+  .panel .pbar i{display:block;height:100%;width:33%;background:var(--accent)}
+  .panel .row{display:flex;gap:6px;align-items:flex-start;padding:3px 0;font-size:12px;line-height:15px}
+  .panel .row span:first-child{width:14px;color:var(--muted)}
+  .panel .row.ok span:first-child{color:var(--done)}
+  .note{font-size:11px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+  <h2>现状（折叠态）</h2>
+  <div class="phone">
+    <div class="old">
+      <div class="dot"></div>
+      <div style="flex:1">
+        <div class="t">补齐 syncNative 的 kind 推断</div>
+        <div class="bar"><i></i></div>
+      </div>
+      <div class="cnt">2/6</div>
+    </div>
+    <div class="composer">给 Minis Ultra 发消息…</div>
+    <div class="note">占满整行 380dp、高度 48dp、两行信息</div>
+  </div>
+
+  <h2>新版（默认折叠 · 紧凑胶囊）</h2>
+  <div class="phone">
+    <div class="new"><div class="dot"></div><div class="t">补齐 syncNative 的 kind 推断</div><div class="cnt">2/6</div></div>
+    <div class="composer">给 Minis Ultra 发消息…</div>
+    <div class="note">最大 168dp、高 26dp、单行 11sp</div>
+  </div>
+
+  <h2>新版（全部完成时）</h2>
+  <div class="phone">
+    <div class="new done"><div class="dot"></div><div class="t">已完成 6/6</div><div class="cnt">6/6</div></div>
+    <div class="composer">给 Minis Ultra 发消息…</div>
+  </div>
+
+  <h2>新版（点开面板，最大 320dp）</h2>
+  <div class="phone">
+    <div class="new"><div class="dot"></div><div class="t">补齐 syncNative 的 kind 推断</div><div class="cnt">2/6</div></div>
+    <div class="panel">
+      <div class="pbar"><i></i></div>
+      <div class="row ok"><span>✓</span><span>补齐 syncNative 的 kind 推断</span></div>
+      <div class="row ok"><span>✓</span><span>语义相似度加 cosine 与实体权重</span></div>
+      <div class="row"><span>●</span><span>任务清单折叠紧凑化方案</span></div>
+      <div class="row"><span>○</span><span>单任务也显示清单</span></div>
+    </div>
+    <div class="composer">给 Minis Ultra 发消息…</div>
+  </div>
+</body>
+</html>

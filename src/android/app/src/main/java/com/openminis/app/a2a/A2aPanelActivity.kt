@@ -84,6 +84,16 @@ class A2aPanelActivity : Activity() {
                 val url = request.url.toString()
                 return !isLocal(url) && routeToPopup(url)
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                view?.evaluateJavascript(A2aPanelTweaks.JS, null)
+            }
+
+            override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                super.doUpdateVisitedHistory(view, url, isReload)
+                view?.evaluateJavascript(A2aPanelTweaks.JS, null)
+            }
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onCreateWindow(
@@ -127,6 +137,18 @@ class A2aPanelActivity : Activity() {
 
         setContentView(root)
         webView = web
+
+        // [T-a2a-back-invoked] Android 13+ 的返回统一走 OnBackInvokedDispatcher，
+        // 只重写 onBackPressed 在部分机型上会偶发不触发；这里显式注册。
+        if (Build.VERSION.SDK_INT >= 33) {
+            runCatching {
+                onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                ) {
+                    if (!handlePanelBack()) finish()
+                }
+            }
+        }
 
         // 状态栏内边距：不把标题顶到状态栏下面去。
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->

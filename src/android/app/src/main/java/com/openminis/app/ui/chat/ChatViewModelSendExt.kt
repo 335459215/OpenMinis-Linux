@@ -31,6 +31,7 @@ internal fun ChatViewModel.sendMessage(
     text: String,
     skipContextCheck: Boolean,
     internalGoalRun: Boolean = false,
+    forceImmediate: Boolean = false,
 ) {
     // [T-android-paste-mediaref] `[Pasted#N]` markers are NOT expanded here
     // any more.
@@ -50,7 +51,7 @@ internal fun ChatViewModel.sendMessage(
     // a send that then bails on the context-check paths below.
     val trimmed = text.trim()
     // While streaming, enqueue instead of silently dropping (iOS: send vs enqueuePrompt).
-    if (_isStreaming.value) {
+    if (_isStreaming.value && !forceImmediate) {
         enqueuePrompt(text)
         return
     }
@@ -226,6 +227,8 @@ internal fun ChatViewModel.sendMessage(
     // slip past the entry guard during DB/OAuth setup. See retryFromMessage.
     AppLogger.info(ChatViewModel.TAG_STREAM, "send _isStreaming=true (sync, sid=$activeSessionId)")
     _isStreaming.value = true
+    // 新发送也要登记活动，否则会话列表的 SpinningRing 永远不亮。
+    SessionActivityTracker.setActive(activeSessionId, onStop = { cancelStream() })
 
     // [T-android-instant-thinking] REMOVED: the placeholder inserted here
     // was meant to give instant "thinking" feedback before DB writes complete,

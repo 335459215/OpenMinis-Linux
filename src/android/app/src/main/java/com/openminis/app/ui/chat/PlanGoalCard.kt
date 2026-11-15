@@ -133,6 +133,7 @@ internal fun PlanGoalCard(
     viewModel: ChatViewModel,
     modifier: Modifier = Modifier,
     onLocate: ((String) -> Unit)? = null,
+    showBoard: Boolean = true,
 ) {
     val context = LocalContext.current
     val sid = viewModel.activeSessionId
@@ -227,7 +228,7 @@ internal fun PlanGoalCard(
         }
     }
 
-    val cardVisible = headerVisible || boardVisible
+    val cardVisible = headerVisible || (boardVisible && showBoard)
     AnimatedVisibility(
         visible = cardVisible,
         modifier = modifier,
@@ -250,7 +251,7 @@ internal fun PlanGoalCard(
                 // owns the row and carries the goal's objective in its title;
                 // the standalone goal header only appears for a goal WITHOUT a
                 // board. The divider that separated them is gone with it.
-                if (headerVisible && !boardVisible) {
+                if (headerVisible && (!boardVisible || !showBoard)) {
                     goalDisplay?.let { goal ->
                         GoalHeaderRow(
                             goal = goal,
@@ -262,7 +263,7 @@ internal fun PlanGoalCard(
                     }
                 }
                 AnimatedVisibility(
-                    visible = boardVisible,
+                    visible = boardVisible && showBoard,
                     enter = fadeIn(tween(ENTER_ANIM_MS)) + expandVertically(tween(ENTER_ANIM_MS)),
                     exit = fadeOut(tween(EXIT_ANIM_MS)) + shrinkVertically(tween(EXIT_ANIM_MS)),
                 ) {

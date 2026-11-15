@@ -41,7 +41,8 @@ internal object BackupUndoPaths {
         // importProviders / importEnvironmentVariables both land in prefs.
         BackupCategory.PROVIDERS -> listOf(PREFS_DIR)
         BackupCategory.ENVIRONMENT_VARIABLES -> listOf(PREFS_DIR)
-        BackupCategory.ROOTFS, BackupCategory.CACHE, BackupCategory.VOICE_CORRECTIONS -> emptyList()
+        BackupCategory.ROOTFS, BackupCategory.CACHE, BackupCategory.AGENT2API,
+        BackupCategory.VOICE_CORRECTIONS -> emptyList()
     }
 
     /**

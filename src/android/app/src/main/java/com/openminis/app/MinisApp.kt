@@ -150,6 +150,7 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Application subclasses run in EVERY process: sub-processes get minimal boot (rest is main-only).
         if (ProcessChecks.shouldSkipMainInit(this)) return
+        com.openminis.app.memory.engine.MemoryEngineProvider.init(this)
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
         com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
 

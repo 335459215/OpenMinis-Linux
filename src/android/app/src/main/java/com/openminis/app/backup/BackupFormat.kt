@@ -100,7 +100,10 @@ enum class BackupCategory(val key: String) {
     /** Full Ubuntu sandbox; large and reproducible, therefore opt-in. */
     ROOTFS("rootfs"),
     /** App cache; volatile and potentially large, therefore opt-in. */
-    CACHE("cache");
+    CACHE("cache"),
+
+    /** Agent2API program + /var/lib/agent2api data (SQLite, plugins, logs). */
+    AGENT2API("agent2api");
 
     /**
      * Categories that stream file trees through the blob store — the ones the
@@ -108,7 +111,7 @@ enum class BackupCategory(val key: String) {
      */
     val carriesFileTree: Boolean
         get() = when (this) {
-            CHATS, SHARED_FILES, SKILLS, ROOTFS, CACHE -> true
+            CHATS, SHARED_FILES, SKILLS, ROOTFS, CACHE, AGENT2API -> true
             MEMORY, PROVIDERS, MCP_SERVERS, VOICE_CORRECTIONS,
             ENVIRONMENT_VARIABLES -> false
         }

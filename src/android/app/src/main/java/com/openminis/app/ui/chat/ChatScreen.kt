@@ -1996,9 +1996,7 @@ fun ChatScreen(
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
-            if (showSubAgentBar) {
-                SubAgentLiveBar(sessionId = sessionId, onStop = com.openminis.app.service.SubAgentActivityTracker::stop)
-            }
+            ChatTopRightSecondRow(viewModel)
             ScheduledCountdownPill(currentSessionId = { viewModel.realSessionId.ifBlank { sessionId } })
             ChatGateBanners(
                 approvals = pendingApprovals,

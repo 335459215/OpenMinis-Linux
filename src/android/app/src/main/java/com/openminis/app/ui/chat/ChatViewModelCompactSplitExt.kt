@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * Summarize [messages], recursively halving when a whole-input attempt
@@ -30,12 +31,25 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
     }
     val tokenBudget = ChatViewModel.compactSegmentTokenBudget(currentModel?.contextWindow ?: 128_000)
     val estimatedTokens = ChatViewModel.estimateCompactTokens(conversationText)
+    // [T-android-compact-large-history] Size the budget/depth from THIS
+    // transcript before the first split decision, instead of pinning every
+    // run to 6 calls and depth 3. A history needing 11 segments previously
+    // threw at the 7th leaf and failed the whole stage.
+    if (depth == 0) {
+        compactCallBudget = ChatViewModel.compactCallBudgetFor(estimatedTokens, tokenBudget)
+        compactMaxSplitDepth = ChatViewModel.compactMaxDepthFor(estimatedTokens, tokenBudget)
+        compactLeafGate = kotlinx.coroutines.sync.Semaphore(ChatViewModel.COMPACT_LEAF_CONCURRENCY)
+    }
+    val callBudget = compactCallBudget
+    val maxDepth = compactMaxSplitDepth
     if (compactAllowSplit && ChatViewModel.shouldProactivelySplit(
             messages.size,
             estimatedTokens,
             tokenBudget,
             depth,
             compactCallsIssued.get(),
+            callBudget,
+            maxDepth,
         )
     ) {
         AppLogger.info(
@@ -43,16 +57,21 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
             "[Compact] proactive split ${messages.size} msgs ~$estimatedTokens tok " +
                 "(budget=$tokenBudget, depth=$depth)",
         )
-        return splitCompactHalves(messages, previousSummary, depth)
+        val partial = splitCompactHalves(messages, previousSummary, depth)
+        return if (depth == 0 && compactCallsIssued.get() > 1) {
+            mergeCompactSummaries(partial)
+        } else {
+            partial
+        }
     }
     // [T-android-compact-runaway] Spend one unit of the run's call budget.
     // The depth cap bounds how DEEP the recursion goes; this bounds how
     // WIDE it gets in total, which is what actually determines wall-clock
     // time when each call is slow rather than failing fast.
     val spent = compactCallsIssued.incrementAndGet()
-    if (spent > ChatViewModel.MAX_COMPACT_LLM_CALLS) {
+    if (spent > callBudget) {
         throw IllegalStateException(
-            "compaction exceeded its budget of ${ChatViewModel.MAX_COMPACT_LLM_CALLS} model calls"
+            "compaction exceeded its budget of $callBudget model calls"
         )
     }
     // [T-android-compact-progress] Publish before the call so the UI shows
@@ -62,20 +81,25 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
         callsIssued = spent,
     )
     return try {
-        generateCompactSummary(conversationText)
+        val gate = compactLeafGate
+        if (gate == null) {
+            generateCompactSummary(conversationText)
+        } else {
+            gate.withPermit { generateCompactSummary(conversationText) }
+        }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        if (!compactAllowSplit || !isSegmentRetryableError(e) || messages.size < 2 || depth >= 3) {
+        if (!compactAllowSplit || !isSegmentRetryableError(e) || messages.size < 2 || depth >= maxDepth) {
             throw e
         }
         // Don't start a split we cannot afford to finish: a half that
         // immediately throws on budget would discard the sibling's work.
-        if (compactCallsIssued.get() + 2 > ChatViewModel.MAX_COMPACT_LLM_CALLS) {
+        if (compactCallsIssued.get() + 2 > callBudget) {
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[Compact] not splitting at depth=$depth — " +
-                    "${compactCallsIssued.get()}/${ChatViewModel.MAX_COMPACT_LLM_CALLS} calls already spent",
+                    "${compactCallsIssued.get()}/$callBudget calls already spent",
             )
             throw e
         }
@@ -83,6 +107,11 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
             ChatViewModel.TAG,
             "[Compact] Splitting ${messages.size} messages after retryable error (depth=$depth)",
         )
-        return splitCompactHalves(messages, previousSummary = null, depth)
+        val partial = splitCompactHalves(messages, previousSummary = null, depth)
+        return if (depth == 0 && compactCallsIssued.get() > 1) {
+            mergeCompactSummaries(partial)
+        } else {
+            partial
+        }
     }
 }

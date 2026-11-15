@@ -2360,6 +2360,7 @@
     <string name="vm_wait_compact_before_send">请等待当前压缩完成后再发送。</string>
     <string name="token_usage_cache_hit_rate">最近一轮命中率</string>
     <string name="backup_category_rootfs">Ubuntu 根文件系统</string>
+    <string name="backup_category_agent2api">Agent2API</string>
     <string name="backup_category_cache">应用缓存</string>
     <string name="chat_tool_edited">已编辑</string>
     <string name="chat_tool_result_label">结果</string>

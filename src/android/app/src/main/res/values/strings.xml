@@ -1743,6 +1743,7 @@
     <string name="backup_category_env_vars">Environment Variables</string>
     <string name="backup_category_voice">Voice Corrections</string>
     <string name="backup_category_rootfs">Ubuntu Rootfs</string>
+    <string name="backup_category_agent2api">Agent2API</string>
     <string name="backup_category_cache">Application Cache</string>
     <!-- Max Per-File Size picker -->
     <string name="backup_max_file_size">Max Per-File Size</string>

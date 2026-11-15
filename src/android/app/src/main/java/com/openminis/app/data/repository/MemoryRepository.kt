@@ -424,7 +424,13 @@ class MemoryRepository(private val memoryDir: File) {
             notes.add("[Output truncated at $lineCap lines]")
         }
         val truncatedNote = if (notes.isNotEmpty()) "\n\n" + notes.joinToString("\n") else ""
-        return results.joinToString("\n\n") + truncatedNote
+        val base = results.joinToString("\n\n") + truncatedNote
+        if (keywordList.isEmpty()) return base
+        val engineHits = com.openminis.app.memory.engine.MemoryEngineProvider.recall(keywords, 5)
+        if (engineHits.isEmpty()) return base
+        return base + "\n\n【结构化记忆】\n" + engineHits.joinToString("\n") {
+            "- [${it.kind}·${"%.2f".format(it.score)}] ${it.text}"
+        }
     }
 
     // -- System Prompt Fragment --

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -187,11 +188,11 @@ internal fun PlanBoardBody(
         }
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                // iOS minimum row height: the summary line is both the label
-                // and the toggle, so it has to be finger-sized.
+                // [T-planboard-compact] 折叠态收窄成胶囊：最大 168dp，
+                // 不再撑满 composer 宽度；高度仍留 44dp 触摸区。
+                .widthIn(max = 168.dp)
                 .heightIn(min = 44.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .pointerInput(expanded) {
                     // Directional swipe, one fire per gesture past 24dp.
                     // Keyed on `expanded` so the closure reads live state.

@@ -206,7 +206,7 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
     val isFailed = !isThinking && step.status == ToolBlockStatus.FAILED
     val block = step.block
 
-    var stepExpanded by remember(step.id) { mutableStateOf(step.running) }
+    var stepExpanded by remember(step.id) { mutableStateOf(false) }
     var userTouched by remember(step.id) { mutableStateOf(false) }
     LaunchedEffect(step.id, step.running) {
         if (!step.running && !userTouched) {

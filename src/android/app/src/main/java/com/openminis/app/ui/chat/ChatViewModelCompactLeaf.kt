@@ -47,6 +47,53 @@ internal suspend fun ChatViewModel.generateCompactSummary(conversationText: Stri
 }
 
 /**
+ * [T-android-compact-merge] A split run writes one summary per leaf and the
+ * splitter concatenates them. Concatenation keeps the facts but loses the
+ * cross-half thread: a decision in leaf 1 and the file it touched in leaf 3
+ * never meet, and each leaf was written blind to its siblings.
+ *
+ * One small merge call over the PARTIAL SUMMARIES (never the transcript)
+ * restores a single coherent summary. This is the price of chunking: Cline
+ * and Codex avoid it by never chunking, so only runs that actually split pay
+ * this extra call. The run's call budget still bounds it — when the budget is
+ * gone, the concatenated partials stand.
+ */
+internal suspend fun ChatViewModel.mergeCompactSummaries(partial: String): String {
+    if (partial.isBlank()) return partial
+    val spent = compactCallsIssued.incrementAndGet()
+    if (spent > compactCallBudget) {
+        compactCallsIssued.decrementAndGet()
+        AppLogger.info(ChatViewModel.TAG, "[Compact] merge skipped — call budget spent")
+        return partial
+    }
+    val attempt = compactLeafAttempt ?: compactStagePlan().firstOrNull()
+        ?: throw IllegalStateException("No LLM provider available for compaction")
+    val userMessage = buildString {
+        append("Merge these partial conversation summaries into ONE coherent context summary:\n\n")
+        append(partial)
+        append("\n\n---\nEND OF PARTIAL SUMMARIES.\n\n")
+        append(
+            "Keep every file path, command, error, decision and identifier verbatim. " +
+                "Order events chronologically, remove duplicated statements, add no new facts. " +
+                "Write in past tense as \"what was discussed / what was done\"."
+        )
+    }
+    AppLogger.info(ChatViewModel.TAG, "[Compact] merge via ${attempt.label}")
+    val text = attempt.provider.sendMessage(
+        messages = listOf(
+            LLMMessage(role = LLMMessage.Role.USER, content = userMessage)
+        ),
+        systemPrompt = compactSummarySystemPrompt,
+        maxTokens = attempt.maxOutFor(userMessage),
+        temperature = attempt.temperature,
+        imageParts = emptyList(),
+        tools = emptyList(),
+        thinkingLevel = ThinkingLevel.OFF,
+    ).text
+    return text.ifBlank { partial }
+}
+
+/**
  * System prompt for the single-shot summarisation call. Matches iOS
  * wording so cross-device summaries stay stylistically aligned.
  */

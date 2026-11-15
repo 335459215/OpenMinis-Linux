@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# minis-rustfs — Minis Ultra 内置 S3 对象存储控制脚本
+# 用法: minis-rustfs start|stop|restart|status|log|url|env|ls|put|get|presign|rm|backup|restore
+set -uo pipefail
+
+ROOT="${MINIS_RUSTFS_ROOT:-/var/minis/shared/rustfs}"
+BIN="$ROOT/rustfs"
+DATA="$ROOT/data"
+LOG="$ROOT/rustfs.log"
+PIDF="$ROOT/rustfs.pid"
+ENVF="$ROOT/env.sh"
+ADDR="${MINIS_RUSTFS_ADDR:-127.0.0.1:9000}"
+CADDR="${MINIS_RUSTFS_CONSOLE:-127.0.0.1:9001}"
+
+mkdir -p "$ROOT" "$DATA"
+
+if [ ! -f "$ENVF" ]; then
+  umask 077
+  cat > "$ENVF" <<EOF
+export RUSTFS_ACCESS_KEY=minis$(openssl rand -hex 4)
+export RUSTFS_SECRET_KEY=$(openssl rand -hex 20)
+export RUSTFS_REGION=us-east-1
+export RUSTFS_CONSOLE_ENABLE=true
+EOF
+  chmod 600 "$ENVF"
+fi
+# shellcheck disable=SC1090
+. "$ENVF"
+
+s3() {  # python boto3 单文件封装
+  python3 - "$@" <<'PY'
+import sys, os, boto3
+from botocore.config import Config
+cmd = sys.argv[1]
+s3 = boto3.client("s3",
+    endpoint_url=os.environ.get("MINIS_RUSTFS_ENDPOINT", "http://127.0.0.1:9000"),
+    aws_access_key_id=os.environ["RUSTFS_ACCESS_KEY"],
+    aws_secret_access_key=os.environ["RUSTFS_SECRET_KEY"],
+    region_name=os.environ.get("RUSTFS_REGION", "us-east-1"),
+    config=Config(s3={"addressing_style": "path"}, retries={"max_attempts": 2}))
+a = sys.argv[2:]
+if cmd == "ls":
+    if not a: 
+        for b in s3.list_buckets()["Buckets"]: print("bucket", b["Name"])
+    else:
+        for o in s3.list_objects_v2(Bucket=a[0], Prefix=a[1] if len(a) > 1 else "") .get("Contents", []):
+            print(f'{o["Size"]:>12}  {o["LastModified"]:%Y-%m-%d %H:%M}  s3://{a[0]}/{o["Key"]}')
+elif cmd == "put":
+    local, bucket, key = a[0], a[1], a[2] if len(a) > 2 else os.path.basename(a[0])
+    s3.upload_file(local, bucket, key)  # 单次 PUT，绕开 PRoot 下损坏的 multipart
+    print(f"uploaded {local} -> s3://{bucket}/{key} ({os.path.getsize(local)} B)")
+elif cmd == "get":
+    bucket, key, dest = a[0], a[1], a[2]
+    s3.download_file(bucket, key, dest); print(f"downloaded s3://{bucket}/{key} -> {dest}")
+elif cmd == "presign":
+    bucket, key = a[0], a[1]; ttl = int(a[2]) if len(a) > 2 else 3600
+    print(s3.generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=ttl))
+elif cmd == "rm":
+    s3.delete_object(Bucket=a[0], Key=a[1]); print("deleted", a[0], a[1])
+elif cmd == "mb":
+    s3.create_bucket(Bucket=a[0]); print("bucket created", a[0])
+elif cmd == "backup":
+    s3.upload_file(a[0], a[1], a[2]); print(f"backup uploaded s3://{a[1]}/{a[2]}")
+PY
+}
+
+case "${1:-status}" in
+  start)
+    if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then echo "already running pid $(cat "$PIDF")"; exit 0; fi
+    ( nohup env RUSTFS_ACCESS_KEY="$RUSTFS_ACCESS_KEY" RUSTFS_SECRET_KEY="$RUSTFS_SECRET_KEY" \
+        RUSTFS_REGION="${RUSTFS_REGION:-us-east-1}" RUSTFS_CONSOLE_ENABLE=true \
+        "$BIN" server "$DATA" --address "$ADDR" --console-address "$CADDR" > "$LOG" 2>&1 & echo $! > "$PIDF" )
+    for i in $(seq 1 30); do
+      [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://$ADDR/minio/health/live")" = "200" ] && { echo "rustfs up in ${i}s: http://$ADDR  console: http://$CADDR/rustfs/console/"; exit 0; }
+      sleep 1
+    done
+    echo "start timeout, see $LOG"; exit 1 ;;
+  stop)
+    if [ -f "$PIDF" ]; then kill "$(cat "$PIDF")" 2>/dev/null; rm -f "$PIDF"; echo stopped; else pkill -f "rustfs server $DATA" && echo stopped || echo "not running"; fi ;;
+  restart) "$0" stop; sleep 1; "$0" start ;;
+  status)
+    if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
+      echo "running pid $(cat "$PIDF")"
+      ps -o pid,rss,etime,cmd -p "$(cat "$PIDF")" --no-headers || true
+      curl -s -o /dev/null -w "health=%{http_code}\n" --max-time 3 "http://$ADDR/minio/health/live"
+      du -sh "$DATA" 2>/dev/null
+    else echo "stopped"; fi ;;
+  log) tail -n "${2:-30}" "$LOG" | cut -c1-240 ;;
+  url) echo "endpoint http://$ADDR   console http://$CADDR/rustfs/console/" ;;
+  env) echo "export AWS_ACCESS_KEY_ID=$RUSTFS_ACCESS_KEY"; echo "export AWS_SECRET_ACCESS_KEY=$RUSTFS_SECRET_KEY"; echo "export AWS_ENDPOINT_URL=http://$ADDR"; echo "export AWS_DEFAULT_REGION=${RUSTFS_REGION:-us-east-1}" ;;
+  ls|put|get|presign|rm|mb) s3 "$@" ;;
+  backup)
+    TS=$(date +%Y%m%d-%H%M%S); TAR="/tmp/minis-$TS.tar.gz"
+    tar czf "$TAR" -C /var/minis --exclude=shared/rustfs/data . 2>/dev/null
+    s3 mb minis-backup >/dev/null 2>&1
+    s3 backup "$TAR" minis-backup "backup/minis-$TS.tar.gz"
+    rm -f "$TAR" ;;
+  restore)
+    s3 get minis-backup "$2" /tmp/restore.tgz && tar xzf /tmp/restore.tgz -C "${3:-/var/minis}" && echo restored ;;
+  *) echo "usage: minis-rustfs start|stop|restart|status|log|url|env|ls|put|get|presign|rm|mb|backup|restore"; exit 2 ;;
+esac

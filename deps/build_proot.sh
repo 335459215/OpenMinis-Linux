@@ -140,6 +140,7 @@ setup_toolchain() {
     case "$(uname -s)-$(uname -m)" in
         Darwin-*)         host_tag="darwin-x86_64" ;;
         Linux-x86_64)     host_tag="linux-x86_64" ;;
+        Linux-aarch64)    host_tag="linux-aarch64" ;;
         Linux-aarch64|Linux-arm64) host_tag="linux-aarch64" ;;
         *)                log_error "Unsupported host: $(uname -s) $(uname -m)" ;;
     esac

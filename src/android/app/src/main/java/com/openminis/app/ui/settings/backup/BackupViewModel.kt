@@ -1032,10 +1032,12 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     // -- Persistence helpers ---------------------------------------------
 
     private fun loadSelectedCategories(): Set<BackupCategory> {
-        val raw = prefs.getString(KEY_CATEGORIES, null) ?: return BackupCategory.backupable.toSet()
+        // 共享文件默认不勾：它通常有几个 GB，新用户不该为默认值等十几分钟。
+        val defaults = BackupCategory.backupable.toSet() - BackupCategory.SHARED_FILES
+        val raw = prefs.getString(KEY_CATEGORIES, null) ?: return defaults
         val restored = raw.split(",").mapNotNull(BackupCategory::fromKey)
             .filter { it in BackupCategory.backupable }.toSet()
-        return restored.ifEmpty { BackupCategory.backupable.toSet() }
+        return restored.ifEmpty { defaults }
     }
 
     /** [T-android-human-bytes-one-place] One formatter only; see [humanBytes]. */

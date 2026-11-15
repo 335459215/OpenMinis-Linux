@@ -28,7 +28,12 @@ internal fun ChatViewModel.sendOrQueue(text: String) {
     }
     cancelStream()
     viewModelScope.launch {
-        delay(150)
-        sendMessage(text)
+        // 等流真正停下再发，否则 sendMessage 又会走 enqueue，看起来像“插话无效”。
+        var waited = 0
+        while (_isStreaming.value && waited < 3000) {
+            delay(50)
+            waited += 50
+        }
+        sendMessage(text, skipContextCheck = false, forceImmediate = true)
     }
 }

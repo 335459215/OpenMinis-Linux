@@ -1,0 +1,298 @@
+#!/usr/bin/env python3
+"""minis-cas — 内容寻址存储（CDC 分块 + SHA-256 + SQLite 索引）
+
+用法:
+  minis-cas put <file> [--tag T]     入库，返回 manifest hash
+  minis-cas get <hash|path> <out>    还原
+  minis-cas ls [prefix]              列出已入库文件
+  minis-cas stat <hash|path>         单文件详情（块数/物理占用/去重收益）
+  minis-cas verify                   全库校验（重算每块 sha256）
+  minis-cas gc                       清理零引用块
+  minis-cas stats                    全库统计
+  minis-cas ingest-dir <dir>         批量入库目录
+
+设计:
+  - FastCDC 风格 gear hash 滚动分块，min 16KiB / avg 64KiB / max 256KiB
+  - 块按 sha256 落盘 objects/aa/bb/<hash>，同内容只存一份
+  - files 表记录 path -> (file_hash, size, chunk list)
+  - 原子写：tmp 文件 + os.replace；入库后 fsync
+"""
+import argparse, hashlib, os, random, sqlite3, sys, time
+from pathlib import Path
+
+ROOT = Path(os.environ.get("MINIS_CAS_ROOT", "/var/minis/shared/cas"))
+OBJ = ROOT / "objects"
+DB = ROOT / "index.db"
+TMP = ROOT / "tmp"
+
+MIN, AVG, MAX = 16 * 1024, 64 * 1024, 256 * 1024
+MASK = (1 << 16) - 1  # 2^16 ≈ 64KiB 平均块
+
+_rng = random.Random(0x4D696E6973556C74)
+GEAR = [_rng.getrandbits(64) for _ in range(256)]
+
+# C 加速：libcdc.so 存在就走 ctypes，缺失时回落纯 Python 分块
+import ctypes
+_LIB = None
+try:
+    _LIB = ctypes.CDLL("/usr/local/lib/miniscas/libcdc.so")
+    _LIB.cas_cdc.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_size_t,
+                             ctypes.c_int, ctypes.c_size_t,
+                             ctypes.POINTER(ctypes.c_size_t), ctypes.c_size_t]
+    _LIB.cas_cdc.restype = ctypes.c_size_t
+except OSError:
+    _LIB = None
+
+
+def ensure():
+    for d in (OBJ, TMP):
+        d.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB)
+    con.executescript("""
+    PRAGMA journal_mode=WAL;
+    CREATE TABLE IF NOT EXISTS blobs(
+      hash TEXT PRIMARY KEY, size INTEGER NOT NULL, refs INTEGER NOT NULL DEFAULT 0,
+      created REAL NOT NULL);
+    CREATE TABLE IF NOT EXISTS files(
+      path TEXT PRIMARY KEY, file_hash TEXT NOT NULL, size INTEGER NOT NULL,
+      chunks INTEGER NOT NULL, mtime REAL, created REAL NOT NULL, tag TEXT);
+    CREATE TABLE IF NOT EXISTS manifest(
+      file_hash TEXT NOT NULL, idx INTEGER NOT NULL, chunk TEXT NOT NULL,
+      PRIMARY KEY(file_hash, idx));
+    CREATE INDEX IF NOT EXISTS idx_manifest_chunk ON manifest(chunk);
+    CREATE INDEX IF NOT EXISTS idx_files_hash ON files(file_hash);
+    """)
+    return con
+
+
+def chunk_stream(fh):
+    buf = bytearray()
+    h = 0
+    while True:
+        block = fh.read(1 << 20)
+        if not block:
+            break
+        for b in block:
+            h = ((h << 1) + GEAR[b]) & 0xFFFFFFFFFFFFFFFF
+            buf.append(b)
+            if len(buf) >= MIN and ((h & MASK) == 0 or len(buf) >= MAX):
+                yield bytes(buf)
+                buf.clear()
+                h = 0
+    if buf:
+        yield bytes(buf)
+
+
+def blob_path(h):
+    return OBJ / h[:2] / h[2:4] / h
+
+
+def iter_chunks(path: Path):
+    """C 加速分块；文件超大或库缺失时回落纯 Python 流式。"""
+    size = path.stat().st_size
+    if _LIB is not None and size <= (512 << 20):
+        data = path.read_bytes()
+        if not data:
+            return
+        max_cuts = size // MIN + 2
+        arr = (ctypes.c_size_t * max_cuts)()
+        n = _LIB.cas_cdc(ctypes.c_char_p(data), size, MIN, 16, MAX, arr, max_cuts)
+        off = 0
+        for i in range(n):
+            ln = arr[i]
+            yield data[off:off + ln]
+            off += ln
+        return
+    with path.open("rb") as fh:
+        yield from chunk_stream(fh)
+
+
+def put_file(con, path: Path, tag=None):
+    if not path.is_file():
+        raise SystemExit(f"not a file: {path}")
+    t0 = time.time()
+    file_hasher = hashlib.sha256()
+    chunks, offset = [], 0
+    for ch in iter_chunks(path):
+        file_hasher.update(ch)
+        h = hashlib.sha256(ch).hexdigest()
+        dst = blob_path(h)
+        if not dst.exists():
+            tmp = TMP / f"{h}.{os.getpid()}"
+            with tmp.open("wb") as w:
+                w.write(ch)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(tmp, dst)
+            con.execute("INSERT OR IGNORE INTO blobs(hash,size,refs,created) VALUES(?,?,0,?)",
+                        (h, len(ch), time.time()))
+        chunks.append(h)
+        offset += len(ch)
+    file_hash = file_hasher.hexdigest()
+
+    old = con.execute("SELECT file_hash FROM files WHERE path=?", (str(path),)).fetchone()
+    if old and old[0] != file_hash:
+        for (c,) in con.execute("SELECT chunk FROM manifest WHERE file_hash=?", (old[0],)):
+            con.execute("UPDATE blobs SET refs=refs-1 WHERE hash=?", (c,))
+    con.execute("DELETE FROM manifest WHERE file_hash=?", (file_hash,))
+    con.executemany("INSERT INTO manifest(file_hash,idx,chunk) VALUES(?,?,?)",
+                    [(file_hash, i, c) for i, c in enumerate(chunks)])
+    new_refs = {}
+    for c in chunks:
+        new_refs[c] = new_refs.get(c, 0) + 1
+    con.executemany("UPDATE blobs SET refs=refs+? WHERE hash=?", [(v, k) for k, v in new_refs.items()])
+    con.execute("""INSERT INTO files(path,file_hash,size,chunks,mtime,created,tag)
+                   VALUES(?,?,?,?,?,?,?)
+                   ON CONFLICT(path) DO UPDATE SET
+                     file_hash=excluded.file_hash, size=excluded.size,
+                     chunks=excluded.chunks, mtime=excluded.mtime, tag=excluded.tag""",
+                (str(path), file_hash, offset, len(chunks), path.stat().st_mtime, time.time(), tag))
+    con.commit()
+    return file_hash, offset, len(chunks), time.time() - t0
+
+
+def resolve(con, ref: str):
+    if len(ref) == 64 and all(c in "0123456789abcdef" for c in ref):
+        row = con.execute("SELECT file_hash FROM files WHERE file_hash=? LIMIT 1", (ref,)).fetchone()
+        if row:
+            return row[0]
+        row = con.execute("SELECT hash FROM blobs WHERE hash=?", (ref,)).fetchone()
+        if row:
+            return "blob:" + ref
+        raise SystemExit("hash not found")
+    row = con.execute("SELECT file_hash FROM files WHERE path=? OR path LIKE ? LIMIT 1",
+                      (ref, f"%{ref}%")).fetchone()
+    if not row:
+        raise SystemExit("path not found")
+    return row[0]
+
+
+def get_file(con, ref: str, out: Path):
+    fh = resolve(con, ref)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(out.suffix + ".part")
+    with tmp.open("wb") as w:
+        if fh.startswith("blob:"):
+            w.write(blob_path(fh[5:]).read_bytes())
+        else:
+            for (c,) in con.execute("SELECT chunk FROM manifest WHERE file_hash=? ORDER BY idx", (fh,)):
+                w.write(blob_path(c).read_bytes())
+    os.replace(tmp, out)
+    return fh
+
+
+def stats(con):
+    blobs, phys = con.execute("SELECT COUNT(*), COALESCE(SUM(size),0) FROM blobs").fetchone()
+    logical, files = con.execute("SELECT COALESCE(SUM(size),0), COUNT(*) FROM files").fetchone()
+    refs = con.execute("SELECT COALESCE(SUM(refs),0) FROM blobs").fetchone()[0]
+    return dict(blobs=blobs, physical=phys, logical=logical, files=files, refs=refs,
+                dedupe=(1 - phys / logical) if logical else 0.0,
+                ratio=(logical / phys) if phys else 0.0)
+
+
+def cmd_put(a):
+    con = ensure()
+    h, size, n, dt = put_file(con, Path(a.file), a.tag)
+    s = stats(con)
+    print(f"put {a.file}  {size/1048576:.1f} MB  {n} chunks  {dt:.2f}s  {size/1048576/dt:.1f} MB/s")
+    print(f"manifest {h}")
+    print(f"库内去重率 {s['dedupe']*100:.1f}%  物理 {s['physical']/1048576:.1f} MB / 逻辑 {s['logical']/1048576:.1f} MB")
+
+
+def cmd_get(a):
+    con = ensure()
+    fh = get_file(con, a.ref, Path(a.out))
+    print(f"restored {a.out}  manifest {fh}")
+
+
+def cmd_ls(a):
+    con = ensure()
+    q = "SELECT path,size,chunks,file_hash FROM files"
+    args = ()
+    if a.prefix:
+        q += " WHERE path LIKE ?"
+        args = (f"%{a.prefix}%",)
+    for p, s, n, h in con.execute(q + " ORDER BY size DESC", args):
+        print(f"{s/1048576:>9.2f} MB  {n:>5} chunks  {h[:12]}  {p}")
+
+
+def cmd_stat(a):
+    con = ensure()
+    fh = resolve(con, a.ref)
+    if fh.startswith("blob:"):
+        h = fh[5:]
+        size, refs = con.execute("SELECT size,refs FROM blobs WHERE hash=?", (h,)).fetchone()
+        print(f"blob {h}  {size} B  refs={refs}")
+        return
+    row = con.execute("SELECT path,size,chunks FROM files WHERE file_hash=? LIMIT 1", (fh,)).fetchone()
+    chunks = [c for (c,) in con.execute("SELECT chunk FROM manifest WHERE file_hash=? ORDER BY idx", (fh,))]
+    uniq = set(chunks)
+    phys = sum(con.execute("SELECT size FROM blobs WHERE hash=?", (c,)).fetchone()[0] for c in uniq)
+    print(f"manifest {fh}\n  path {row[0]}\n  logical {row[1]/1048576:.2f} MB  chunks {row[2]}  unique {len(uniq)}")
+    print(f"  physical {phys/1048576:.2f} MB  块内去重 {(1-phys/row[1])*100:.1f}%")
+
+
+def cmd_verify(a):
+    con = ensure()
+    bad = 0
+    for (h,) in con.execute("SELECT hash FROM blobs"):
+        p = blob_path(h)
+        if not p.exists():
+            print("MISSING", h); bad += 1; continue
+        if hashlib.sha256(p.read_bytes()).hexdigest() != h:
+            print("CORRUPT", h); bad += 1
+    print(f"verify done, blobs bad={bad}")
+    return 0 if bad == 0 else 1
+
+
+def cmd_gc(a):
+    con = ensure()
+    rows = con.execute("SELECT hash FROM blobs WHERE refs<=0").fetchall()
+    freed = 0
+    for (h,) in rows:
+        p = blob_path(h)
+        if p.exists():
+            freed += p.stat().st_size
+            p.unlink()
+        con.execute("DELETE FROM blobs WHERE hash=?", (h,))
+    con.commit()
+    print(f"gc: removed {len(rows)} blobs, freed {freed/1048576:.2f} MB")
+
+
+def cmd_stats(a):
+    con = ensure()
+    s = stats(con)
+    print(f"files {s['files']}  blobs {s['blobs']}  refs {s['refs']}")
+    print(f"logical {s['logical']/1048576:.1f} MB  physical {s['physical']/1048576:.1f} MB")
+    print(f"dedupe {s['dedupe']*100:.1f}%  ratio {s['ratio']:.2f}x")
+
+
+def cmd_dir(a):
+    con = ensure()
+    t0 = time.time()
+    n = 0
+    for p in sorted(Path(a.dir).rglob("*")):
+        if p.is_file() and not p.is_symlink():
+            put_file(con, p, tag="ingest")
+            n += 1
+    s = stats(con)
+    print(f"ingested {n} files in {time.time()-t0:.1f}s")
+    print(f"logical {s['logical']/1048576:.1f} MB  physical {s['physical']/1048576:.1f} MB  dedupe {s['dedupe']*100:.1f}%")
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="minis-cas")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("put"); p.add_argument("file"); p.add_argument("--tag"); p.set_defaults(f=cmd_put)
+    p = sub.add_parser("get"); p.add_argument("ref"); p.add_argument("out"); p.set_defaults(f=cmd_get)
+    p = sub.add_parser("ls"); p.add_argument("prefix", nargs="?"); p.set_defaults(f=cmd_ls)
+    p = sub.add_parser("stat"); p.add_argument("ref"); p.set_defaults(f=cmd_stat)
+    p = sub.add_parser("verify"); p.set_defaults(f=cmd_verify)
+    p = sub.add_parser("gc"); p.set_defaults(f=cmd_gc)
+    p = sub.add_parser("stats"); p.set_defaults(f=cmd_stats)
+    p = sub.add_parser("ingest-dir"); p.add_argument("dir"); p.set_defaults(f=cmd_dir)
+    a = ap.parse_args()
+    sys.exit(a.f(a) or 0)
+
+
+if __name__ == "__main__":
+    main()

@@ -150,6 +150,10 @@ class BackupExporter(
                         trees, File(context.filesDir, "ubuntu-rootfs"), "rootfs", BackupCategory.ROOTFS,
                     )
                 }
+                if (BackupCategory.AGENT2API in options.categories) {
+                    onProgress?.invoke("Exporting Agent2API…")
+                    stats[BackupCategory.AGENT2API.key] = exportAgent2Api(trees)
+                }
                 if (BackupCategory.CACHE in options.categories) {
                     onProgress?.invoke("Exporting cache…")
                     stats[BackupCategory.CACHE.key] = exportTree(
@@ -306,14 +310,16 @@ class BackupExporter(
                                 markers.write("CompactMarkerV2", 1, markerRecord(marker))
                             }
 
-                            // The session's whole on-disk tree: attachments /
-                            // offloads / workspace / browser.
-                            val dir = File(context.filesDir, "minis-sessions/${session.id}")
-                            val r = trees.export(
-                                dir, "chats/${session.id}", BackupCategory.CHATS, session.id
-                            )
-                            fileCount += r.filesIncluded
-                            fileBytes += r.bytesIncluded
+                            // 会话文件树默认不进备份：附件/工作区/浏览器缓存体积大，
+                            // 且 /var/minis 已由共享文件与独立 tar 覆盖。只留消息与索引。
+                            if (INCLUDE_CHAT_SESSION_FILES) {
+                                val dir = File(context.filesDir, "minis-sessions/${session.id}")
+                                val r = trees.export(
+                                    dir, "chats/${session.id}", BackupCategory.CHATS, session.id
+                                )
+                                fileCount += r.filesIncluded
+                                fileBytes += r.bytesIncluded
+                            }
                         }
 
                         for (folder in dao.listFolders()) {
@@ -452,6 +458,24 @@ class BackupExporter(
     ): BackupManifest.CategoryStat {
         val r = trees.export(root, prefix, category)
         return BackupManifest.CategoryStat(r.filesIncluded, r.bytesIncluded, encrypted = false)
+    }
+
+
+    private fun exportAgent2Api(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
+        var files = 0
+        var bytes = 0L
+        val roots = listOf(
+            File(context.filesDir, "ubuntu-rootfs/opt/agent2api") to "agent2api/opt",
+            File(context.filesDir, "ubuntu-rootfs/var/lib/agent2api") to "agent2api/var/lib/agent2api",
+            File(context.filesDir, "ubuntu-rootfs/usr/local/bin") to "agent2api/usr/local/bin",
+        )
+        for ((root, prefix) in roots) {
+            if (!root.exists()) continue
+            val r = trees.export(root, prefix, BackupCategory.AGENT2API)
+            files += r.filesIncluded
+            bytes += r.bytesIncluded
+        }
+        return BackupManifest.CategoryStat(files, bytes, encrypted = false)
     }
 
     private fun exportSharedFiles(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
@@ -769,6 +793,8 @@ class BackupExporter(
 
     companion object {
         private const val TAG = "Backup"
+        /** 是否把每个会话的 attachments/workspace/browser 整树打进备份。 */
+        private const val INCLUDE_CHAT_SESSION_FILES = false
 
         /**
          * Process-wide export/restore lock. Both read the same stores, and a
