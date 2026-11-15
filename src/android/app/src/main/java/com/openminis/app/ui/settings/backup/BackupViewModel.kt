@@ -676,7 +676,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         val avail = manifest.categories.keys.mapNotNull(BackupCategory::fromKey).toSet()
         return PendingRestore(extracted, manifest, avail)
     }
-
     private fun setPending(pending: PendingRestore) {
         _pending.value = pending
         _restoreSelected.value = pending.availableCategories // default-select all present
@@ -1030,7 +1029,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // -- Persistence helpers ---------------------------------------------
-
     private fun loadSelectedCategories(): Set<BackupCategory> {
         // 共享文件默认不勾：它通常有几个 GB，新用户不该为默认值等十几分钟。
         val defaults = BackupCategory.backupable.toSet() - BackupCategory.SHARED_FILES

@@ -461,44 +461,18 @@ class BackupExporter(
     }
 
 
-    private fun exportAgent2Api(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
-        var files = 0
-        var bytes = 0L
-        val roots = listOf(
-            File(context.filesDir, "ubuntu-rootfs/opt/agent2api") to "agent2api/opt",
-            File(context.filesDir, "ubuntu-rootfs/var/lib/agent2api") to "agent2api/var/lib/agent2api",
-            File(context.filesDir, "ubuntu-rootfs/usr/local/bin") to "agent2api/usr/local/bin",
-        )
-        for ((root, prefix) in roots) {
-            if (!root.exists()) continue
-            val r = trees.export(root, prefix, BackupCategory.AGENT2API)
-            files += r.filesIncluded
-            bytes += r.bytesIncluded
-        }
-        return BackupManifest.CategoryStat(files, bytes, encrypted = false)
-    }
+    private fun exportAgent2Api(trees: BackupFileTreeExporter): BackupManifest.CategoryStat =
+        exportAgent2ApiCategory(context, trees)
 
-    private fun exportSharedFiles(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
-        val r = trees.export(
-            File(context.filesDir, "minis-global/shared"), "shared", BackupCategory.SHARED_FILES
-        )
-        return BackupManifest.CategoryStat(r.filesIncluded, r.bytesIncluded, encrypted = false)
-    }
+    private fun exportSharedFiles(trees: BackupFileTreeExporter): BackupManifest.CategoryStat =
+        exportSharedFilesCategory(context, trees)
 
     /**
      * Skills, counted in SKILLS — not files: `filesIncluded` would count
      * directories, so the count mirrors iOS (`rows.count`).
      */
-    private fun exportSkills(trees: BackupFileTreeExporter): BackupManifest.CategoryStat {
-        val root = File(context.filesDir, "minis-global/skills")
-        val r = trees.export(root, "skills", BackupCategory.SKILLS)
-        return BackupManifest.CategoryStat(
-            entries = Companion.skillCount(root),
-            bytes = r.bytesIncluded,
-            encrypted = false,
-            files = r.filesIncluded,
-        )
-    }
+    private fun exportSkills(trees: BackupFileTreeExporter): BackupManifest.CategoryStat =
+        exportSkillsCategory(context, trees)
 
     /** `GLOBAL.md` / `SOUL.md` / daily notes, copied verbatim into `data/memory/`. */
     private fun exportMemory(dataDir: File): BackupManifest.CategoryStat {

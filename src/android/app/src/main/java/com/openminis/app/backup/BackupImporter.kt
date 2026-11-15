@@ -120,7 +120,6 @@ class BackupImporter(
     ): Report = activityLock.withLock {
         importBody(packageRoot, options, onProgress, onCount)
     }
-
     private suspend fun importBody(
         extractedRoot: File,
         options: Options,
@@ -303,7 +302,6 @@ class BackupImporter(
     }
 
     // MARK: - Chats
-
     private suspend fun importChats(
         root: File,
         fileIndex: List<BackupFileIndexEntry>,
@@ -580,7 +578,6 @@ class BackupImporter(
     }
 
     // MARK: - Shared files / Skills / Memory / MCP
-
     private fun importSharedFiles(
         root: File,
         fileIndex: List<BackupFileIndexEntry>,
@@ -598,7 +595,6 @@ class BackupImporter(
         // directory, so the guest sees the files on the next boot.
         return report
     }
-
     private fun importSkills(root: File, fileIndex: List<BackupFileIndexEntry>): CategoryReport {
         val report = CategoryReport(BackupCategory.SKILLS.key)
         val dest = File(context.filesDir, "minis-global/skills")
@@ -609,7 +605,6 @@ class BackupImporter(
         applyFileResult(report, files)
         return report
     }
-
     private fun importTree(
         root: File,
         fileIndex: List<BackupFileIndexEntry>,
