@@ -2576,6 +2576,16 @@
     <string name="vm_compact_in_progress_blocked">Cannot compact while a turn is in progress. Stop the current response first.</string>
     <string name="vm_compaction_timed_out">Compaction timed out after %1$ds (%2$d model call(s) attempted). The model may be slow or rate-limited — you can try compacting again.</string>
     <string name="vm_compaction_failed">Compaction failed: %1$s</string>
+    <!-- [T-compact-failure-taxonomy] The truncation path used to print the raw
+         exception text ("empty compact summary from fallback") which told the
+         user nothing and offered no next step. Each bucket now names the cause
+         and what actually helps. -->
+    <string name="vm_compaction_exhausted">Compaction could not summarize (%1$s). Truncating older context to continue.</string>
+    <string name="compact_reason_no_output">every stage returned nothing — try compacting again, or switch to a stronger model</string>
+    <string name="compact_reason_timeout">every stage timed out — the model is slow or rate-limited; pick a faster model or compact again later</string>
+    <string name="compact_reason_quality">every summary failed the quality check — the model kept echoing or truncating the input; switch to a stronger model</string>
+    <string name="compact_reason_empty">every stage returned an empty summary — check the provider response filter, then retry</string>
+    <string name="compact_reason_error">last error: %1$s</string>
     <string name="vm_context_filling_compacting">Context is filling up (%1$d / %2$d tokens) — compacting to continue.</string>
     <string name="vm_context_near_limit">Context is near the model\'s limit (%1$d / %2$d tokens). Start a new chat or /compact to continue reliably.</string>
     <string name="vm_wait_compact_before_send">Wait for the current compact to finish before sending.</string>

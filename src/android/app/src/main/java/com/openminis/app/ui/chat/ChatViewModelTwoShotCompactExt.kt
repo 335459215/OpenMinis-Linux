@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.CancellationException
@@ -124,11 +125,27 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
         }
     }
     AppLogger.warning(ChatViewModel.TAG, "[Compact] compaction exhausted, truncating older context: ${lastError?.message}")
+    // [T-compact-failure-taxonomy] The truncation path used to print the raw
+    // exception text ("empty compact summary from fallback", "compact summary
+    // from primary failed the quality check (412 chars)"). Nothing in that told
+    // the user whether retrying helps, whether to switch models, or whether the
+    // provider was down. Bucket by cause and name the next step instead.
+    val reason = when {
+        lastError == null -> context.getString(R.string.compact_reason_no_output)
+        lastError is TimeoutCancellationException -> context.getString(R.string.compact_reason_timeout)
+        lastError!!.message?.contains("empty compact summary") == true ->
+            context.getString(R.string.compact_reason_empty)
+        lastError!!.message?.contains("quality check") == true ->
+            context.getString(R.string.compact_reason_quality)
+        else -> context.getString(
+            R.string.compact_reason_error,
+            lastError!!.message ?: lastError!!.javaClass.simpleName,
+        )
+    }
     withContext(Dispatchers.Main) {
         appendSystemInfo(
-            "Compaction could not summarize (${lastError?.message ?: "no output"}). " +
-                "Truncating older context to continue.",
-            "compact",
+            text = context.getString(R.string.vm_compaction_exhausted, reason),
+            iconKind = "compact",
         )
     }
     return existing?.takeIf { it.isNotBlank() }

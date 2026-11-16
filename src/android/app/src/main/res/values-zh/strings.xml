@@ -2364,6 +2364,14 @@
     <string name="vm_compact_in_progress_blocked">回合进行中，无法压缩。请先停止当前回复。</string>
     <string name="vm_compaction_timed_out">压缩在 %1$d 秒后超时（已尝试 %2$d 次模型调用）。模型可能过慢或被限流——可重新尝试压缩。</string>
     <string name="vm_compaction_failed">压缩失败：%1$s</string>
+    <!-- [T-compact-failure-taxonomy] 截断路径过去直接打印原始异常（"empty compact
+         summary from fallback"），用户既看不懂也不知道下一步做什么。现在按原因分类并给出可操作建议。 -->
+    <string name="vm_compaction_exhausted">压缩未能生成摘要（%1$s）。将截断较早的上下文以继续。</string>
+    <string name="compact_reason_no_output">所有阶段都没有返回内容——可重新压缩，或换一个更强的模型</string>
+    <string name="compact_reason_timeout">所有阶段都超时——模型过慢或被限流；换更快的模型，或稍后重试</string>
+    <string name="compact_reason_quality">所有摘要都没通过质量校验——模型在复读或截断输入；换一个更强的模型</string>
+    <string name="compact_reason_empty">所有阶段都返回空摘要——检查供应商的响应过滤设置后重试</string>
+    <string name="compact_reason_error">最后错误：%1$s</string>
     <string name="vm_context_filling_compacting">上下文接近满载（%1$d / %2$d token），正在自动压缩以继续。</string>
     <string name="vm_context_near_limit">上下文接近模型上限（%1$d / %2$d token）。请开启新会话或 /compact 以稳定继续。</string>
     <string name="vm_wait_compact_before_send">请等待当前压缩完成后再发送。</string>

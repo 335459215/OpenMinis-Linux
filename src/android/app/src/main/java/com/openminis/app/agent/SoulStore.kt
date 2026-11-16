@@ -207,6 +207,18 @@ object SoulStore {
     private const val PREFS_NAME = "soul_store"
     private const val FORCE_OVERWRITE_KEY = "force_overwrite_1_36_13"
 
+    /**
+     * [T-persona-anchor] Stable marker identifying a persona section produced by
+     * [identitySection].
+     *
+     * Callers used to hardcode the literal "Personality (from" in their own
+     * `contains()` checks. That made the per-turn reminder depend on the exact
+     * wording of the header: a harmless label edit in one file would silently
+     * stop the reminder from ever being appended, with nothing failing. Matching
+     * this constant instead keeps the two in lockstep.
+     */
+    const val PERSONALITY_HEADER_MARKER = "Personality (from"
+
     fun fileLocation(context: Context): File =
         File(File(context.filesDir, MEMORY_SUBDIR), FILE_NAME)
 
@@ -691,7 +703,7 @@ object SystemPromptBuilder {
         val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }
 
         val result = identityTrimmed +
-            "\n\nPersonality (from $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
+            "\n\n$PERSONALITY_HEADER_MARKER $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
             personality +
             styleBlock(style) +
             "\n\n" +

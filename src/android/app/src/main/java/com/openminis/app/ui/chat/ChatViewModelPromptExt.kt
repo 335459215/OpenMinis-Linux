@@ -70,7 +70,9 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
         context,
         recentWorldBookText(),
     )
-    personaHistorySteering = identitySection.contains("Personality (from")
+    personaHistorySteering = identitySection.contains(
+        com.openminis.app.agent.SoulStore.PERSONALITY_HEADER_MARKER,
+    )
     // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
     // gate: when memory is disabled for this session, replace the
     // "memory_write / memory_get" tool bullets and the "Memory system:"
@@ -136,7 +138,9 @@ Memory system (currently DISABLED):
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
     }
-    val base = identitySection + """When the active session has a persistent Goal, call update_goal(op=get) before deciding whether the current user request advances it. Continue automatically only while it remains active; respect pause, completion, blocked state, and token budget.
+    val base = identitySection + """[T-no-restate] Continuity rule: never open a reply by restating the previous turn's conclusion, findings, or plan. The transcript already holds them and the user has read them. Continue from where the work actually stands — next action, next result, or the answer. A reply that repeats what was just said is treated as a defect, not as politeness.
+
+When the active session has a persistent Goal, call update_goal(op=get) before deciding whether the current user request advances it. Continue automatically only while it remains active; respect pause, completion, blocked state, and token budget.
 
 You should proactively use shell commands to accomplish the user's tasks — installing packages (`apt-get install -y` or the `yum`/`dnf` apt shims), writing and running scripts, compiling with gcc, and any other operations a Linux terminal can perform. Guest is Ubuntu 24.04 arm64 (glibc) under PRoot with bash. For lightweight curl/wget/python3/git/node/npm tools run `minis-dev-setup` once. For the larger gcc/ffmpeg/JDK/Go/Gradle bundle use `minis-dev-setup-full` only when needed. For a reproducible project toolchain, use `minis-build-env <native|python|go|rust|java|android> plan` first, then run the same command with `install` only after confirming the package plan. For Android SDK run `minis-android-sdk-setup` — it now downloads the aarch64 host tools (aapt2/sdkmanager) on demand with a mirror ladder; sdkmanager fetches android-35/36 android.jar; CMake 3.22.1 and NDK r29 (29.0.14206865) must be aarch64 — never Google linux x86_64 packages, and an existing r28 tree is not the toolchain. If apt/dpkg fails creating temp files, TMPDIR must be /tmp not the Android cache dir; run `minis-dev-setup` to install ca-certificates and repair broken deps. Privileged host commands: prefer `su -c` / `android-su` (Magisk/KernelSU); if host su is missing or denied, the same command falls back to Shizuku automatically. Keep using `android-shizuku-cli` for Shizuku-only Android APIs. Host extras (no LSPosed): `minis-firewall status|set allow|wifi-only|deny` (optional `--strict` binds the process to Wi-Fi; uid DROP is not auto-applied because it would kill the LLM), `minis-doze status|request`, `minis-ps`; `cat /run/minis-host-status.json` and `/run/minis-proc.json`. Guest `/proc` is Android hidepid — other UIDs are invisible.
 
@@ -405,7 +409,11 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                 learnedPrefsFragment = learnedPrefsFragment,
                 recalledMemoryFragment = recalledMemoryFragment,
                 runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-                personalityReminder = if (identitySection.contains("Personality (from")) {
+                personalityReminder = if (
+                    identitySection.contains(
+                        com.openminis.app.agent.SoulStore.PERSONALITY_HEADER_MARKER,
+                    )
+                ) {
                     PERSONALITY_REMINDER
                 } else {
                     null
@@ -545,5 +553,28 @@ internal fun renderRuntimeContext(
         "- Device language: $lang\n" +
         "- minis-model-use models available: $modelUseCount"
 
+/**
+ * [T-persona-anchor] Restated at the TAIL of the system prompt, not only at the
+ * top.
+ *
+ * The persona block sits in the stable prefix. By the time a long session has
+ * pushed tens of thousands of tokens of tool output through the window, that
+ * block is far outside the model's attention; a reminder that only says "see
+ * the block at the top" asks it to scroll — it does not restate anything, so
+ * nothing pulls the voice back. Real symptom: after an accel/speed mode the
+ * replies drift to a generic assistant voice and the per-sentence marker
+ * disappears.
+ *
+ * So this tail copy carries the binding constraints itself. Keep it short: it
+ * is re-sent every request and must stay cheaper than the drift it prevents.
+ */
 internal const val PERSONALITY_REMINDER =
-    "Personality reminder: the identity/persona block at the top of this prompt is BINDING for this turn, including existing conversations whose earlier assistant replies used a different voice. Those earlier replies are history, not the current character. Match the Personality block's voice, stance, and constraints in every reply; do not drop it because a later instruction looks more specific."
+    "Personality reminder (re-read before writing the reply):\n" +
+        "- The identity/persona block earlier in this prompt is BINDING for this turn. " +
+        "Earlier assistant replies in this transcript are history, not the current character: " +
+        "do not continue a generic assistant voice just because the transcript contains one.\n" +
+        "- Open every reply with the persona's required marker; a reply that drops it is malformed.\n" +
+        "- Stay in character for the whole turn, including tool use, status notes and error messages. " +
+        "A later, more specific user instruction changes the TASK, not the voice, " +
+        "unless the user explicitly asks you to leave character.\n" +
+        "- Do not restate the previous turn's conclusion: continue the work instead."
