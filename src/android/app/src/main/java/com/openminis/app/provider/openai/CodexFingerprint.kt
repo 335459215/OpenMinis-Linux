@@ -68,6 +68,22 @@ object CodexFingerprint {
 
     val DEFAULT_PROFILE: Profile = CLI_MACOS_ARM64
 
+    /**
+     * [T-client-disguise-app-level] 桌面端画像。
+     *
+     * originator 含空格（真实桌面端就是这样），UA 末尾标记是
+     * `(Codex Desktop; <构建号>)`，与 CLI 的 `(codex-tui; <版本>)` 不同 ——
+     * 用 CLI 的末尾标记去冒充桌面端，本身就是可识别特征。
+     */
+    val DESKTOP_MACOS_ARM64 = Profile(
+        originator = "Codex Desktop",
+        osName = "Mac OS",
+        osVersion = "15.5.0",
+        arch = "arm64",
+        terminal = "unknown",
+        appName = "Codex Desktop",
+    )
+
     /** 一次请求的完整身份集合。同 seed 稳定，turn_id 每轮新建。 */
     data class Identity(
         val installationId: String,
@@ -210,6 +226,23 @@ object CodexFingerprint {
         }
         body.put("client_metadata", cm)
     }
+
+    /**
+     * [T-client-disguise-app-level] 派生「下一轮」身份。
+     *
+     * 稳定字段（installation / session / thread / window / contextWindow）原样
+     * 保留 —— 真实客户端在会话内它们不变；轮次级字段（turn_id /
+     * turn_started_at_unix_ms）重算。
+     *
+     * 为什么必须重算：身份对象被按 clientId 缓存后，如果连 turn 字段一起缓存，
+     * 同一渠道连续请求会发出**完全相同**的 turn_id 和永不前进的时间戳。真实
+     * CLI 每轮都是新的 now_v7 与当前毫秒，一个 turn 持续数小时在服务端看来
+     * 就是异常时序 —— 那本身就是特征，比不做伪装更容易被挑出来。
+     */
+    fun Identity.nextTurn(nowMs: Long = System.currentTimeMillis()): Identity = copy(
+        turnId = UUID.randomUUID().toString(),
+        turnStartedAtUnixMs = nowMs,
+    )
 
     /** 由 provider 实例 id 派生稳定 seed：同一实例每次启动得到同一组身份。 */
     fun seedFor(instanceId: String?, modelId: String?): String =

@@ -1,6 +1,8 @@
 package com.openminis.app.provider.openai
 
 import android.util.Base64
+// [T-client-disguise-app-level] App 级伪装配置：请求层唯一入口。
+import com.openminis.app.data.ClientDisguisePrefs
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMMessage
@@ -11,6 +13,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.disguise.DisguiseClients
 import com.openminis.app.provider.thinking.ThinkingResolveContext
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import okhttp3.MediaType.Companion.toMediaType
@@ -636,19 +639,42 @@ internal class OpenAIRequestBodies(
     }
 
     /**
+     * [T-client-disguise-app-level] 该渠道当前该伪装成哪个客户端。
+     *
+     * 两级判定，App 级优先：
+     *   1. [ClientDisguisePrefs] 的渠道绑定 —— 它内部已经判过总开关，
+     *      返回 null 表示没绑或总开关关着。
+     *   2. 回落到单渠道独立开关 `host.codexClientFingerprintEnabled`
+     *      （旧行为，保持兼容）。
+     *
+     * 返回 null 是「完全不动请求」的信号：调用方必须直接 return，这样未开启
+     * 伪装的实例出站字节与改前逐字节一致。
+     */
+    private fun activeDisguiseClientId(): String? {
+        ClientDisguisePrefs.clientForChannel(host.thinkingRuleInstanceId ?: "")
+            ?.let { return it }
+        // 回落：单渠道独立开关（旧行为，保持兼容）
+        return if (host.codexClientFingerprintEnabled) "codex-cli" else null
+    }
+
+    /**
      * [T-codex-client-fingerprint] 给 builder 打上官方 Codex 客户端身份头。
      *
-     * 只在 `host.codexClientFingerprintEnabled` 打开时生效，所以未开启的实例
-     * 出站字节与之前完全一致。身份按 provider 实例 id 确定性派生：同一实例重启
-     * 后得到同一组 installation/session ID，不会因重启就换一个“新客户端”。
+     * 只在 [activeDisguiseClientId] 非 null 时生效，所以未开启伪装的实例
+     * 出站字节与之前完全一致。身份按 provider 实例 id + 客户端 id 确定性派生：
+     * 同一实例同一客户端重启后得到同一组 installation/session ID，不会因重启
+     * 就换一个“新客户端”；切换伪装客户端则会得到另一套身份（否则冒充 desktop
+     * 却带着 CLI 的 installation_id，本身就是可识别特征）。
      *
      * 头顺序按 [CodexFingerprint.headers] 的顺序逐个 header() 写入，因为顺序
      * 本身在严格风控侧可观测。
      */
     private fun applyCodexFingerprintHeaders(builder: Request.Builder) {
-        if (!host.codexClientFingerprintEnabled) return
-        val identity = cachedCodexIdentity
-        val profile = CodexFingerprint.DEFAULT_PROFILE
+        val clientId = activeDisguiseClientId() ?: return
+        // 非 Codex 家族（如 claude-code）返回 null：OpenAI 路径只认 Codex 画像，
+        // 别的一律不改头，避免把 Anthropic 身份塞进 OpenAI 请求。
+        val profile = DisguiseClients.codexProfileFor(clientId) ?: return
+        val identity = codexIdentityFor(clientId)
         for ((name, value) in CodexFingerprint.headers(
             identity = identity,
             version = host.codexClientVersion,
@@ -665,11 +691,48 @@ internal class OpenAIRequestBodies(
         }
     }
 
-    /** 每个 provider 实例一份稳定身份；lazy 保证一次进程只算一次。 */
-    private val cachedCodexIdentity: CodexFingerprint.Identity by lazy {
-        CodexFingerprint.newIdentity(
-            CodexFingerprint.seedFor(host.thinkingRuleInstanceId, host.model.id),
-        )
+    /**
+     * [T-client-disguise-app-level] 按伪装客户端缓存身份。
+     *
+     * 不能用固定 seed 的 lazy：切换客户端后身份必须跟着变。按 clientId 分桶，
+     * 每个桶只算一次；回到之前用过的客户端时稳定字段还是原来那套（不会因为
+     * 来回切就每次换新 installation_id）。
+     *
+     * 请求层本身在单线程外被调用，用 ConcurrentHashMap 兜底。
+     */
+    private val codexIdentityCache =
+        java.util.concurrent.ConcurrentHashMap<String, CodexFingerprint.Identity>()
+
+    /**
+     * 轮次级字段的存活窗口。
+     *
+     * 真实 CLI 的 turn_id 是 now_v7，turn_started_at 是当前毫秒 —— 每轮都新。
+     * 这里用「超过窗口就翻新」而不是「每次调用都翻新」，原因是头注入与 body
+     * 注入是两个独立调用点，必须读到**同一套** turn 字段，否则 header 里的
+     * turn_id 和 body client_metadata 里的对不上，那比不做伪装更可疑。
+     *
+     * 20 秒足够覆盖一次请求从建 body 到发头的全过程（毫秒级），又远短于人的
+     * 两轮对话间隔，所以跨轮必然翻新 —— 服务端看到的是一个 turn 持续秒级，
+     * 不是几小时。
+     */
+    private companion object {
+        const val TURN_TTL_MS = 20_000L
+    }
+
+    /**
+     * 取该客户端当前的伪装身份。稳定字段来自缓存，轮次级字段按
+     * [TURN_TTL_MS] 翻新。
+     */
+    private fun codexIdentityFor(clientId: String): CodexFingerprint.Identity {
+        val seed = CodexFingerprint.seedFor(host.thinkingRuleInstanceId, host.model.id) + ":" + clientId
+        val now = System.currentTimeMillis()
+        val current = codexIdentityCache[clientId]
+        if (current != null && now - current.turnStartedAtUnixMs < TURN_TTL_MS) {
+            return current
+        }
+        val fresh = current?.nextTurn(now) ?: CodexFingerprint.newIdentity(seed, now)
+        codexIdentityCache[clientId] = fresh
+        return fresh
     }
 
     /**
@@ -1254,8 +1317,14 @@ internal class OpenAIRequestBodies(
         // 字段，中转站的引擎指纹校验会读 client_metadata.x-codex-window-id /
         // x-codex-installation-id。只在这一条路径注入：chat/completions 带未知
         // 顶层字段会被严格后端 400，而那边的身份已经由请求头承担。
-        if (host.codexClientFingerprintEnabled) {
-            CodexFingerprint.applyToBody(body, cachedCodexIdentity)
+        //
+        // [T-client-disguise-app-level] 判定与请求头同源（都走
+        // activeDisguiseClientId），且 body 里的身份必须和头里的同一套 ——
+        // 两处用不同 identity 会立刻露馅。非 Codex 家族客户端同样跳过。
+        activeDisguiseClientId()?.let { clientId ->
+            if (DisguiseClients.codexProfileFor(clientId) != null) {
+                CodexFingerprint.applyToBody(body, codexIdentityFor(clientId))
+            }
         }
 
         return body

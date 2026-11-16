@@ -173,6 +173,8 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // [T-codex-fast-mode] Warm the Fast Mode flag cache for Context-free provider reads.
         com.openminis.app.data.FastModePrefs.prime(this)
+        // [T-client-disguise-app-level] Warm the client-disguise config cache for Context-free provider reads.
+        com.openminis.app.data.ClientDisguisePrefs.prime(this)
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)

@@ -104,6 +104,8 @@ private fun SettingsGroupLabel(text: String) {
 fun SettingsScreen(
     onBack: () -> Unit,
     onProvidersClick: () -> Unit,
+    // [T-client-disguise-app-level] App 级客户端伪装板块。默认 no-op，兼容旧调用方。
+    onClientDisguiseClick: () -> Unit = {},
     onModelGroupsClick: () -> Unit,
     onRootfsClick: () -> Unit = {},
     onBackupClick: () -> Unit = {},
@@ -213,6 +215,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_manage_providers),
                     subtitle = stringResource(R.string.settings_manage_providers_subtitle),
                     onClick = onProvidersClick,
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Shield,
+                    iconColor = IosBlue,
+                    title = stringResource(R.string.client_disguise_title),
+                    subtitle = stringResource(R.string.client_disguise_subtitle),
+                    onClick = onClientDisguiseClick,
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Settings,

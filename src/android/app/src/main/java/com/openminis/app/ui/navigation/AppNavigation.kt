@@ -460,6 +460,7 @@ fun AppNavigation(
             SettingsScreen(
                 onBack = { navController.safePopBackStack() },
                 onProvidersClick = { navController.safeNavigate(Routes.PROVIDER_LIST) },
+                onClientDisguiseClick = { navController.safeNavigate(Routes.CLIENT_DISGUISE) },
                 onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
@@ -486,6 +487,12 @@ fun AppNavigation(
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
+            )
+        }
+
+        composable(Routes.CLIENT_DISGUISE) {
+            com.openminis.app.ui.settings.ClientDisguiseScreen(
+                onBack = { navController.safePopBackStack() },
             )
         }
 
