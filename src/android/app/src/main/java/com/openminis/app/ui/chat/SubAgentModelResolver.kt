@@ -22,7 +22,7 @@ import com.openminis.app.provider.ModelAliasMatcher
  *  - the active session model was the **last** fallback, not the anchor.
  *
  * Net effect: a chat running `gcmod/deepseek-v4.1-flash` could spawn a lane on
- * `newapi/DeepSeek-OCR` or `builtin-opencode-zen/*`, which then failed with
+ * `newapi/DeepSeek-OCR` or `builtin-opencode-zen`, which then failed with
  * `model_not_found` because those entries were not in the Agent Loop visible set.
  *
  * Preference order, all constrained to the pinned provider:
