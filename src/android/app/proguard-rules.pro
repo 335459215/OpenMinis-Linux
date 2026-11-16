@@ -78,3 +78,34 @@
 # Verified with :app:minifyReleaseWithR8 on 2.0.91.
 -dontwarn java.lang.management.**
 -dontwarn javax.management.**
+
+# [T-git-panel-r8-jgit] release minify broke the panel's native chain with
+# NoClassDefFoundError: r8.A — R8's horizontal class merging synthesized r8.*
+# holder classes while surviving references still pointed at the pre-merge
+# names, so every JGit entry point (probe/status/logPage) died at class-load.
+# JGit is reflection-heavy by design (config parsing, SystemReader, transport
+# SPI, annotation reads); partial keeps cannot be audited, so the whole tree
+# is kept — same failure class as the Rhino/JSch keeps above.
+-keep class org.eclipse.jgit.** { *; }
+-dontwarn org.eclipse.jgit.**
+# JGit 7.x logs via slf4j-api; providers are ServiceLoader-resolved at runtime
+# and absent ones are harmless (silenced logging).
+-dontwarn org.slf4j.**
+
+# [T-r8-jgit-desktop-apis] Verified against the JGit 7.8.1 jar shipped in this
+# tree (org.eclipse.jgit-7.8.1.202611041320-r.jar):
+#   · GC$PidLock.class references java/lang/ProcessHandle (getPID() returns 0
+#     when SystemReader.isAndroid(), so the reference is never executed here)
+#   · 4 classes reference org/ietf/jgss — HttpAuthMethod$Negotiate,
+#     GSSManagerFactory + its two inner factories. Negotiate's static
+#     initializer needs JGSS with no Android guard; GSSManagerFactory probes it.
+# Neither package exists on Android. Without these exclusions R8 fails the
+# release build on missing-class references even though the code paths are
+# unreachable on-device. Keep the exemptions scoped to the missing APIs.
+-dontwarn java.lang.ProcessHandle
+-dontwarn org.ietf.jgss.GSSContext
+-dontwarn org.ietf.jgss.GSSCredential
+-dontwarn org.ietf.jgss.GSSException
+-dontwarn org.ietf.jgss.GSSManager
+-dontwarn org.ietf.jgss.GSSName
+-dontwarn org.ietf.jgss.Oid

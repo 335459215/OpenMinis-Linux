@@ -703,7 +703,7 @@ object SystemPromptBuilder {
         val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }
 
         val result = identityTrimmed +
-            "\n\n$PERSONALITY_HEADER_MARKER $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
+            "\n\n${SoulStore.PERSONALITY_HEADER_MARKER} $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
             personality +
             styleBlock(style) +
             "\n\n" +
