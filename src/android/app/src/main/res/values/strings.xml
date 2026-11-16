@@ -49,6 +49,8 @@
     <string name="memory_revoke_result_not_found">Entry not found in recent daily logs.</string>
     <string name="memory_revoke_result_io_error">Error writing file: %1$s</string>
     <string name="memory_save_toast">Saved</string>
+
+    <string name="memory_save_failed_toast">Save failed — check storage and try again</string>
     <string name="memory_global_footer">Persistent instructions and preferences visible to the Agent in every session. The Agent cannot modify this file.</string>
 
     <!-- Check Update -->
@@ -115,6 +117,7 @@
     <string name="mention_model_badge">Model</string>
     <string name="mention_model_only">Only this one replies</string>
     <string name="mention_model_caption">Models in this group. With group chat on, pick one and the others stay quiet.</string>
+    <string name="chat_composer_queued_hint">Input will be queued and sent when the current task finishes</string>
     <string name="chat_input_placeholder_group">Message the group, @ a model to call just one</string>
 
     <!-- T13: Resume banner (shown at the bottom of the message list when an interrupted agent loop can be resumed) -->
@@ -376,6 +379,13 @@
     <string name="voice_service_text_to_speech">Text to Speech</string>
     <string name="voice_service_show_in_voice_services">Show in Voice Services</string>
     <string name="voice_service_shared_credential_note">This voice service shares the API key and endpoint of its provider. To change them, edit that provider.</string>
+    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
+    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
+    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
+    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
+    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
+    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
+    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
     <string name="voice_service_hidden_badge">Hidden</string>
     <string name="add_provider_voice_chat_providers">Voice Chat Providers</string>
     <string name="zen_restore_section">Recovery</string>
@@ -457,7 +467,9 @@
     <string name="gate_approval_title">Tool needs approval</string>
     <string name="gate_approval_approve">Allow</string>
     <string name="gate_approval_deny">Deny</string>
-    <string name="gate_approval_allow_all">Allow all this session</string>
+    <!-- [#36] Three-state approval: the middle action allowlists this
+         (tool, args-gist) key for the rest of the session. -->
+    <string name="gate_approval_allow_all">Always allow this session (current target)</string>
     <string name="gate_intercept_denied">Blocked by SecurityGate</string>
     <string name="gate_intercept_rejected">Tool rejected</string>
     <string name="gate_intercept_dismiss">Dismiss</string>
@@ -549,8 +561,11 @@
     <string name="settings_storage_subtitle">Manage Ubuntu Linux rootfs and browse files</string>
     <string name="settings_section_permissions">Permissions</string>
     <string name="settings_permissions_subtitle">System privileges and per-tool access: accessibility, Shizuku, host su, privacy level. Agent permission for each tool is set on this page.</string>
-    <string name="chat_menu_perm_yoyo">YOYO · full auto</string>
-    <string name="chat_menu_perm_ask">Approval · confirm actions</string>
+    <!-- [#31] Four-tier session tool gate (cycle order ASK → SAFE_AUTO → YOLO → OFF). -->
+    <string name="chat_menu_perm_yoyo">YOLO · full auto</string>
+    <string name="chat_menu_perm_safe_auto">Safe auto · read-only tools run free</string>
+    <string name="chat_menu_perm_ask">Ask · confirm every call</string>
+    <string name="chat_menu_perm_off">Off · deny all tools</string>
 <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>
@@ -619,6 +634,8 @@
     <string name="token_usage_section_thinking">Thinking</string>
     <string name="token_usage_thinking_label">Thinking</string>
     <string name="token_usage_thinking_level">Level</string>
+    <string name="token_usage_thinking_requested">Requested</string>
+    <string name="token_usage_thinking_effective">Effective</string>
     <string name="token_usage_thinking_supported">Supported</string>
     <string name="token_usage_section_tokens">Tokens (Session Total)</string>
     <string name="token_usage_input_with_cache">Input (incl. cache)</string>
@@ -629,6 +646,20 @@
     <string name="token_usage_cache_hit_rate">Per-Turn Hit Rate</string>
     <string name="token_usage_section_agent_loop">Agent Loop</string>
     <string name="token_usage_total_loops">Total Loops</string>
+    <!-- [#25] Context breakdown sheet — prompt composition + per-block estimates -->
+    <string name="context_block_system">System prompt &amp; tools</string>
+    <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
+    <string name="context_block_memory">Memory injection</string>
+    <string name="context_block_runtime">This turn’s temporary context</string>
+    <string name="context_block_goal_plan">Goal &amp; plan injection</string>
+    <string name="context_block_history">History window</string>
+    <string name="context_block_attachments">Attachments &amp; images</string>
+    <string name="context_usage_note_estimate">Rough estimates (±10%); refreshed when this sheet opens</string>
+    <!-- [#41] Gen UI card — sandboxed interactive HTML from the agent -->
+    <string name="gen_ui_card_label">Interactive card</string>
+    <string name="gen_ui_view_source">View source</string>
+    <string name="gen_ui_view_render">Show render</string>
+    <string name="gen_ui_view_fullscreen">Fullscreen</string>
     <string name="common_on">On</string>
     <string name="common_off">Off</string>
     <string name="common_yes">Yes</string>
@@ -769,6 +800,11 @@
     <string name="sessionlist_regenerate_title">Regenerate Title</string>
     <string name="sessionlist_regenerating_title">Regenerating title…</string>
     <string name="sessionlist_duplicate">Duplicate</string>
+    <string name="sessionlist_branch_tree">Branch tree</string>
+    <string name="sessionlist_branch_from_here">Branch from latest message</string>
+    <string name="sessionlist_branch_empty">This session has no branches yet. Branch from the latest message to keep reruns off the original thread.</string>
+    <string name="sessionlist_branch_source">Source</string>
+    <string name="sessionlist_branch_children">Branches</string>
     <string name="sessionlist_search_action">Search</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>
@@ -852,6 +888,7 @@
     <!-- [T-android-thinking-rules-phase2] Provider-detail Thinking Rules section -->
     <string name="thinking_rules_section">Thinking Rules</string>
     <string name="thinking_rules_footer">Rules are evaluated top to bottom. The first rule matching the model decides which thinking parameters are sent. Default rules are built in and cannot be deleted — add a rule above them to override one.</string>
+    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
     <string name="thinking_rules_official_protocol_notice">This provider uses an official protocol, so its thinking parameters are maintained by Minis Ultra. Custom rules apply to OpenAI-compatible providers on the Chat Completions API.</string>
     <string name="thinking_rules_default_rules_count">Default rules (%1$d)</string>
     <string name="thinking_rules_add_rule">Add Rule</string>
@@ -964,6 +1001,9 @@
     <string name="env_var_privacy_header">Privacy</string>
     <string name="env_var_privacy_toggle">Privacy Mode</string>
     <string name="env_var_privacy_footer">When enabled, any environment variable value that appears in shell-execute output is replaced with a masked form (e.g. `sk-1********ajhks`) before reaching the model. Values shorter than 8 characters become all `*`. The user-visible output in chat is unchanged.</string>
+    <!-- [#28] Outbound privacy masking (default OFF, opt-in). -->
+    <string name="outbound_mask_toggle">Outbound privacy masking</string>
+    <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (code, JWT/base64), e-mails and phone-like numbers become placeholders. The embedding API key below is stored in plain text inside app-private prefs. Device history unchanged.</string>
     <string name="env_var_platform_header">Platform Integrations</string>
     <string name="env_var_platform_tier_2">Complete</string>
     <string name="env_var_platform_tier_1">Read-only</string>
@@ -1149,6 +1189,8 @@
     <string name="skill_title">Skills</string>
     <string name="skill_add">Add Skill</string>
     <string name="skill_section_installed">Installed</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
     <string name="skill_section_footer">Skills extend the Minis Ultra Agent with specialized instructions and workflows. They are loaded into the system prompt when enabled.</string>
     <string name="skill_empty_title">No Skills Installed</string>
     <string name="skill_empty_action">Tap + to import a SKILL.md, .zip, or .skill file, or browse Minis Ultra Skills.</string>
@@ -1335,6 +1377,14 @@
     <string name="provider_detail_auto_append_v1">Auto-append /v1</string>
     <string name="provider_detail_custom_user_agent">Custom User-Agent</string>
     <string name="provider_detail_custom_user_agent_placeholder">Leave blank for default</string>
+    <!-- [GH#221] per-provider custom request headers (KV, one per line). -->
+    <string name="provider_detail_custom_headers">Custom request headers</string>
+    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_save_headers">Save Headers</string>
+    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
+    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
+    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
     <string name="provider_detail_save_url_settings">Save URL Settings</string>
     <string name="provider_detail_api_format">API Format</string>
     <string name="provider_detail_api_format_footer_chat">Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services.</string>
@@ -1343,6 +1393,8 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats.</string>
+    <string name="provider_detail_force_thinking">Force extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
     <string name="provider_detail_status">Status</string>
     <string name="provider_detail_enabled">Enabled</string>
     <string name="provider_detail_refresh_models">Refresh Models</string>
@@ -1411,6 +1463,12 @@
     <string name="modeldetail_temperature_invalid">Enter a number from 0.0 to 2.0, or leave blank to omit.</string>
     <string name="modeldetail_context_window">Context Window</string>
     <string name="modeldetail_thinking">Thinking</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Thinking Level Ceiling</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Effective: %1$s (catalog default)</string>
+    <string name="modeldetail_thinking_level_effective_override">Effective: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Caps the thinking levels the chat picker offers for this model. Auto follows the catalog declaration. Ultra is sent as the literal tier when the provider declares it or when you manually set this ceiling to Ultra; otherwise it maps to max.</string>
     <string name="modeldetail_capabilities_footer">Context window and max output tokens (in tokens). Leave empty to use provider defaults. Enable Thinking for models that support extended reasoning.</string>
     <string name="modeldetail_provider_default">Provider default</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Exceeds provider-reported limit (%1$d). The value is saved but may cause errors.</string>
@@ -1656,6 +1714,8 @@
     <string name="git_panel_generate">AI</string>
     <string name="git_panel_commit">Commit</string>
     <string name="git_panel_no_commits">No commits yet</string>
+    <string name="git_panel_history_read_failed">Failed to read commit history — details in logs (GitPanel tag)</string>
+    <string name="git_panel_status_read_failed">Failed to read working-tree status — details in logs (GitPanel tag)</string>
     <string name="git_panel_title">Git</string>
     <string name="git_panel_back">Back</string>
     <string name="git_panel_refresh">Refresh</string>
@@ -1681,6 +1741,19 @@
     <string name="git_panel_no_branches">No branches</string>
     <string name="git_panel_no_stashes">No stashes</string>
     <string name="git_panel_switch_branch">Switch branch</string>
+
+    <string name="git_panel_branch_search">Search branches</string>
+
+
+    <string name="git_panel_branches_section">Branches</string>
+
+    <string name="git_panel_uncommitted_count">Uncommitted changes: %1$d files</string>
+
+    <string name="git_panel_detached_head">detached HEAD</string>
+
+    <string name="git_panel_create_branch">Create and check out new branch…</string>
+
+    <string name="git_panel_branch_name_hint">Branch name</string>
     <string name="chat_menu_open_browser">Open Browser</string>
     <string name="chat_menu_browse_chat_files">Browse Chat Files</string>
     <string name="chat_menu_enhanced_cache">Enhanced Cache</string>
@@ -1806,7 +1879,7 @@
     <string name="backup_history_remove_title">Delete this backup record?</string>
     <string name="backup_history_remove_record_only">Delete Record Only</string>
     <string name="backup_history_remove_with_files">Delete Record and Files</string>
-    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files on your destinations. “Delete Record and Files” also deletes the package from each destination — that cannot be undone.</string>
+    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files where they are. “Delete Record and Files” also deletes the package from each destination and from this device — that cannot be undone.</string>
     <string name="backup_status_succeeded">Completed</string>
     <string name="backup_status_issues">Completed with issues</string>
     <string name="backup_status_failed">Failed</string>
@@ -2092,6 +2165,36 @@
 
     <!-- T323: System Permissions screen + AccessibilityService -->
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
+    <!-- [GH#114] per-app accessibility allow / block list. -->
+    <string name="a11y_app_policy_section">Accessibility app access</string>
+    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
+    <string name="a11y_app_policy_enabled">Restrict by app</string>
+    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
+    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
+    <!-- [GH#131] lifecycle hooks (session events → sandbox scripts). -->
+    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
+    <string name="lifecycle_hooks_section_master">Master switch</string>
+    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
+    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
+    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
+    <string name="lifecycle_hooks_section_events">Events</string>
+    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
+    <string name="lifecycle_hooks_not_set">Not set</string>
+    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
+    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
+    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
+    <!-- [GH#511] sandbox boot hook master switch (agent-writable /var/minis/boot.sh). -->
+    <string name="boot_hook_section">Boot hook</string>
+    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
+    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
+    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
+    <string name="boot_hook_last_status">Last run</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
     <string name="system_permissions_a11y_oem_autostart_sub">Open the autostart manager and enable Minis Ultra</string>
@@ -2241,6 +2344,8 @@
     <string name="scheduled_task_field_repeat">Repeat</string>
     <string name="scheduled_task_field_prompt">Prompt</string>
     <string name="scheduled_task_field_prompt_hint">What should the assistant do when this fires?</string>
+    <!-- [GH#201] Template variables + automatic fire-time date prefix. -->
+    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
     <string name="scheduled_task_repeat_once">Once</string>
     <string name="scheduled_task_repeat_daily">Daily</string>
     <string name="scheduled_task_repeat_weekdays">Weekdays</string>
@@ -2412,6 +2517,11 @@
     <string name="translate_no_model">No enabled model with an API key.</string>
     <string name="translate_empty">The model returned no text.</string>
     <string name="web_search_engine_header">Engine</string>
+    <!-- [GH#298] 工具总开关（settings UI + AgentTools 注册门控）。 -->
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_enabled">Enable web_search</string>
+    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
     <string name="web_search_engine_footer">Tap an engine to configure it. DuckDuckGo needs no key. SearXNG needs an instance URL. Bing needs an API key. Custom uses a URL template with {query}. Failed searches fall back to DuckDuckGo, then suggest browser_use.</string>
     <string name="web_search_engine_ddg">DuckDuckGo HTML</string>
     <string name="web_search_engine_searxng">SearXNG</string>
@@ -2669,6 +2779,8 @@
     <string name="ma_add_role_sub">Custom name/description/prompt/tool allowlist; a built-in role with the same name is overridden</string>
     <string name="ma_team_lead_suffix"> · team lead</string>
     <string name="ma_thinking_depth">Thinking depth for this run</string>
+
+    <string name="ma_thinking_follows_main">Follows main session</string>
     <string name="ma_role_dialog_title_builtin">Built-in role (saves as a custom copy)</string>
     <string name="ma_role_dialog_title_new">New collaboration role</string>
     <string name="ma_role_dialog_title_edit">Edit role</string>
@@ -2685,6 +2797,7 @@
     <string name="usage_label_output_short">Output</string>
     <string name="plan_board_all_done">All steps completed</string>
     <string name="cd_plan_board_toggle">Expand or collapse the plan board</string>
+    <string name="cd_plan_step_retry">Retry this failed step</string>
     <string name="cd_goal_header">Open goal details</string>
     <string name="cd_goal_status_active">Goal in progress</string>
     <string name="cd_goal_status_paused">Goal paused</string>
@@ -2858,6 +2971,9 @@
     <string name="mcp_approval_restart_notice">Restart cleared %1$d pending approval(s)</string>
     <string name="context_saver_title">Context Saver</string>
     <string name="context_saver_footer">Folds tool output older than the last few results into one-line placeholders once a request gets large. Nothing is deleted - a folded result keeps its spill file path or says to re-run the tool.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Prompt Cache Warming</string>
+    <string name="cache_warming_footer">When enabled, after an idle gap the app may replay the last successful request with a one-token output cap to refresh the provider&#8217;s prompt cache before it expires. Sends extra billable requests; off by default.</string>
     <string name="context_saver_off">Off</string>
     <string name="context_saver_balanced">Balanced</string>
     <string name="context_saver_aggressive">Aggressive</string>
@@ -2865,6 +2981,12 @@
     <string name="token_usage_saver_folded">Folded tool results</string>
     <string name="token_usage_saver_saved">Saved this turn</string>
     <string name="memory_center_overview">At a glance</string>
+    <string name="memory_embedding_header">Semantic recall</string>
+    <string name="memory_embedding_toggle">Embedding semantic recall</string>
+    <string name="memory_embedding_base_url">Embeddings base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API key</string>
+    <string name="memory_embedding_model">Embedding model</string>
+    <string name="memory_embedding_footer">Off by default. When on, memory recall adds vector-similarity search through an OpenAI-compatible embeddings endpoint on top of keyword search. Changes take effect only after the app process restarts.</string>
     <string name="memory_center_stat_memory">Memory files</string>
     <string name="memory_center_stat_recalls">Recalled entries</string>
     <string name="memory_center_stat_failures">Blocked repeats</string>
@@ -2923,4 +3045,108 @@
     <string name="ssh_host_save">Save</string>
     <string name="ssh_host_pinned">Host key pinned</string>
     <string name="settings_ssh_subtitle">Run commands and transfer files over SSH/SFTP</string>
+    <string name="git_panel_diff_truncated">Diff truncated at 200,000 characters — the full text is in the repo file itself.</string>
+
+    <!-- [T-android-export-markdown] Session export formats. The Markdown document
+         labels below mark roles / metadata inside the exported file — document
+         content shared OUT of the app, not UI — hence translatable=false: the
+         L10n gate does not require locale copies for them. -->
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <string name="export_role_user" translatable="false">👤 用户</string>
+    <string name="export_role_assistant" translatable="false">🤖 助手</string>
+    <string name="export_md_tool" translatable="false">工具</string>
+    <!-- [T-export-quiet-transcript] Kept in the export language on purpose, like the other export_* labels: translatable=false keeps it out of the translation gate and out of the Kotlin-source CJK gate. -->
+    <string name="export_body_truncated" translatable="false">…（正文过长，已截断；完整内容保留在设备上的会话里）</string>
+    <string name="export_md_model" translatable="false">模型</string>
+    <string name="export_md_exported_at" translatable="false">导出时间</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]): one-tap
+         prefill of mainstream vendors' documented OpenAI-compatible endpoints. -->
+    <string name="add_provider_vendor_presets">Vendor presets</string>
+    <string name="add_provider_vendor_presets_pick_hint">Tap a vendor to prefill its endpoint and name.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Create an API key at platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Get an API key from the Zhipu open platform console at open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Create an API key at platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Create an API key in the Alibaba Cloud Model Studio (Bailian) console</string>
+    <string name="add_provider_vendor_hint_ark">Create an API key in the Volcano Ark console; the model name is an endpoint ID or model ID</string>
+    <string name="add_provider_vendor_hint_minimax">Get an API key from the MiniMax open platform</string>
+    <string name="add_provider_vendor_hint_siliconflow">Create an API key at cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Create an API key at console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Get an API key from the Together console at api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Create an API key at console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Local server — no API key needed</string>
+    <string name="add_provider_vendor_hint_lmstudio">Local server — no API key needed. Start the Developer server in LM Studio first</string>
+    <string name="chat_queued_edit_title">Edit queued message</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Show all</string>
+    <string name="check_update_notes_collapse">Show less</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archive</string>
+    <string name="sessionlist_unarchive">Unarchive</string>
+    <string name="sessionlist_section_archived">Archived (%1$d)</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Export Providers</string>
+    <string name="provider_transfer_export_title">Export Providers</string>
+    <string name="provider_transfer_export_body">%1$d providers will be exported to a JSON file.</string>
+    <string name="provider_transfer_include_keys">Include API keys</string>
+    <string name="provider_transfer_include_keys_risk">API keys are written to the file in plain text. Anyone who obtains this file can use your keys — keep it safe and delete it after importing.</string>
+    <string name="provider_transfer_export">Export</string>
+    <string name="provider_transfer_export_success">Exported %1$d providers</string>
+    <string name="provider_transfer_export_failed">Export failed</string>
+    <string name="provider_transfer_import_ok">Imported %1$d providers</string>
+    <string name="provider_transfer_import_partial">Imported %1$d providers, %2$d failed</string>
+    <string name="provider_transfer_import_partial_detail">Imported %1$d providers, %2$d failed: %3$s</string>
+
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH Workspace</string>
+    <string name="ssh_workspace_binding_title">SSH workspace</string>
+    <string name="ssh_workspace_bound_to">Bound to %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Working in the local sandbox</string>
+    <string name="ssh_workspace_option_local">Local sandbox</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell runs on this device\'s Linux sandbox</string>
+    <string name="ssh_workspace_no_hosts">No SSH hosts yet — add one in Settings → SSH Workspace.</string>
+    <string name="ssh_workspace_shell_only_note">SSH workspaces support shell commands only; file tools are refused while a host is bound.</string>
+    <string name="ssh_workspace_shell_only">SSH workspace supports shell commands only — \'%1$s\' was refused.</string>
+    <string name="ssh_workspace_shell_only_hint">Run remote commands with shell_execute, or unbind this session via chat menu → SSH Workspace to restore local file tools.</string>
+    <string name="ssh_hosts_subtitle">Remote hosts the agent can reach over SSH. Credentials are stored encrypted and never displayed.</string>
+    <string name="ssh_hosts_row_subtitle">Add hosts, test connections, manage host keys</string>
+    <string name="ssh_hosts_add">Add host</string>
+    <string name="ssh_hosts_add_cancel">Cancel</string>
+    <string name="ssh_hosts_test">Test connection</string>
+    <string name="ssh_hosts_testing">Testing…</string>
+    <string name="ssh_hosts_test_ok">Connection OK</string>
+    <string name="ssh_hosts_test_failed">Connection failed</string>
+    <string name="ssh_hosts_forget_key">Forget host key</string>
+    <string name="ssh_hosts_remove">Remove</string>
+    <string name="ssh_hosts_pinned">Host key pinned: %1$s…</string>
+    <string name="ssh_field_name">Name (letters/digits/._-)</string>
+    <string name="ssh_field_hostname">Hostname or IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Username</string>
+    <string name="ssh_auth_password">Password</string>
+    <string name="ssh_auth_key">Private key</string>
+    <string name="ssh_field_password">Password</string>
+    <string name="ssh_field_private_key">PEM private key</string>
+    <string name="ssh_field_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_save">Save</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Hands-free</string>
+    <string name="handsfree_state_starting">Starting…</string>
+    <string name="handsfree_state_listening">Listening…</string>
+    <string name="handsfree_state_thinking">Thinking…</string>
+    <string name="handsfree_state_speaking">Speaking…</string>
+    <string name="handsfree_exit_recognition">Hands-free stopped: speech recognition failed repeatedly. Tap Hands-free to try again.</string>
+    <string name="handsfree_exit_tts">Hands-free stopped: replies could not be read aloud. Tap Hands-free to try again.</string>
 </resources>

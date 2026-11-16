@@ -195,6 +195,29 @@ class OpenAIProviderTest {
         assertTrue(!body.has("max_tokens"))
     }
 
+    /**
+     * [T-android-dashscope-max-tokens #35] DashScope / Bailian compatible-mode
+     * rejects `max_completion_tokens` with a 400 and only reads the legacy
+     * `max_tokens`. The gate is host-matched (`isDashScope`), so pointing
+     * MockWebServer's path at a `dashscope` segment exercises it without a key.
+     */
+    @Test
+    fun `sendMessage uses max_tokens for DashScope`() = runBlocking {
+        val dashscopeProvider = OpenAIProvider(
+            apiKey = "test-key",
+            model = LLMModel.gpt4oMini,
+            basePath = server.url("/dashscope/v1").toString().trimEnd('/'),
+        )
+        server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))
+
+        dashscopeProvider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 2048)
+
+        val request = server.takeRequest()
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(2048, body.getInt("max_tokens"))
+        assertTrue(!body.has("max_completion_tokens"))
+    }
+
     @Test
     fun `sendMessage sets stream false for non-streaming`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))
@@ -441,15 +464,21 @@ class OpenAIProviderTest {
 
     @Test
     fun `clampEffort snaps onto declared tiers`() {
-        // Down to the nearest declared tier at or below the request.
-        assertEquals("high", provider.clampEffort("xhigh", listOf("high", "max")))
-        assertEquals("high", provider.clampEffort("xhigh", listOf("low", "medium", "high")))
-        // Exact matches pass through.
-        assertEquals("xhigh", provider.clampEffort("xhigh", listOf("high", "xhigh")))
-        // Nothing at-or-below: step up to the lowest declared tier.
-        assertEquals("high", provider.clampEffort("low", listOf("high", "max")))
-        // No declaration: untouched (pre-existing behavior).
-        assertEquals("xhigh", provider.clampEffort("xhigh", null))
-        assertEquals("xhigh", provider.clampEffort("xhigh", emptyList()))
+        // The provider-level duplicate member was removed (P2 3-9 cleanup):
+        // it had zero production callers and drifted from the live clamp, so
+        // the contract is pinned against the one true source instead.
+        with(com.openminis.app.provider.thinking.ThinkingEffort) {
+            // Down to the nearest declared tier at or below the request.
+            assertEquals("high", clampEffort("xhigh", listOf("high", "max")))
+            assertEquals("high", clampEffort("xhigh", listOf("low", "medium", "high")))
+            // Exact matches pass through.
+            assertEquals("xhigh", clampEffort("xhigh", listOf("high", "xhigh")))
+            // [T-thinking-no-upward-jump] Nothing at-or-below: NULL, never the
+            // declared floor — a "low" ask must not become "high" on the wire.
+            assertEquals(null, clampEffort("low", listOf("high", "max")))
+            // No declaration: untouched (pre-existing behavior).
+            assertEquals("xhigh", clampEffort("xhigh", null))
+            assertEquals("xhigh", clampEffort("xhigh", emptyList()))
+        }
     }
 }

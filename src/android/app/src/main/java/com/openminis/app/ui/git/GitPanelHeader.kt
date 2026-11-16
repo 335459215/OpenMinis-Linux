@@ -2,8 +2,6 @@ package com.openminis.app.ui.git
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,9 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
@@ -28,7 +28,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,7 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
-import com.openminis.app.git.GitCli.GitBranchRef
 
 /**
  * Repository head card, pinned above the tab row: branch pill, ↑↓
@@ -164,7 +169,9 @@ private fun BranchPill(branch: String, onClick: () -> Unit) {
             .padding(horizontal = 10.dp, vertical = 4.dp),
     ) {
         Text(
-            branch.ifBlank { "HEAD" },
+            // Detached HEAD has no branch name — label it honestly instead
+            // of showing an empty pill (ZCode's detached label).
+            branch.ifBlank { stringResource(R.string.git_panel_detached_head) },
             color = Color.White,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
@@ -215,69 +222,206 @@ private fun SyncRow(status: com.openminis.app.git.GitCli.GitStatus, busy: Boolea
 }
 
 /**
- * Branch switcher, rendered below the header card when the pill is tapped:
- * local branches first, remote refs with a ⇄ glyph. Picking one checks it
- * out (remote picks create the local tracking branch).
+ * Branch switcher, ZCode GitBranchSwitcher shape: search box over the
+ * branch list, the current branch first with its uncommitted-changes count,
+ * remote refs with a ⇄ glyph, and a "create and check out" entry. Picking
+ * one checks it out (remote picks create the local tracking branch).
  */
 @Composable
-internal fun BranchMenu(branches: List<GitBranchRef>, onPick: (String) -> Unit) {
+internal fun BranchMenu(
+    state: GitPanelState,
+    onPick: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    onCreate: (String) -> Unit,
+) {
+    val query = state.branchSearch.trim()
+    val visible = if (query.isEmpty()) {
+        state.branches
+    } else {
+        state.branches.filter { it.name.contains(query, ignoreCase = true) }
+    }
+    val uncommitted = state.status?.entries
+        ?.distinctBy { it.path }
+        ?.size ?: 0
+    var showCreate by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        // Capped: an unconstrained LazyColumn here would expand to the whole
-        // viewport and push the tab row and its content off-screen.
-        LazyColumn(Modifier.heightIn(max = 280.dp)) {
-            items(branches, key = { it.name }) { branch ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onPick(branch.name) }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                ) {
-                    if (branch.isCurrent) {
-                        Text("●", color = GitAddGreen, fontSize = 11.sp)
-                    } else if (branch.name.contains('/')) {
-                        Text("⇄", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                    } else {
-                        Text("○", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            branch.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (branch.isCurrent) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (branch.lastSubject.isNotBlank()) {
-                            Text(
-                                branch.lastSubject,
-                                style = MaterialTheme.typography.bodySmall,
+        Column {
+            TextField(
+                value = state.branchSearch,
+                onValueChange = onSearch,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                placeholder = { Text(stringResource(R.string.git_panel_branch_search)) },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium,
+            )
+            // Capped: an unconstrained LazyColumn here would expand to the whole
+            // viewport and push the tab row and its content off-screen.
+            LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                // ZCode's "分支" section header.
+                item(key = "section") {
+                    Text(
+                        stringResource(R.string.git_panel_branches_section),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                items(visible, key = { it.name }) { branch ->
+                    // [T-git-menu-busy-feedback] Busy state disables the rows —
+                    // the old always-clickable rows closed the menu and silently
+                    // did nothing when the mutation gate was held.
+                    val rowEnabled = !state.busy
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = rowEnabled) { onPick(branch.name) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                    ) {
+                        // ZCode's branch glyph per ref kind: filled for the
+                        // checked-out branch, muted fork for locals, ⇄ for
+                        // remote-tracking refs.
+                        when {
+                            branch.isCurrent -> Icon(
+                                Icons.Filled.CallMerge,
+                                contentDescription = null,
+                                tint = GitAddGreen,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            // [T-git-branch-is-remote] Slash ≠ remote — a LOCAL
+                            // feature/x keeps the split icon; only a real
+                            // remote-tracking ref gets the ⇄ one.
+                            branch.isRemote -> Text(
+                                "⇄",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                            )
+                            else -> Icon(
+                                Icons.Filled.CallSplit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                branch.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (branch.isCurrent) FontWeight.SemiBold else FontWeight.Normal,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            if (branch.isCurrent && uncommitted > 0) {
+                                Text(
+                                    // ZCode's "未提交的更改：N 个文件" line under
+                                    // the current branch.
+                                    stringResource(R.string.git_panel_uncommitted_count, uncommitted),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            } else if (branch.lastSubject.isNotBlank()) {
+                                Text(
+                                    branch.lastSubject,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        if (branch.isCurrent) {
+                            Text("✓", color = GitAddGreen, fontSize = 13.sp)
+                            Spacer(Modifier.width(8.dp))
                         }
                     }
+                    HorizontalDivider(color = GitHairline)
                 }
-                HorizontalDivider(color = GitHairline)
+                if (visible.isEmpty()) {
+                    item {
+                        Text(
+                            stringResource(R.string.git_panel_no_branches),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                    }
+                }
             }
-            if (branches.isEmpty()) {
-                item {
-                    Text(
-                        stringResource(R.string.git_panel_no_branches),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                }
+            // ZCode's "+ 创建并检出新分支…" entry: icon + text action row.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showCreate = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.git_panel_create_branch),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
+    if (showCreate) {
+        CreateBranchDialog(
+            onDismiss = { showCreate = false },
+            onCreate = { name ->
+                showCreate = false
+                onCreate(name)
+            },
+        )
+    }
+}
+
+@Composable
+private fun CreateBranchDialog(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.git_panel_create_branch)) },
+        text = {
+            TextField(
+                value = name,
+                onValueChange = { name = it },
+                placeholder = { Text(stringResource(R.string.git_panel_branch_name_hint)) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (name.isNotBlank()) onCreate(name.trim()) },
+                enabled = name.isNotBlank(),
+            ) { Text(stringResource(android.R.string.ok)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

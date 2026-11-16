@@ -204,14 +204,15 @@ object ThinkingLevelCatalog {
 
 /**
  * [T-android-thinking-level-arch] "How high can this model's thinking go?"
- * resolved through the built-in tiers only (no user override — see
- * [ModelEntry.effectiveMaxThinkingLevel] for that):
- *   1. supportsReasoning == false → OFF (checked BEFORE catalog rules so a
- *      broadened family rule can't lift a non-reasoning member's ceiling).
- *   2. ThinkingLevelCatalog rule.
- *   3. true/null → XHIGH (conservative default so a reasoning model isn't
- *      accidentally capped below the tiers every provider already accepted
- *      pre-GPT-5.6).
+ * resolved through the tiers available on the RESOLVED model: the folded
+ * operator override ([LLMModel.maxThinkingLevel], from
+ * [ModelOverrides.maxThinkingLevel]) first, then the catalog family rule,
+ * then the declared effort set's top tier. This is the ceiling the chat
+ * picker clamps against AND — via the fold — the ceiling
+ * [LLMProvider.clampThinkingLevel] clamps against at the send boundary, so
+ * the picker and the wire can no longer disagree (the UI offered 至高 while
+ * the send-boundary clamp folded it back to MAX). KDoc's "no user override"
+ * phrase above predates the fold; the override now lives ON the model.
  */
 val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
     get() {
@@ -221,6 +222,11 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
         // ceiling of that family's non-reasoning members (mimo-v2.5-tts/-asr).
         // [T-fallback-thinking-preclamp]
         if (supportsReasoning == false) return ThinkingLevel.OFF
+        // [T-thinking-ultra-manual] The folded operator override is the
+        // highest-priority source (its ModelOverrides doc says exactly that):
+        // it beats the declared set AND the id rules, and — via the fold —
+        // the provider-side clamp now honors it too.
+        maxThinkingLevel?.let { return it }
         // [T-thinking-levels-data-driven] A declared effort set is a stronger
         // statement than any id-substring rule: it names the exact tiers the
         // backend accepts. Take its top tier as the ceiling so a model whose
@@ -240,7 +246,16 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
         // is — its job is to stop an undeclared tier reaching the backend
         // (which 400s), and loosening it would trade this bug for that one.
         // Mirrors iOS LLMTypes.swift `catalogMaxThinkingLevel` (47dc71b3).
+        //
+        // [T-thinking-ultra-declared] A set containing "ultra" lifts the
+        // ceiling to ULTRA through the same selectableThinkingLevels path —
+        // the backend named the tier, so it is reachable by definition.
         selectableThinkingLevels.lastOrNull()?.let { return it }
+        // [T-thinking-ultra-manual] A folded operator override is returned
+        // FIRST (before this point), so an entry-bound model with only the
+        // override and no catalog/declared opinion can still fall through to
+        // the generic default — its picker reachability comes from
+        // effectiveMaxThinkingLevel (override-aware), not this default.
         return ThinkingLevelCatalog.declaredMaxLevel(id) ?: ThinkingLevel.XHIGH
     }
 
@@ -248,7 +263,7 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
  * [T-thinking-levels-data-driven] The thinking levels worth OFFERING for this
  * model, derived from the catalog's declared effort tiers.
  *
- * The wire path ([com.openminis.app.provider.thinking.ThinkingRuleResolver.clampEffort])
+ * The wire path ([com.openminis.app.provider.thinking.ThinkingEffort.clampEffort])
  * snaps any request onto the declared set, so when a model declares a sparse
  * set — `["high","max"]` is the single most common sparse shape in the bundled
  * catalog (79 of the 339 deepseek-v4/glm-5.x entries that declare effort tiers,
@@ -264,12 +279,18 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
  * OFF wire value is chosen by the resolver's off-effort handling, not here.
  * `none`/`minimal` are likewise OFF-ish tiers owned by that toggle.
  *
- * [T-thinking-levels-data-driven] ULTRA is likewise never included, and that is
- * by design rather than an omission: ULTRA is a client-side "MAX +
- * orchestration" concept, never a wire effort (see
- * [com.openminis.app.provider.thinking.ThinkingRuleResolver.wireEffort], where
+ * [T-thinking-levels-data-driven] ULTRA is excluded for every model whose
+ * declared set stops at "max", and that is by design rather than an omission:
+ * ULTRA is a client-side "MAX + orchestration" concept, never a wire effort
+ * for those models (see
+ * [com.openminis.app.provider.thinking.ThinkingEffort.wireEffort], where
  * both MAX and ULTRA serialize as `"max"`). A second rung spelling the same wire
  * value would be precisely the lie this function exists to stop telling.
+ *
+ * [T-thinking-ultra-declared] The ONE exception is a declared set that
+ * literally contains "ultra": there the backend names the tier itself, so
+ * ULTRA IS a distinct wire value (clampEffort passes it through) and the
+ * rung must be offered.
  *
  * The declared tiers say WHICH generic levels are legal; they say nothing about
  * whether those levels produce different bytes. Families whose wire path folds
@@ -293,8 +314,13 @@ val LLMModel.selectableThinkingLevels: List<ThinkingLevel>
             "high" to ThinkingLevel.HIGH,
             "xhigh" to ThinkingLevel.XHIGH,
             "max" to ThinkingLevel.MAX,
-            // [T-thinking-ultra-declared] 后端字面声明 ultra 时才多给一档；
-            // 未声明的模型这张表里没有它，UI 也不会凭空多一档。
+            // [T-thinking-ultra-declared] A backend that literally declares
+            // "ultra" in its effort set (e.g. a future GPT-6.x tier or a relay
+            // exposing one) is the ONE case where ULTRA is a real wire tier.
+            // wireEffort maps ULTRA→"max" for every OTHER model; for a model
+            // whose declared set contains "ultra", clampEffort passes the
+            // literal through, so the picker must offer the rung and the
+            // ceiling must reach it — otherwise the declared tier is dead.
             "ultra" to ThinkingLevel.ULTRA,
         )
         val set = declared.map { it.lowercase() }.toSet()
@@ -317,6 +343,15 @@ val LLMModel.selectableThinkingLevels: List<ThinkingLevel>
  * consults: the user's manual override on the entry (highest priority) wins over
  * the catalog/default. `entry.model` already folds ModelOverrides into the base
  * model, so read the ceiling off the resolved model there.
+ *
+ * [T-thinking-ultra-manual] A manual ceiling is still bounded by capability: a
+ * model resolved to `supportsReasoning == false` is OFF regardless of the
+ * override, mirroring the first rule of [catalogMaxThinkingLevel] — which the
+ * override previously bypassed, letting a dead ceiling sit on a non-reasoning
+ * model.
  */
 val ModelEntry.effectiveMaxThinkingLevel: ThinkingLevel
-    get() = overrides.maxThinkingLevel ?: model.catalogMaxThinkingLevel
+    // [T-thinking-ultra-manual] The override is folded onto model.maxThinkingLevel
+    // and catalogMaxThinkingLevel returns it first (after the capability guard),
+    // so this single read now covers override + declared set + id rules.
+    get() = model.catalogMaxThinkingLevel

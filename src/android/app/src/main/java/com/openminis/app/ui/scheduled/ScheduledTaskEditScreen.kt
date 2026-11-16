@@ -222,7 +222,9 @@ fun ScheduledTaskEditScreen(
             vm.listModels().firstOrNull { it.entryId == eid }?.modelId
         },
         startDateMs = startDateMs, endDateMs = endDateMs,
-        newSessionPermissionMode = if (newSessionPermYoyo) "YOYO" else "ASK",
+        // [#31] Non-YOLO emits SAFE_AUTO — the tier that reproduces the old
+        // "ASK" gate behaviour (read-only auto, the rest asks).
+        newSessionPermissionMode = if (newSessionPermYoyo) "YOLO" else "SAFE_AUTO",
         newSessionFolderId = newSessionFolderId,
     )
 
@@ -602,6 +604,15 @@ private fun EditFormBody(
                 placeholder = { Text(stringResource(R.string.scheduled_task_field_prompt_hint)) },
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
+            )
+            // [GH#201] Template variables + the automatic date prefix. The
+            // prefix is prepended at FIRE time, so it always carries the real
+            // "today" rather than the day the task was authored.
+            Text(
+                stringResource(R.string.scheduled_task_prompt_template_hint),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp),
             )
         } else {
             Text(

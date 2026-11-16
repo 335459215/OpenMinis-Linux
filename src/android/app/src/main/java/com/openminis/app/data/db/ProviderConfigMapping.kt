@@ -12,6 +12,7 @@ import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.data.model.withInferredVoiceModality
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -101,11 +102,17 @@ fun ProviderConfig.toSnapshot(
             appendV1Suffix = if (inst.appendV1Suffix) 1 else 0,
             useResponsesAPI = if (inst.useResponsesAPI) 1 else 0,
             azureMode = if (inst.azureMode) 1 else 0,
+            // [OpenMinis#311] Provider-level force-thinking switch round-trips
+            // through Room, not just the JSON mirror.
+            forceThinking = if (inst.forceThinkingEnabled) 1 else 0,
             // [GH#68] Persist the picker choice + probe cache; auto is stored
             // explicitly (not null) so a legit "auto" survives round-trips too.
             imageEndpointMode = inst.imageEndpointMode.name,
             imageEndpointResolved = inst.imageEndpointResolved?.name,
             customUserAgent = inst.customUserAgent,
+            // [T-codex-client-fingerprint] Round-trip the Codex-client
+            // fingerprint switch through Room, not just the JSON mirror.
+            codexClientFingerprint = if (inst.codexClientFingerprint) 1 else 0,
             isEnabled = if (inst.isEnabled) 1 else 0,
             pinned = if (inst.pinned) 1 else 0,
             sortOrder = idx,
@@ -131,6 +138,11 @@ fun ProviderConfig.toSnapshot(
                     isHidden = if (e.isHidden) 1 else 0,
                     sortOrder = idx,
                     userModifiedAt = e.userModifiedAt,
+                    // [T-compat-flags-persist] Opaque CompatFlags JSON blob
+                    // round-trips so a future write side (UI editor / models.json
+                    // import) survives every save; read side feeds
+                    // CompatResolver.override at repository load. Null = no overlay.
+                    compatJson = e.compatJson,
                 )
             )
         }
@@ -247,8 +259,10 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             customBaseURL = row.customBaseURL,
             appendV1Suffix = row.appendV1Suffix != 0,
             customUserAgent = row.customUserAgent,
+            codexClientFingerprint = row.codexClientFingerprint != 0,
             useResponsesAPI = row.useResponsesAPI != 0,
             azureMode = row.azureMode != 0,
+            forceThinkingEnabled = row.forceThinking != 0,
             // [GH#68] Safe parse: null (pre-migration rows) or an unknown
             // name from a future build falls back to auto / no cache rather
             // than throwing and wiping the whole provider load.
@@ -262,7 +276,14 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
     }.toMutableList()
 
     val entries = this.entries.map { row ->
-        val baseModel = jsonForBlobs.decodeFromString(LLMModel.serializer(), row.baseModelJson)
+        val decoded = jsonForBlobs.decodeFromString(LLMModel.serializer(), row.baseModelJson)
+        // [OpenMinis#305] Heal API-fetched entries persisted before the
+        // Bailian/SiliconFlow ASR/TTS naming rules existed: they carry a
+        // text-only modality and were never classified as voice, so the Voice
+        // Services lists stayed empty until the next model refresh. Inference
+        // is read-time here and is persisted on the next save. CUSTOM entries
+        // are left untouched — their modality is user-authored.
+        val baseModel = if (row.isCustom != 0) decoded else decoded.withInferredVoiceModality()
         val overrides = row.overridesJson?.let {
             jsonForBlobs.decodeFromString(ModelOverrides.serializer(), it)
         } ?: ModelOverrides()
@@ -274,6 +295,9 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             isHidden = row.isHidden != 0,
             uuid = row.id,
             userModifiedAt = row.userModifiedAt,
+            // [T-compat-flags-persist] Carry the overlay into memory; the
+            // repository load path decodes it into CompatResolver.override.
+            compatJson = row.compatJson,
         )
     }.toMutableList()
 

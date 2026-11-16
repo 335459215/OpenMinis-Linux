@@ -185,6 +185,15 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET last_message = :preview, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateLastMessage(id: String, preview: String?, updatedAt: Long)
 
+    /**
+     * [GH#325] Drop only the list preview after /clear. Deliberately does NOT
+     * bump `updated_at`: clearing a chat must not reorder the session list,
+     * and the row itself must survive so a restart cannot resurrect the old
+     * preview or make the session look deleted.
+     */
+    @Query("UPDATE sessions SET last_message = NULL WHERE id = :id")
+    suspend fun clearLastMessagePreview(id: String)
+
     @Query("UPDATE sessions SET model_id = :modelId, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateSessionModel(id: String, modelId: String, updatedAt: Long = System.currentTimeMillis())
 
@@ -443,7 +452,13 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("DELETE FROM messages WHERE session_id = :sessionId")
     suspend fun deleteMessages(sessionId: String)
 
-    @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL")
+    // [T-thinking-dual-ledger] ORDER BY sort_order pins the row order the two
+    // callers both ASSUMED (oldest-first): the load-path context probe scans
+    // .asReversed() for the newest non-zero context, and the token sheet reads
+    // the LAST row as the session's most recent turn (thinkingLevelRequested/
+    // Effective). An unordered SELECT made "last" unspecified; the projection
+    // query below already canonicalized sort_order ASC, so mirror it.
+    @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL ORDER BY sort_order ASC")
     suspend fun tokenUsages(sessionId: String): List<String>
 
     @Query("""
@@ -514,9 +529,37 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET thinking_override = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateThinkingOverride(id: String, value: String?, updatedAt: Long = System.currentTimeMillis())
 
+    // Session: dormant_thinking_override ([T-thinking-dormant-restore], P2 1-8)
+    // — the level PARKED while the active model's ceiling was too low, restored
+    // when the ceiling widens. null clears the park. Deliberately NO updated_at
+    // bump: parking/clearing is bookkeeping piggybacked on persistThinkingOverride
+    // (which already stamps updated_at via updateThinkingOverride), and a standalone
+    // bookkeeping write must not reorder the session list.
+    @Query("UPDATE sessions SET dormant_thinking_override = :value WHERE id = :id")
+    suspend fun updateDormantThinkingOverride(id: String, value: String?)
+
     @Query("UPDATE sessions SET permission_mode = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePermissionMode(id: String, value: String, updatedAt: Long = System.currentTimeMillis())
 
+    // Session: branch tree ([T-android-session-branch-tree])
+    @Query(
+        "UPDATE sessions SET branch_of = :source, branch_point = :point, updated_at = :updatedAt " +
+            "WHERE id = :id",
+    )
+    suspend fun updateBranch(id: String, source: String, point: String?, updatedAt: Long = System.currentTimeMillis())
+
+    /** Direct children of a session (branch tree panel), newest first. */
+    @Query("SELECT * FROM sessions WHERE branch_of = :source ORDER BY updated_at DESC")
+    suspend fun branchChildren(source: String): List<ChatSessionEntity>
+
+    /**
+     * Defensive sweep for rows predating the gate. NOTE the deliberate
+     * asymmetry with the read path ([com.openminis.app.security.SecurityGateHolder]
+     * maps "DENY_ALL" → OFF): this backfill treats DENY_ALL as blank — the
+     * token was never a legal SESSION persistent value (it is a sub-agent
+     * fence value), so rewriting it to the legacy 'ASK' default (read back as
+     * SAFE_AUTO) is the faithful "the row never said anything" semantics.
+     */
     @Query(
         """
         UPDATE sessions SET permission_mode = 'ASK'
@@ -530,6 +573,12 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     // Session: pinned_at
     @Query("UPDATE sessions SET pinned_at = :pinnedAt, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePinnedAt(id: String, pinnedAt: Long?, updatedAt: Long = System.currentTimeMillis())
+
+    // Session: archived_at ([#35] session archive). Metadata-only on purpose —
+    // NO updated_at bump, so archiving cannot reorder the live list and
+    // unarchiving returns the row to its old slot.
+    @Query("UPDATE sessions SET archived_at = :archivedAt WHERE id = :id")
+    suspend fun updateArchivedAt(id: String, archivedAt: Long?)
 
     // Session: source
     @Query("UPDATE sessions SET source = :source WHERE id = :id")

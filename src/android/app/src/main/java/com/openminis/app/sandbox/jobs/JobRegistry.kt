@@ -88,6 +88,10 @@ object JobRegistry {
         val state: JobState = JobState.RUNNING,
         val exitCode: Int? = null,
         val outputSpillPath: String? = null,
+        /** GUEST path of the job's stdin FIFO; null when the spawner has none. */
+        val stdinGuestPath: String? = null,
+        /** Process id of the job's setsid leader; -1 when unknown. */
+        val pid: Int = -1,
     )
 
     /**
@@ -118,6 +122,19 @@ object JobRegistry {
          * not expose the log to the guest filesystem.
          */
         val outputGuestPath: String? get() = null
+
+        /**
+         * Optional GUEST path of the job's stdin FIFO
+         * (`/var/minis/workspace/tool-spill/jobs/<id>.in`); action=input
+         * appends to it. Default null = spawner has no stdin pipe (fakes).
+         */
+        val stdinGuestPath: String? get() = null
+
+        /**
+         * Optional process id of the job's session leader (setsid), used by
+         * action=signal to deliver arbitrary signals. Default -1 = unknown.
+         */
+        val pid: Int get() = -1
     }
 
     /** Start outcomes; mapped to structured tool results by [com.openminis.app.tools.JobTools]. */
@@ -241,6 +258,8 @@ object JobRegistry {
                 state = JobState.RUNNING,
                 exitCode = null,
                 outputSpillPath = spawned.outputGuestPath,
+                stdinGuestPath = spawned.stdinGuestPath,
+                pid = spawned.pid,
             )
             val record = Record(k, job, spawned)
             val list = memory.getOrPut(k) { mutableListOf() }
@@ -322,6 +341,35 @@ object JobRegistry {
         }
     }
 
+    // -------------------------------------------------------- protection
+
+    /**
+     * [T-job-tree-spare] Pids of every RUNNING job across ALL sessions (the
+     * setsid leader of each detached guest process). SandboxWorkload's tree
+     * walks subtract these trees from every kill sweep: a user Stop, a
+     * command watchdog timeout or the process-cap / memory-pressure
+     * supervisor must never kill a background job the model started on
+     * purpose. Qwen parity: there a background job is an independent
+     * PoolEntry process, invisible to the foreground command's
+     * pid-descendants walk; here jobs live inside the persistent shell's
+     * tree, so the walkers must actively spare them.
+     *
+     * Runs the lazy reconcile so a just-finished job is not spared.
+     */
+    fun activeJobPids(): Set<Int> {
+        val pids = LinkedHashSet<Int>()
+        for (k in memory.keys) {
+            lock(k).withLock {
+                for (record in memory[k].orEmpty()) {
+                    reconcileLocked(record)
+                    val pid = record.job.pid
+                    if (record.job.state == JobState.RUNNING && pid > 0) pids.add(pid)
+                }
+            }
+        }
+        return pids
+    }
+
     private sealed interface JobRef {
         data class Found(val record: Record) : JobRef
         data class Ambiguous(val ids: List<String>) : JobRef
@@ -370,6 +418,63 @@ object JobRegistry {
     }
 
     // ---------------------------------------------------------------- kill
+
+    /**
+     * [T-android-jobs-interactive] Append [text] to the job's stdin FIFO.
+     * Text travels base64-encoded through the guest shell so no quoting or
+     * control characters can corrupt the stream. Returns the guest path
+     * written to, or null when the job has no stdin pipe (fakes, or spawned
+     * before the fifo existed).
+     */
+    suspend fun writeStdin(sessionId: String, ref: String, text: String): String? {
+        val k = key(sessionId)
+        val fifo = lock(k).withLock {
+            val record = memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
+                ?: return@withLock null
+            reconcileLocked(record)
+            // [T-android-jobs-interactive] Only a RUNNING job has a live
+            // stdin fifo — the spawner's holder removes it once the job
+            // dies, and appending into the removed path would silently
+            // recreate a plain file and report a fake success.
+            if (record.job.state != JobState.RUNNING) return@withLock null
+            record.job.stdinGuestPath
+        } ?: return null
+        val b64 = java.util.Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
+        val out = com.openminis.app.sandbox.ExecutionCoordinator.execute(
+            sessionId,
+            "printf '%s' '$b64' | base64 -d >> '$fifo'",
+        )
+        return if (out.exitCode == 0) fifo else null
+    }
+
+    /**
+     * Deliver [signal] (e.g. "TERM", "USR1", "INT") to the job's process
+     * group. Uses the persisted leader pid; distinct from [kill] which is
+     * TERM+KILL unconditionally.
+     */
+    suspend fun signal(sessionId: String, ref: String, signal: String): Boolean {
+        val k = key(sessionId)
+        val pid = lock(k).withLock {
+            val record = memory[k].orEmpty().find { it.job.id == ref || it.job.id.startsWith(ref) }
+                ?: return@withLock null
+            reconcileLocked(record)
+            // A finished job has no live process group to signal — reporting
+            // a delivered signal for one would be a fake success.
+            if (record.job.state != JobState.RUNNING) return@withLock null
+            record.job.pid
+        } ?: return false
+        if (pid <= 0) return false
+        val sig = signal.trim().removePrefix("-").uppercase()
+        val safe = if (sig.matches(Regex("[A-Z0-9]+"))) sig else return false
+        // No `; true` bailout: the exit code must reflect whether the signal
+        // was actually delivered — a dead group fails the kill and the caller
+        // reports the miss instead of a fake success.
+        val out = com.openminis.app.sandbox.ExecutionCoordinator.execute(
+            sessionId,
+            "kill -$safe -- -$pid 2>/dev/null || kill -$safe $pid 2>/dev/null",
+        )
+        return out.exitCode == 0
+    }
 
     fun kill(sessionId: String, ref: String): KillOutcome {
         val k = key(sessionId)

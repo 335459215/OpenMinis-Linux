@@ -58,6 +58,15 @@ data class SoulMetadata(
      * never serializes frontmatter wholesale, so even a ~20 KB data URI costs
      * zero tokens; and SOUL.md is already synced as text and copied by the
      * memory backup, so a sibling PNG would silently not be backed up.
+     *
+     * [GH#299] The inline form is now only a LEGACY input. [SoulStore.save]
+     * migrates it to `file:minis-global/memory/soul-icons/soul.png` and moves
+     * the bytes into the **memory backup root**, so a hand-edited 85 KB data
+     * URI stops riding along in every SOUL.md save and backup — and, unlike the
+     * second-round patch that wrote `filesDir/soul-icons/soul.png` outside every
+     * backup category, the migrated PNG is now packed/restored with SOUL.md.
+     * `file:` values are accepted anywhere a data URI is. Reads never migrate
+     * (see [SoulStore.load]): no read-side rewrite, no lost-update race.
      */
     val icon: String,
     val style: String,
@@ -203,7 +212,15 @@ object SoulStore {
 
     private const val TAG = "SoulStore"
     private const val FILE_NAME = "SOUL.md"
-    private const val MEMORY_SUBDIR = "minis-global/memory"
+
+    /**
+     * [GH#299] `filesDir`-relative memory root. `internal` because the backup
+     * layer (MEMORY category) must pack/restore exactly this tree: the migrated
+     * Soul icon lives in a subdirectory of it, and one shared definition is what
+     * keeps "SOUL.md is backed up" and "its avatar is backed up" from drifting
+     * apart again.
+     */
+    internal const val MEMORY_SUBDIR = "minis-global/memory"
     private const val PREFS_NAME = "soul_store"
     private const val FORCE_OVERWRITE_KEY = "force_overwrite_1_36_13"
 
@@ -481,22 +498,58 @@ lang: "auto"
      * Read + parse the current SOUL.md. Returns null when the file is
      * missing or unreadable; an empty body parses to default-meta with
      * empty body and callers may treat that as "fall back to default".
+     *
+     * [GH#299] **纯读：这里绝不写盘。** 第二轮补修在读路径把内联 icon 迁移后
+     * 整文件重写 SOUL.md，"先读后写"与并发 [save] 竞争时会用旧快照覆盖用户刚
+     * 保存的新内容（lost-update）。迁移现在只发生在 [save]（见
+     * [SoulIconMigration.prepareForSave]），读取保持零副作用，也不会为了迁移
+     * 而刷新 mtime / 让 prompt 缓存失效。
+     *
+     * 读用 [AtomicFileWrite.read]：与 [save] 的写共用同一把 per-path 锁，避免
+     * 读到一次写到一半的 SOUL.md。
      */
     fun load(context: Context): SoulFile? {
         val file = fileLocation(context)
         if (!file.exists()) return null
-        return try {
-            SoulMDParser.parse(file.readText())
-        } catch (t: Throwable) {
-            AppLogger.warning(TAG, "SOUL.md load failed: ${t.message}")
-            null
+        // [T-persona-load-retry] Two retries, matching the persona library's
+        // readTextResilient: a transient IO error (concurrent write window,
+        // memory pressure) used to blank the BUILTIN persona for a whole
+        // turn — the "persona silently vanished" reports.
+        repeat(2) { attempt ->
+            // A null read counts as a failed attempt too: AtomicFileWrite.read
+            // catches IOException internally and returns null, so the transient
+            // IO errors this retry exists for arrive as null, not as throws.
+            val raw = try {
+                AtomicFileWrite.read(file)
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "SOUL.md load failed (attempt ${attempt + 1}): ${t.message}")
+                null
+            } ?: run {
+                if (attempt == 1) return null
+                return@repeat
+            }
+            try {
+                SoulMDParser.parse(raw)?.let { return it }
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "SOUL.md parse failed (attempt ${attempt + 1}): ${t.message}")
+            }
         }
+        return null
     }
 
-    /** Atomic write through a `.tmp` sibling, then rename. */
+    /**
+     * Atomic write through a `.tmp` sibling, then rename.
+     *
+     * [GH#299] Save-side contract: **只迁移 frontmatter icon，body 原样落盘**。
+     * 磁盘上的 SOUL.md 必须保留用户原文（含 body 内 base64 图片）；token 清洗
+     * 只发生在 prompt 构建的内存副本上，由
+     * [SystemPromptBuilder.identitySection] 完成。这样保存不会无声改写用户内容，
+     * 也不需要"压缩 body"的产品决策。
+     */
     fun save(context: Context, file: SoulFile) {
         val target = fileLocation(context)
-        val text = SoulMDParser.serialize(file)
+        val prepared = SoulIconMigration.prepareForSave(context, file)
+        val text = SoulMDParser.serialize(prepared)
         // Unified atomic write: AtomicFileWrite adds the per-path lock,
         // short-write detection and post-write verify on top of the same
         // tmp+rename dance. Its copy-over fallback covers the old
@@ -506,7 +559,7 @@ lang: "auto"
         if (AtomicFileWrite.write(target, text, temp = File(target.parentFile, "${target.name}.tmp")) == null) {
             throw IOException("SOUL.md save failed for ${target.name}")
         }
-        _cachedMetadata.value = file.metadata
+        _cachedMetadata.value = prepared.metadata
     }
 
     /**
@@ -527,201 +580,4 @@ lang: "auto"
         val parsed = load(context)
         _cachedMetadata.value = parsed?.metadata ?: SoulMetadata.DEFAULT
     }
-}
-
-/**
- * Composes the Layer-1 identity section of the agent system prompt.
- * Mirrors iOS `SystemPromptBuilder.identitySection()` (commit 74c0daf):
- * a fixed identity-sentence template owned by the app + an optional,
- * clearly-labeled Personality block from SOUL.md's body.
- *
- * Why template-based (not "let the user write the whole prompt"):
- *  - Users never see "You are <name>, a capable AI assistant ..." in the
- *    Personality editor — that internal scaffolding stays out of view
- *    so users can't accidentally delete or duplicate it.
- *  - The original carefully-tuned identity sentence is preserved
- *    byte-for-byte. Substituting only `{name}` keeps the surrounding
- *    model expectations (Android device, Linux sandbox via PRoot,
- *    aarch64) intact.
- *  - When the user hasn't authored a personality body, the full
- *    assembled prompt is byte-identical to the pre-SOUL prompt
- *    (modulo `{name}`) — no behavior regression for default users.
- */
-object SystemPromptBuilder {
-
-    private const val TAG = "Soul"
-
-    /**
-     * Patterns used by [scrubInjections] to drop prompt-injection lines
-     * from the personality body at prompt-build time. Exposed so write
-     * paths (minis-config `soul.body` setter) can reject the same set
-     * of patterns rather than silently scrubbing — see iOS parity:
-     * the agent should see a clear error, not a silent edit.
-     */
-    val INJECTION_PATTERNS: List<Regex> = listOf(
-        Regex("ignore.{0,30}previous.{0,30}instructions?", RegexOption.IGNORE_CASE),
-        Regex("disregard.{0,30}(previous|prior).{0,30}instructions?", RegexOption.IGNORE_CASE),
-        Regex("forget.{0,30}(previous|prior).{0,30}instructions?", RegexOption.IGNORE_CASE),
-    )
-
-    /**
-     * `true` iff [s] contains a known prompt-injection pattern. Used by
-     * write-side validation to reject the change at the configure call,
-     * which surfaces a clean error to the agent (instead of the silent
-     * line-drop that [scrubInjections] performs at prompt-build time).
-     */
-    fun containsInjectionPattern(s: String): Boolean =
-        INJECTION_PATTERNS.any { it.containsMatchIn(s) }
-
-    /**
-     * The identity sentence template. `{name}` is substituted from the
-     * SOUL metadata. This wording matches the pre-SOUL literal that
-     * lived inline in ChatViewModel.buildSystemPrompt — keep it in sync
-     * if you ever need to tweak the runtime statement, because every
-     * Android chat hits this line.
-     */
-    /**
-     * [T-default-assets] The identity-sentence template, loaded from
-     * `assets/default_identity.md` (single source of truth — edit that file
-     * to customize the shipped default). `{name}` is substituted from the
-     * SOUL metadata at build time. The asset content is injected into the
-     * system prompt VERBATIM, so the file must contain no comment lines or
-     * documentation — only the sentence itself. Trailing whitespace is
-     * normalized at load (editors strip it) to preserve the gluing contract
-     * documented on [identitySection]. [EMBEDDED_IDENTITY_TEMPLATE] is the
-     * fallback when the asset is missing.
-     */
-    private val IDENTITY_TEMPLATE: String
-        get() = assetsIdentity ?: EMBEDDED_IDENTITY_TEMPLATE
-
-    @Volatile private var assetsIdentity: String? = null
-
-    /** Read `assets/default_identity.md` into the IDENTITY_TEMPLATE getter. */
-    fun loadIdentityFromAssets(context: Context) {
-        runCatching {
-            context.assets.open("default_identity.md").bufferedReader()
-                .use { it.readText() }
-        }.getOrNull()?.trimEnd()?.let { assetsIdentity = "$it " }
-    }
-
-    private const val EMBEDDED_IDENTITY_TEMPLATE =
-        "You are {name}, the on-device agent in Minis Ultra. The product name is Minis Ultra. Do not call yourself Minis, minisultra, or OpenMinis. You run on an Android device with a fully functional Linux sandbox (Ubuntu 24.04 arm64 via PRoot, glibc). "
-
-    /**
-     * Render the identity sentence (template + name) and optionally
-     * append the user-authored personality body from SOUL.md.
-     *
-     * Two distinct trailing-whitespace contracts so the next concatenated
-     * sentence in [com.openminis.app.ui.chat.ChatViewModel.buildSystemPrompt]
-     * glues correctly:
-     *   - No personality body → identity sentence with its original
-     *     single trailing space (byte-identical to the pre-SOUL prompt).
-     *   - With personality body → identity sentence + blank line +
-     *     "Personality:" block + blank line, so the runtime-guidance
-     *     sentence starts a fresh paragraph.
-     *
-     * Returned format (when SOUL body is present):
-     *
-     *     You are <name>, a capable AI assistant running on an Android device …
-     *
-     *     Personality (from SOUL.md — your character and voice; defer to
-     *     the user's latest message when it conflicts with anything here):
-     *     <body>
-     *
-     * We never substitute a default body into the prompt — the identity
-     * sentence alone is the safe fallback when SOUL.md is missing or
-     * empty, matching pre-SOUL behavior.
-     */
-    /**
-     * [T-prompt-cache] Fingerprint + last result for [identitySection].
-     * The section re-reads SOUL.md and the persona prompt library on every
-     * turn; both only change on explicit edits, so cache on a cheap
-     * (mtime,size)-based fingerprint.
-     */
-    @Volatile
-    private var identityCacheKey: String? = null
-    @Volatile
-    private var identityCacheValue: String? = null
-
-    fun identitySection(context: Context, providerInstanceId: String? = null, sessionId: String? = null): String {
-        // Cheap dirty-check before the two file reads below.
-        val soulFile = SoulStore.fileLocation(context)
-        val soulFp = if (soulFile.exists()) "${soulFile.lastModified()}|${soulFile.length()}" else "missing"
-        val promptFileFp = PersonaPromptLibrary.resolvedFileFingerprint(context, providerInstanceId, sessionId)
-        val key = "$soulFp|$promptFileFp|$providerInstanceId|$sessionId"
-        if (key == identityCacheKey) return identityCacheValue ?: ""
-
-        val file = SoulStore.load(context)
-        val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
-            .trim()
-            .ifEmpty { "Minis Ultra" }
-
-        val style = (file?.metadata?.style ?: "").trim()
-        val resolved = PersonaPromptLibrary.resolve(context, providerInstanceId, sessionId)
-
-        val identity = IDENTITY_TEMPLATE.replace("{name}", name)
-        val identityTrimmed = identity.trimEnd()
-
-        // [T-soul-hint] Fixed hint telling the model how SOUL fields can be
-        // changed. Always appended (with or without a personality body) so
-        // the model never says "I can't change my personality". This hint
-        // is system-owned text and is NOT counted against the user-facing
-        // SOUL body length limit (#356 / 1000 EN words / 1600 CN chars).
-        val soulEditHint =
-            "---\n" +
-            "SOUL.md is your persona. Write it as the persona requires — there is no length cap. " +
-            "Change it via `minis-config` (user approves) or Settings → Soul. Do not claim you cannot change personality."
-
-        // [T-soul-style-injection 2026-05-18, port iOS 0409e24f] The `style`
-        // frontmatter field (response voice / tone / formatting preference,
-        // e.g. a row of emojis or "concise, no markdown") was parsed and
-        // shown in the UI but never reached the model — only the Markdown
-        // body was injected. Render it as its own labeled paragraph so the
-        // model treats it as a hard constraint on response style rather
-        // than free-form context.
-        fun styleBlock(s: String): String {
-            if (s.isEmpty()) return ""
-            // [T-agent-prompt-consistency-pass] Mirrors iOS SoulStore: a user-authored
-            // style that prescribes a reply language is the more specific preference
-            // and wins over the base prompt's match-the-user's-language default.
-            return "\n\nResponse style (from SOUL.md `style` — apply to every reply unless the user explicitly asks otherwise; if it prescribes a reply language, it overrides the default match-the-user's-language rule):\n$s"
-        }
-
-        val trimmed = resolved.body.trim()
-        if (trimmed.isEmpty()) {
-            val result = identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
-            identityCacheKey = key
-            identityCacheValue = result
-            return result
-        }
-
-        // [persona-unlimited] No length cap, no truncation — inject the body
-        // verbatim. isOverLimit() is a pass-through Ok now.
-        val personalityRaw = trimmed
-
-        val personality = scrubInjections(personalityRaw)
-        val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }
-
-        val result = identityTrimmed +
-            "\n\n${SoulStore.PERSONALITY_HEADER_MARKER} $sourceLabel — BINDING for this entire conversation, including existing sessions, tool use, and this turn. Earlier assistant replies in this transcript may predate this persona or use a generic assistant voice — do not continue that voice. Do not treat it as optional flavour, do not replace it with a generic assistant voice, and do not drop it when a later user message looks more specific unless the user explicitly asks you to leave character):\n" +
-            personality +
-            styleBlock(style) +
-            "\n\n" +
-            soulEditHint +
-            "\n\n"
-        identityCacheKey = key
-        identityCacheValue = result
-        return result
-    }
-
-    /**
-     * Drop lines that look like an attempt to subvert the system prompt.
-     * SOUL.md is user-authored personality — instructions to the model
-     * have no business being there. Casts a wide net on purpose: matches
-     * "ignore previous instructions" and the usual variants.
-     */
-    private fun scrubInjections(s: String): String =
-        s.split("\n")
-            .filter { line -> INJECTION_PATTERNS.none { it.containsMatchIn(line) } }
-            .joinToString("\n")
 }

@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Entrada no encontrada en los registros diarios recientes.</string>
     <string name="memory_revoke_result_io_error">Error al escribir el archivo: %1$s</string>
     <string name="memory_save_toast">Guardado</string>
+
+    <string name="memory_save_failed_toast">Error al guardar: revise el almacenamiento e inténtelo de nuevo</string>
     <string name="memory_global_footer">Instrucciones y preferencias persistentes visibles para Minis Ultra Agent en cada sesión. El Agent no puede modificar este archivo.</string>
     <string name="check_update_section_header">Actualización de la app</string>
     <string name="check_update_current_version">Versión actual: %1$s</string>
@@ -118,13 +120,13 @@
     <string name="settings_mcp">Integraciones MCP</string>
     <string name="settings_mcp_subtitle">Conecta servidores Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Stack completo de Android y móvil</string>
     <string name="dev_suite_android_summary">JDK17 · Cadena de herramientas aarch64 SDK · NDK r29 · Flutter/RE/Rust opcional</string>
     <string name="dev_suite_code_search_name">Búsqueda de código y eficiencia del terminal</string>
     <string name="dev_suite_code_search_summary">cuarteto rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suite de desarrolladores de Python &amp; AI</string>
     <string name="dev_suite_python_summary">Tiempo de ejecución de Python 3 · pip/venv · Dependencias de compilación de computación científica de IA</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Stack completo de Node.js y web</string>
     <string name="dev_suite_nodejs_summary">Tiempo de ejecución de Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suite de desarrollo Go</string>
     <string name="dev_suite_go_summary">Cadena de herramientas golang-go (suite exclusiva de OpenMinis)</string>
@@ -181,8 +183,8 @@
     <string name="zen_deleted_models_title">Restaurar modelos gratuitos eliminados (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Deshace las eliminaciones registradas en este proveedor</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Conexión fallida</string>
+    <string name="provider_sync_mark_invalid">Respuesta no válida</string>
     <string name="add_provider_voice_templates_footer">Proveedores de voz a texto y texto a voz. El tipo de proveedor y la URL base ya están rellenados: solo agrega tu API key.</string>
     <string name="add_provider_voice_capability_tts">Síntesis de voz (TTS)</string>
     <string name="add_provider_voice_capability_asr">Reconocimiento de voz (ASR)</string>
@@ -257,8 +259,8 @@
     <string name="soul_icon_choose_image">Elegir imagen</string>
     <string name="soul_icon_image_hint">Se recorta en cuadrado y se redondea</string>
     <string name="soul_icon_use_default">Usar el predeterminado</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Usar icono del modelo</string>
+    <string name="soul_icon_use_model_hint">Sigue el icono del proveedor del modelo en ejecución</string>
     <string name="soul_icon_emoji_title">Icono de identidad</string>
     <string name="soul_icon_emoji_field">O escribe un emoji</string>
     <string name="soul_icon_set">Establecer</string>
@@ -325,6 +327,8 @@
     <string name="token_usage_section_thinking">Razonamiento</string>
     <string name="token_usage_thinking_label">Razonamiento</string>
     <string name="token_usage_thinking_level">Nivel</string>
+    <string name="token_usage_thinking_requested">Solicitado</string>
+    <string name="token_usage_thinking_effective">Efectivo</string>
     <string name="token_usage_thinking_supported">Compatible</string>
     <string name="token_usage_section_tokens">Tokens (total de la sesión)</string>
     <string name="token_usage_input_with_cache">Entrada (incl. caché)</string>
@@ -334,6 +338,20 @@
     <string name="token_usage_cache_write">Escritura de caché</string>
     <string name="token_usage_section_agent_loop">Bucle de Minis Ultra Agent</string>
     <string name="token_usage_total_loops">Bucles totales</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">Prompt del sistema y herramientas</string>
+    <string name="context_block_skills_mcps">Skills y MCPs</string>
+    <string name="context_block_memory">Inyección de memoria</string>
+    <string name="context_block_runtime">Contexto temporal de este turno</string>
+    <string name="context_block_goal_plan">Inyección de objetivo y plan</string>
+    <string name="context_block_history">Ventana de historial</string>
+    <string name="context_block_attachments">Adjuntos e imágenes</string>
+    <string name="context_usage_note_estimate">Estimaciones aproximadas (±10 %); se actualizan al abrir esta hoja</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Tarjeta interactiva</string>
+    <string name="gen_ui_view_source">Ver código fuente</string>
+    <string name="gen_ui_view_render">Mostrar render</string>
+    <string name="gen_ui_view_fullscreen">Pantalla completa</string>
     <string name="common_on">Activado</string>
     <string name="common_off">Desactivado</string>
     <string name="common_yes">Sí</string>
@@ -441,6 +459,11 @@
     <string name="sessionlist_regenerate_title">Regenerar título</string>
     <string name="sessionlist_regenerating_title">Regenerando el título…</string>
     <string name="sessionlist_duplicate">Duplicar</string>
+    <string name="sessionlist_branch_tree">Árbol de ramas</string>
+    <string name="sessionlist_branch_from_here">Ramificar desde el último mensaje</string>
+    <string name="sessionlist_branch_empty">Esta sesión aún no tiene ramas. Ramifica desde el último mensaje para que los reintentos no toquen la conversación original.</string>
+    <string name="sessionlist_branch_source">Origen</string>
+    <string name="sessionlist_branch_children">Ramas</string>
     <string name="sessionlist_search_action">Buscar</string>
     <string name="sessionlist_dismiss">Descartar</string>
     <string name="sessionlist_delete_one_title">¿Eliminar la conversación?</string>
@@ -461,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s está pensando</string>
     <string name="read_aloud_unavailable">No se pudo leer en voz alta: no hay un motor de voz utilizable. Revisa los ajustes de salida de voz o instala un motor de voz del sistema.</string>
     <string name="chat_error_stream_dropped_partial">Se cortó la conexión; esta respuesta puede estar incompleta. Toca Reintentar para continuar.</string>
+    <string name="chat_composer_queued_hint">La entrada se pondrá en cola y se enviará al terminar la tarea actual</string>
     <string name="chat_input_placeholder">Mensaje a %1$s (@ para mencionar archivos)</string>
     <string name="chat_input_placeholder_hint_1">Usa @ para mencionar archivos que %1$s pueda leer</string>
     <string name="chat_input_placeholder_hint_2">Escribe / para acceder a SKILLs y comandos rápidos</string>
@@ -478,7 +502,7 @@
     <string name="browser_engine_stale">El núcleo WebView Chrome/%1$s va %2$d versiones por detrás. Actualízalo para las últimas funciones web.</string>
     <string name="browser_engine_stale_action">Actualizar núcleo</string>
     <string name="browser_settings_engine_shared">browser_use y el navegador integrado comparten este núcleo.</string>
-    <string name="browser_settings_user_agent">User Agent</string>
+    <string name="browser_settings_user_agent">Agente de usuario</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome móvil (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome de escritorio (Linux)</string>
     <string name="browser_settings_ua_custom">Personalizado</string>
@@ -609,6 +633,13 @@
     <string name="env_var_privacy_header">Privacidad</string>
     <string name="env_var_privacy_toggle">Modo privacidad</string>
     <string name="env_var_privacy_footer">Cuando está activado, cualquier valor de variable de entorno que aparezca en la salida de shell se reemplaza por una forma enmascarada (por ejemplo, `sk-1********ajhks`) antes de llegar al modelo. Los valores de menos de 8 caracteres se convierten en `*`. La salida visible en el chat no cambia.</string>
+    <string name="outbound_mask_toggle">Enmascarado de privacidad saliente</string>
+    <string name="outbound_mask_footer">Enmascarado opcional por forma: cadenas tipo clave (código incluido), correos y números telefónicos se sustituyen. La clave API de embedding se guarda en texto plano en prefs privadas. Historial del dispositivo sin cambios.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · todo automático</string>
+    <string name="chat_menu_perm_safe_auto">Auto seguro · las herramientas de lectura pasan libres</string>
+    <string name="chat_menu_perm_ask">Preguntar · confirmar cada llamada</string>
+    <string name="chat_menu_perm_off">Apagado · denegar todas las herramientas</string>
+    <string name="gate_approval_allow_all">Permitir siempre en esta sesión (objetivo actual)</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Las variables de entorno se inyectan en la shell del entorno aislado al iniciar la sesión. Los nombres se convierten a mayúsculas y deben cumplir las reglas de variables de shell POSIX.</string>
     <string name="env_var_empty_title">Sin variables de entorno</string>
@@ -723,8 +754,8 @@
     <string name="shizuku_state_need_permission">Se requiere autorización</string>
     <string name="shizuku_state_need_permission_subtitle">El servicio está en ejecución, pero Minis Ultra no está autorizado.</string>
     <string name="shizuku_state_ready">Listo</string>
-    <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
-    <string name="shizuku_ready_subtitle_sui">Sui (root) · version=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle">versión=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle_sui">Sui (root) · versión=%1$d, uid=%2$d</string>
     <string name="shizuku_badge_not_installed">No instalado</string>
     <string name="shizuku_badge_not_running">Detenido</string>
     <string name="shizuku_badge_need_permission">Permiso</string>
@@ -973,6 +1004,12 @@
     <string name="modeldetail_section_capabilities">Capacidades</string>
     <string name="modeldetail_context_window">Ventana de contexto</string>
     <string name="modeldetail_thinking">Razonamiento</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Límite de nivel de razonamiento</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Efectivo: %1$s (predeterminado del catálogo)</string>
+    <string name="modeldetail_thinking_level_effective_override">Efectivo: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Limita los niveles de razonamiento que ofrece el selector de chat para este modelo. Auto sigue la declaración del catálogo. Ultra se envía como nivel literal si el proveedor lo declara o si estableces manualmente este límite en Ultra; de lo contrario se asigna a max.</string>
     <string name="modeldetail_capabilities_footer">Ventana de contexto y máximo de tokens de salida (en tokens). Déjalo vacío para usar los valores predeterminados del proveedor. Activa Razonamiento para los modelos que admiten razonamiento extendido.</string>
     <string name="modeldetail_provider_default">Predeterminado del proveedor</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Supera el límite informado por el proveedor (%1$d). El valor se guarda, pero puede causar errores.</string>
@@ -1762,7 +1799,7 @@
     <string name="dev_suite_installing">Instalando…</string>
     <string name="dev_suite_failed">fallido</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Detalles del fallo de instalación</string>
     <string name="dev_suite_ready">Listo</string>
     <string name="dev_suite_not_installed">No instalado</string>
     <string name="dev_suite_required">obligatorio</string>
@@ -1839,6 +1876,8 @@
     <string name="ma_add_role_sub">Nombre/descripción/prompt/lista de herramientas personalizados; un rol integrado con el mismo nombre se sobrescribe</string>
     <string name="ma_team_lead_suffix"> · líder de equipo</string>
     <string name="ma_thinking_depth">Profundidad de razonamiento para esta ejecución</string>
+
+    <string name="ma_thinking_follows_main">Sigue la sesión principal</string>
     <string name="ma_role_dialog_title_builtin">Rol integrado (se guarda como copia personalizada)</string>
     <string name="ma_role_dialog_title_new">Nuevo rol de colaboración</string>
     <string name="ma_role_dialog_title_edit">Editar rol</string>
@@ -1856,6 +1895,7 @@
     <string name="usage_label_output_short">Salida</string>
     <string name="plan_board_all_done">Todos los pasos completados</string>
     <string name="cd_plan_board_toggle">Expandir o contraer el panel del plan</string>
+    <string name="cd_plan_step_retry">Reintentar este paso fallido</string>
     <string name="cd_goal_header">Abrir detalles del objetivo</string>
     <string name="cd_goal_status_active">Objetivo en curso</string>
     <string name="cd_goal_status_paused">Objetivo en pausa</string>
@@ -2028,6 +2068,9 @@
     <string name="mcp_approval_restart_notice">El reinicio descartó %1$d aprobación(es) pendiente(s)</string>
     <string name="context_saver_title">Ahorro de contexto</string>
     <string name="context_saver_footer">Pliega las salidas de herramientas antiguas más allá de los últimos resultados en marcadores de una línea cuando la petición crece. No se elimina nada: el resultado plegado conserva su ruta de archivo o indica volver a ejecutar la herramienta.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Precalentado de caché de prompts</string>
+    <string name="cache_warming_footer">Si se activa, tras una pausa la app puede repetir la última solicitud exitosa con un límite de salida de un token para refrescar la caché de prompts del proveedor antes de que caduque. Envía solicitudes facturables adicionales; desactivado por defecto.</string>
     <string name="context_saver_off">Desactivado</string>
     <string name="context_saver_balanced">Equilibrado</string>
     <string name="context_saver_aggressive">Agresivo</string>
@@ -2035,6 +2078,12 @@
     <string name="token_usage_saver_folded">Resultados plegados</string>
     <string name="token_usage_saver_saved">Ahorrado este turno</string>
     <string name="memory_center_overview">De un vistazo</string>
+    <string name="memory_embedding_header">Recuperación semántica</string>
+    <string name="memory_embedding_toggle">Recuperación semántica con embeddings</string>
+    <string name="memory_embedding_base_url">URL base de embeddings</string>
+    <string name="memory_embedding_api_key">Clave de API de embeddings</string>
+    <string name="memory_embedding_model">Modelo de embeddings</string>
+    <string name="memory_embedding_footer">Desactivado por defecto. Al activarlo, la recuperación de memoria añade búsqueda por similitud vectorial mediante un endpoint de embeddings compatible con OpenAI, además de la búsqueda por palabras clave. Los cambios surten efecto solo tras reiniciar el proceso de la app.</string>
     <string name="memory_center_stat_memory">Archivos de memoria</string>
     <string name="memory_center_stat_recalls">Entradas recuperadas</string>
     <string name="memory_center_stat_failures">Repeticiones bloqueadas</string>
@@ -2100,4 +2149,176 @@
     <string name="pool_mode_random">Aleatorio</string>
     <string name="pool_mode_round_robin">Por turnos</string>
     <string name="pool_mode_title">Modo de uso de claves</string>
+
+    <string name="git_panel_branch_search">Buscar ramas</string>
+
+
+    <string name="git_panel_branches_section">Ramas</string>
+
+    <string name="git_panel_uncommitted_count">Cambios sin confirmar: %1$d archivos</string>
+
+    <string name="git_panel_detached_head">HEAD separado</string>
+
+    <string name="git_panel_create_branch">Crear y extraer nueva rama…</string>
+
+    <string name="git_panel_branch_name_hint">Nombre de la rama</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Mostrar todo</string>
+    <string name="check_update_notes_collapse">Mostrar menos</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archivar</string>
+    <string name="sessionlist_unarchive">Desarchivar</string>
+    <string name="sessionlist_section_archived">Archivadas (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Preajustes de proveedor</string>
+    <string name="add_provider_vendor_presets_pick_hint">Toca un proveedor para rellenar automáticamente su endpoint y su nombre.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Crea una clave de API en platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Obtén una clave de API en la consola de la plataforma abierta de Zhipu, open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Crea una clave de API en platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Crea una clave de API en la consola de Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Crea una clave de API en la consola de Volcano Ark; el nombre del modelo es un ID de endpoint o de modelo</string>
+    <string name="add_provider_vendor_hint_minimax">Obtén una clave de API en la plataforma abierta de MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Crea una clave de API en cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Crea una clave de API en console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Obtén una clave de API en la consola de Together, api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Crea una clave de API en console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Servidor local — no se necesita clave de API</string>
+    <string name="add_provider_vendor_hint_lmstudio">Servidor local — no se necesita clave de API. Inicia primero el servidor de desarrollador en LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Editar mensaje en cola</string>
+    <string name="git_panel_diff_truncated">Diff truncado en 200 000 caracteres; el texto completo está en el propio archivo del repositorio.</string>
+    <string name="voice_service_no_audio_models">No hay modelos de audio listados para este proveedor. Las listas de modelos de algunos proveedores (Bailian, SiliconFlow) no declaran soporte de audio — añade el modelo ASR/TTS como modelo personalizado con la modalidad de audio, o elige otro servicio de voz.</string>
+    <string name="voice_error_network">Reconocimiento de voz fallido: error de red. Comprueba tu conexión o cambia al motor local u otro proveedor.</string>
+    <string name="voice_error_transcription">El reconocimiento de voz no devolvió texto. Habla de nuevo o comprueba el modelo y la clave API del proveedor de transcripción.</string>
+    <string name="voice_error_busy">El reconocedor de voz está ocupado. Espera un momento e inténtalo de nuevo.</string>
+    <string name="voice_error_audio">Fallo al capturar audio. Comprueba el permiso de micrófono y que ninguna otra app lo esté usando.</string>
+    <string name="voice_error_language">El idioma seleccionado no lo admite este motor. Elige otro idioma.</string>
+    <string name="voice_error_unknown">Reconocimiento de voz fallido: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Las reglas personalizadas aún no están activas (%1$s). Las peticiones usan ahora los valores integrados; el mensaje siguiente a la carga de la caché aplicará tus reglas.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Forzar pensamiento extendido</string>
+    <string name="provider_detail_force_thinking_footer">Solo para relés compatibles con Anthropic. Envía thinking:{type:"enabled",budget_tokens:N} aunque el catálogo diga que el modelo no puede razonar. Úsalo cuando el modelo admite pensamiento pero la entrada del catálogo falta o es incorrecta.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Exportar proveedores</string>
+    <string name="provider_transfer_export_title">Exportar proveedores</string>
+    <string name="provider_transfer_export_body">%1$d proveedores se exportarán a un archivo JSON.</string>
+    <string name="provider_transfer_include_keys">Incluir claves de API</string>
+    <string name="provider_transfer_include_keys_risk">Las claves de API se escriben en el archivo como texto plano. Cualquiera que obtenga este archivo puede usar sus claves — guárdelo en un lugar seguro y elimínelo después de importar.</string>
+    <string name="provider_transfer_export">Exportar</string>
+    <string name="provider_transfer_export_success">Se exportaron %1$d proveedores</string>
+    <string name="provider_transfer_export_failed">Error al exportar</string>
+    <string name="provider_transfer_import_ok">Se importaron %1$d proveedores</string>
+    <string name="provider_transfer_import_partial">Se importaron %1$d proveedores, %2$d fallaron</string>
+    <string name="provider_transfer_import_partial_detail">Se importaron %1$d proveedores, %2$d fallaron: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Espacio de trabajo SSH</string>
+    <string name="ssh_workspace_binding_title">Espacio de trabajo SSH</string>
+    <string name="ssh_workspace_bound_to">Conectado a %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Trabajando en el entorno local</string>
+    <string name="ssh_workspace_option_local">Entorno local</string>
+    <string name="ssh_workspace_option_local_subtitle">El shell se ejecuta en la sandbox Linux de este dispositivo</string>
+    <string name="ssh_workspace_no_hosts">Aún no hay hosts SSH: añade uno en Ajustes → Espacio de trabajo SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Los espacios de trabajo SSH solo admiten comandos de shell; las herramientas de archivos se rechazan con un host vinculado.</string>
+    <string name="ssh_workspace_shell_only">El espacio de trabajo SSH solo admite comandos de shell: se rechazó \'%1$s\'.</string>
+    <string name="ssh_workspace_shell_only_hint">Ejecuta comandos remotos con shell_execute, o desvincula esta sesión desde el menú del chat → Espacio de trabajo SSH para restaurar las herramientas de archivos locales.</string>
+    <string name="ssh_hosts_title">Hosts SSH</string>
+    <string name="ssh_hosts_subtitle">Hosts remotos a los que el agente puede llegar por SSH. Las credenciales se guardan cifradas y nunca se muestran.</string>
+    <string name="ssh_hosts_row_subtitle">Añadir hosts, probar conexiones, gestionar claves de host</string>
+    <string name="ssh_hosts_empty">Aún no hay hosts.</string>
+    <string name="ssh_hosts_add">Añadir host</string>
+    <string name="ssh_hosts_add_cancel">Cancelar</string>
+    <string name="ssh_hosts_test">Probar conexión</string>
+    <string name="ssh_hosts_testing">Probando…</string>
+    <string name="ssh_hosts_test_ok">Conexión correcta</string>
+    <string name="ssh_hosts_test_failed">Error de conexión</string>
+    <string name="ssh_hosts_forget_key">Olvidar clave de host</string>
+    <string name="ssh_hosts_remove">Eliminar</string>
+    <string name="ssh_hosts_pinned">Clave de host fijada: %1$s…</string>
+    <string name="ssh_field_name">Nombre (letras/dígitos/._-)</string>
+    <string name="ssh_field_hostname">Host o IP</string>
+    <string name="ssh_field_port">Puerto</string>
+    <string name="ssh_field_username">Usuario</string>
+    <string name="ssh_auth_password">Contraseña</string>
+    <string name="ssh_auth_key">Clave privada</string>
+    <string name="ssh_field_password">Contraseña</string>
+    <string name="ssh_field_private_key">Clave privada PEM</string>
+    <string name="ssh_field_passphrase">Frase de la clave (opcional)</string>
+    <string name="ssh_save">Guardar</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Manos libres</string>
+    <string name="handsfree_state_starting">Iniciando…</string>
+    <string name="handsfree_state_listening">Escuchando…</string>
+    <string name="handsfree_state_thinking">Pensando…</string>
+    <string name="handsfree_state_speaking">Hablando…</string>
+    <string name="handsfree_exit_recognition">Manos libres detenido: el reconocimiento de voz falló repetidamente. Toca Manos libres para reintentar.</string>
+    <string name="handsfree_exit_tts">Manos libres detenido: no se pudieron leer las respuestas en voz alta. Toca Manos libres para reintentar.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Un nombre de paquete Android por línea, p. ej. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Usar la lista como lista de bloqueo</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = solo las apps de la lista se permiten. On = las apps de la lista se bloquean.</string>
+    <string name="a11y_app_policy_enabled">Restringir por app</string>
+    <string name="a11y_app_policy_enabled_sub">Comprueba el paquete de la app en primer plano antes de cada lectura de pantalla o toque</string>
+    <string name="a11y_app_policy_footer">Al activarlo, ui_read y ui_action se comprueban contra la app en primer plano antes de ejecutarse. Las apps fuera de la lista (modo permitir) o dentro de la lista (modo bloquear) se rechazan con un mensaje visible. La propia app de Minis siempre está permitida.</string>
+    <string name="a11y_app_policy_section">Alcance de apps de accesibilidad</string>
+    <string name="boot_hook_enable">Ejecutar /var/minis/boot.sh al iniciar</string>
+    <string name="boot_hook_enable_sub">Se ejecuta en el sandbox después de que arranque el rootfs de Linux</string>
+    <string name="boot_hook_footer">Desactivado por defecto. Esta ruta está dentro del sandbox modificable, así que cualquier agente con capacidad de shell puede reemplazar el script — al activarlo, ese archivo se ejecuta silenciosamente en cada arranque. El interruptor se vuelve a comprobar justo antes de la ejecución, y la hora de primera detección del script más los cambios de tamaño/mtime se escriben en el registro de la app. Surte efecto en el próximo arranque.</string>
+    <string name="boot_hook_last_status">Última ejecución</string>
+    <string name="boot_hook_section">Hook de arranque</string>
+    <string name="lifecycle_hooks_command_hint">Una línea de comando. Normalmente lo mejor es una ruta de script, p. ej. bash /var/minis/hooks/on-response.sh. Déjalo vacío para eliminar el hook.</string>
+    <string name="lifecycle_hooks_enable">Activar hooks de ciclo de vida</string>
+    <string name="lifecycle_hooks_enable_sub">Ejecuta los scripts de abajo en sus eventos</string>
+    <string name="lifecycle_hooks_events_footer">Los scripts se ejecutan en el sandbox, en serie y en su propio carril, con un tiempo límite de 20 segundos. Los fallos se registran y nunca bloquean el chat.</string>
+    <string name="lifecycle_hooks_help_body">Cada script recibe MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID y MINIS_HOOK_DETAIL. Los scripts son procesos PRoot de un solo uso: el /proc de otros comandos no es visible entre invocaciones y flock no es fiable, así que usa archivos para el estado entre ejecuciones. OnResponse se dispara una vez por cada respuesta completada del agente; OnSessionEnd se dispara al eliminar el chat.</string>
+    <string name="lifecycle_hooks_help_header">Entorno y advertencias</string>
+    <string name="lifecycle_hooks_master_footer">Desactivado por defecto. Mientras esté apagado, los scripts configurados se conservan pero nunca se ejecutan.</string>
+    <string name="lifecycle_hooks_not_set">Sin configurar</string>
+    <string name="lifecycle_hooks_section_events">Eventos</string>
+    <string name="lifecycle_hooks_section_master">Interruptor maestro</string>
+    <string name="lifecycle_hooks_title">Hooks de ciclo de vida</string>
+    <string name="network_trusted_ca_count">%1$d certificado(s) importado(s)</string>
+    <string name="network_trusted_ca_duplicate">Ese certificado ya está importado.</string>
+    <string name="network_trusted_ca_failed">No se pudo leer ese archivo como certificado PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Para un proveedor cuyo endpoint HTTPS usa una CA autofirmada o privada. El certificado se guarda solo dentro de Minis y se añade a los anclajes de confianza de Android para esta app; las comprobaciones normales de certificado y hostname siguen activas. Surte efecto en la siguiente petición al proveedor — sin reiniciar.</string>
+    <string name="network_trusted_ca_import">Importar certificado PEM</string>
+    <string name="network_trusted_ca_imported">%1$d certificado(s) importado(s). Reintenta la petición.</string>
+    <string name="network_trusted_ca_none">Sin certificados importados</string>
+    <string name="network_trusted_ca_remove_all">Quitar todos</string>
+    <string name="network_trusted_ca_removed">Certificados importados eliminados.</string>
+    <string name="network_trusted_ca_title">Certificados de confianza</string>
+    <string name="provider_detail_custom_headers">Cabeceras de petición personalizadas</string>
+    <string name="provider_detail_custom_headers_footer">Una línea por «Nombre: valor». Se aplica solo a las peticiones de chat, /models y Responses de este proveedor. Host, Content-Length y Connection los gestiona el cliente HTTP y no se pueden sobrescribir.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Desactivado por defecto. Al activarlo, cada petición de chat a este endpoint personalizado lleva un ID estable por conversación (x-opencode-session) para que los relés compatibles con OpenCode puedan enrutarla y cachearla. Actívalo solo en una pasarela de confianza: el ID identifica la conversación entre turnos.</string>
+    <string name="provider_detail_opencode_session_header">Cabecera de sesión OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Enviar x-opencode-session</string>
+    <string name="provider_detail_save_headers">Guardar cabeceras</string>
+    <string name="scheduled_task_prompt_template_hint">La fecha/hora actual y la última ejecución se añaden automáticamente. También puedes usar {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} y {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Hooks de ciclo de vida</string>
+    <string name="settings_lifecycle_hooks_subtitle">Ejecuta scripts del sandbox al iniciar sesión / al terminar respuestas / al cerrar sesión</string>
+    <string name="web_search_tool_enabled">Activar web_search</string>
+    <string name="web_search_tool_enabled_sub">Permite al agente buscar en la web desde el chat. Off → la herramienta no se ofrece en absoluto.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Apagar la herramienta no borra la configuración del motor de abajo; vuelve a activarla para recuperar el mismo comportamiento.</string>
+<string name="git_panel_history_read_failed">No se pudo leer el historial de commits: detalles en los registros (etiqueta GitPanel)</string>
+
+    <string name="git_panel_status_read_failed">No se pudo leer el estado del árbol de trabajo — detalles en el registro (etiqueta GitPanel)</string>
 </resources>

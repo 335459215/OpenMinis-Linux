@@ -18,11 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -57,7 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
-import com.openminis.app.security.PermissionMode
+import com.openminis.app.security.SessionPermissionMode
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.components.MinisMenuDivider
 import com.openminis.app.ui.components.MinisMenuSectionHeader
@@ -333,7 +335,7 @@ internal fun ChatTopBarTitle(
                                         // toggle; an enabled level still shows
                                         // unconditionally (user may have opted in
                                         // on an unknown-capability model).
-                                        if (viewModel.availableThinkingLevels.isNotEmpty() &&
+                                        if (viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value.isNotEmpty() &&
                                             (
                                                 thinkingLevelBadgeState.isEnabled ||
                                                     viewModel.currentModelSupportsReasoning
@@ -440,7 +442,6 @@ internal fun ChatTopBarActions(
                             // system-prompt injection.
                             val menuMemoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
                             val sessionPerm by viewModel.permissionMode.collectAsStateWithLifecycle()
-                            val yoyoOn = sessionPerm.isYoyo()
                             // [P0-6] 快捷：三个高频入口置顶。宽窗口（≥600dp）它们
                             // 已是顶栏直接图标（shouldShowTopBarQuickActions），
                             // 菜单里不再重复；窄屏由本节承载。
@@ -479,32 +480,34 @@ internal fun ChatTopBarActions(
                             }
                             // [P0-6] 会话段：本会话的行为开关。
                             MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_session))
+                            // [#31] Four-tier tool gate. The row shows the
+                            // current tier and cycles on tap:
+                            // ASK → SAFE_AUTO → YOLO → OFF → ASK.
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        if (yoyoOn) stringResource(R.string.chat_menu_perm_yoyo)
-                                        else stringResource(R.string.chat_menu_perm_ask),
+                                        when (sessionPerm) {
+                                            SessionPermissionMode.OFF -> stringResource(R.string.chat_menu_perm_off)
+                                            SessionPermissionMode.ASK -> stringResource(R.string.chat_menu_perm_ask)
+                                            SessionPermissionMode.SAFE_AUTO -> stringResource(R.string.chat_menu_perm_safe_auto)
+                                            SessionPermissionMode.YOLO -> stringResource(R.string.chat_menu_perm_yoyo)
+                                        }
                                     )
                                 },
-                                onClick = {
-                                    viewModel.setSessionPermissionMode(
-                                        if (yoyoOn) PermissionMode.ASK else PermissionMode.ALLOW_ALL,
-                                    )
-                                },
+                                onClick = { viewModel.setSessionPermissionMode(sessionPerm.next()) },
                                 leadingIcon = {
                                     Icon(
-                                        if (yoyoOn) Icons.Filled.Bolt else Icons.Filled.Shield,
+                                        if (sessionPerm.isYolo()) Icons.Filled.Bolt else Icons.Filled.Shield,
                                         contentDescription = null,
                                     )
                                 },
+                                // "Cycles on tap" must be visible or the row
+                                // reads as a static status line.
                                 trailingIcon = {
-                                    SettingsSwitch(
-                                        checked = yoyoOn,
-                                        onCheckedChange = { on ->
-                                            viewModel.setSessionPermissionMode(
-                                                if (on) PermissionMode.ALLOW_ALL else PermissionMode.ASK,
-                                            )
-                                        },
+                                    Icon(
+                                        m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
                                     )
                                 },
                             )
@@ -579,6 +582,21 @@ internal fun ChatTopBarActions(
                                     },
                                 )
                             }
+                            // [T-ssh-workspace] (#32) Bind this session to an
+                            // SSH host: shell tools then run remotely. The
+                            // sheet's visibility rides the process-level
+                            // SshWorkspaceSheetState (ContextUsageSheetState
+                            // pattern) so no new callback crosses ChatScreen.
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ssh_workspace_menu_title)) },
+                                onClick = {
+                                    showChatMenu.value = false
+                                    SshWorkspaceSheetState.show()
+                                },
+                                leadingIcon = {
+                                    Icon(m3Icon(Icons.Default.Dns), contentDescription = null)
+                                },
+                            )
                             // Session Memory (iOS parity)
                             if (memoryRepository != null && menuMemoryEnabled) {
                                 DropdownMenuItem(
@@ -597,7 +615,11 @@ internal fun ChatTopBarActions(
                             // 由当前会话的模型/提供方决定（showFastModeToggle、
                             // showEnhancedCacheToggle），设置页没有会话上下文。
                             MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_settings))
-                            // Token Usage (iOS parity)
+                            // Token Usage (iOS parity). [#25] The context
+                            // breakdown (per-block composition of the next
+                            // request) now lives INSIDE this sheet's Context
+                            // section — one entry point, one sheet, no
+                            // duplicated header stats (see TokenUsageSheet).
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_token_usage)) },
                                 onClick = {

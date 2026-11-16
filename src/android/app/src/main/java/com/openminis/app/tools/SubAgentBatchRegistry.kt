@@ -66,6 +66,14 @@ object SubAgentBatchRegistry {
         val attempts: Int = 0,
         val error: String? = null,
         val digest: String = "",
+        /**
+         * Guest path of the FULL report written on finish — the JSON
+         * persistence keeps only the digest, so a process death between
+         * wave completion and check_agent collection used to leave nothing
+         * but the 2 000-char summary. Null on older batches and failures
+         * with no output.
+         */
+        val reportPath: String? = null,
         val startedAt: Long = 0L,
         val finishedAt: Long = 0L,
     ) {
@@ -332,7 +340,28 @@ object SubAgentBatchRegistry {
         error: String?,
         attempts: Int,
         stopped: Boolean = false,
+        filesDir: java.io.File? = null,
     ) = mutateLane(sessionId, context, batchId, index) { lane ->
+        // [T-subagent-report-spill] The full report spills into the session's
+        // WORKSPACE (ToolOutputSpill pattern): JSON keeps the 2 000-char
+        // digest, the file keeps everything — a process death between wave
+        // completion and check_agent collection still leaves the whole
+        // report readable via file_read at the recorded guest path. The
+        // write MUST land in a bound subdir (hostDir "workspace" ↔ guest
+        // /var/minis/workspace/...): an unbound path like
+        // /var/minis/subagent-reports/ exists neither in the sandbox nor in
+        // resolveGuestPath, so the recorded link would be dead on arrival.
+        val reportPath = if (output.isNotBlank() && filesDir != null) {
+            runCatching {
+                val dir = File(
+                    SessionWorkspace.hostDir(filesDir, sessionId, "workspace"),
+                    "subagent-reports",
+                ).apply { mkdirs() }
+                val f = File(dir, "batch-$batchId-lane-$index.md")
+                f.writeText(output)
+                "/var/minis/workspace/subagent-reports/" + f.name
+            }.getOrNull()
+        } else lane.reportPath
         lane.copy(
             state = when {
                 stopped -> STATE_STOPPED
@@ -341,6 +370,7 @@ object SubAgentBatchRegistry {
             },
             digest = output.trim().take(MAX_DIGEST_CHARS),
             error = error?.take(400),
+            reportPath = reportPath,
             attempts = maxOf(attempts, lane.attempts),
             finishedAt = System.currentTimeMillis(),
         )
@@ -439,18 +469,13 @@ object SubAgentBatchRegistry {
         if (touched > 0) saveLocked(sessionId, context, out)
         touched
     }
-
     /**
-     * [T-lane-awareness] What is in flight right now, rendered for the request.
+     * [T-in-flight-live] Sub-agents already working, rendered into every turn.
      *
-     * A wave used to be visible only in the tool result that launched it: once
-     * compaction dropped those blocks, the model could not tell "I already sent
-     * three workers at this" from "nobody is on it" and dispatched the same work
-     * again. The prototype closes the same hole by telling the router to check
-     * ticket summaries after compaction (`prompts/dispatch.md:44`); rendering
-     * from the registry makes it structural instead — nothing to remember.
-     *
-     * Null when no lane is pending or running, so an idle session pays nothing.
+     * Same failure mode as the plan board: once the dispatch tool result scrolls
+     * out (or compaction eats it), the model cannot tell "a lane is running" from
+     * "nothing is running" and re-dispatches the same brief. Reading the registry
+     * at request time makes the in-flight set structural.
      */
     fun renderInFlight(
         sessionId: String,
@@ -499,6 +524,10 @@ object SubAgentBatchRegistry {
             if (lane.error != null) append("    error: ").append(lane.error).append('\n')
             if (verbose && lane.digest.isNotBlank()) {
                 append("    ").append(lane.digest.replace("\n", "\n    ")).append('\n')
+            }
+            if (verbose && lane.reportPath != null) {
+                append("    full report: ").append(lane.reportPath)
+                append(" (file_read it for the complete text)\n")
             }
         }
     }

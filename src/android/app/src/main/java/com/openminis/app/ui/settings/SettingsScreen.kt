@@ -27,9 +27,11 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Groups
@@ -140,6 +142,8 @@ fun SettingsScreen(
     // don't need to be retrofitted.
     onBackgroundClick: () -> Unit = {},
     onWebSearchClick: () -> Unit = {},
+    // [GH#131] Lifecycle hooks (session start / response / end → sandbox script).
+    onLifecycleHooksClick: () -> Unit = {},
     // [T-dead-character-extras] onCharacterExtrasClick removed: no row invoked
     // it, so the CHARACTER_EXTRAS page was unreachable — deleted along with
     // its navigation destination.
@@ -167,6 +171,8 @@ fun SettingsScreen(
     var retryIntervalSec by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.intervalSec()) }
     var showRetryAttemptsDialog by remember { mutableStateOf(false) }
     var showRetryIntervalDialog by remember { mutableStateOf(false) }
+    // [T-ssh-workspace] (#32) Inline host-management sheet (no nav route).
+    var showSshWorkspaceSheet by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -281,6 +287,14 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_web_search),
                     subtitle = stringResource(R.string.settings_web_search_subtitle),
                     onClick = onWebSearchClick,
+                )
+                // [GH#131] Session lifecycle hooks (start / response / end).
+                SettingsRow(
+                    icon = Icons.Outlined.Build,
+                    iconColor = IosOrange,
+                    title = stringResource(R.string.settings_lifecycle_hooks),
+                    subtitle = stringResource(R.string.settings_lifecycle_hooks_subtitle),
+                    onClick = onLifecycleHooksClick,
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Translate,
@@ -431,6 +445,17 @@ fun SettingsScreen(
                     title = stringResource(R.string.sessionlist_shell_terminal),
                     subtitle = stringResource(R.string.settings_section_tools),
                     onClick = onTerminalClick,
+                )
+                // [T-ssh-workspace] (#32) SSH host registry + connection test.
+                // Hosted inline as a sheet — AppNavigation is pinned at its
+                // architecture ceiling, so this destination does not get a
+                // nav route. Per-session binding lives in the chat menu.
+                SettingsRow(
+                    icon = Icons.Outlined.Dns,
+                    iconColor = IosTeal,
+                    title = stringResource(R.string.ssh_workspace_menu_title),
+                    subtitle = stringResource(R.string.ssh_hosts_row_subtitle),
+                    onClick = { showSshWorkspaceSheet = true },
                 )
                 // [T-tool-approval-removed] 审批门按 LO 裁决移除。
                 SettingsRow(
@@ -630,6 +655,12 @@ fun SettingsScreen(
         )
     }
 
+    // [T-ssh-workspace] (#32) SSH hosts: add / test / remove. Inline sheet,
+    // same hosting style as the feedback sheet above.
+    if (showSshWorkspaceSheet) {
+        SshHostsManagerSheet(onDismiss = { showSshWorkspaceSheet = false })
+    }
+
     if (showFeedbackSheet) {
         ModalBottomSheet(onDismissRequest = { showFeedbackSheet = false }) {
             Column(modifier = Modifier.padding(bottom = 24.dp)) {
@@ -691,109 +722,3 @@ fun SettingsScreen(
         }
     }
 }
-
-/**
- * Build the GitHub Issues "new bug report" URL with the body pre-filled
- * from the existing bug-report template. Platform / OS version / app
- * version / device model are injected so the report arrives ready to
- * triage instead of asking the user to fill in environment details.
- *
- * URL shape:
- *   https://github.com/OpenMinis/OpenMinis/issues/new
- *     ?template=bug_report.md
- *     &title=[Bug]
- *     &body=<percent-encoded markdown>
- *
- * The body is a Markdown template with sections for Problem Summary,
- * Basic Information (table — auto-filled), Steps to Reproduce, Error
- * Details (fenced code block), Expected Behavior, and Additional
- * Information.
- */
-private fun buildBugReportUrl(): String {
-    val osVersion = android.os.Build.VERSION.RELEASE
-    val sdkInt = android.os.Build.VERSION.SDK_INT
-    val versionName = BuildConfig.VERSION_NAME
-    val versionCode = BuildConfig.VERSION_CODE
-    val manufacturer = android.os.Build.MANUFACTURER
-    val model = android.os.Build.MODEL
-
-    // Body matches the spec template. Triple-backtick fences are written
-    // as "```" — they survive percent-encoding cleanly. Indentation here
-    // is significant: trimIndent() removes the common Kotlin indentation
-    // but preserves the Markdown structure as-is.
-    val body = """
-        ## 📝 Problem Summary
-
-        <!-- Briefly describe the issue you encountered -->
-
-
-        ## 📱 Basic Information
-
-        | Field | Value |
-        |-------|-------|
-        | Platform | Android |
-        | OS Version | Android $osVersion (API $sdkInt) |
-        | Minis Version | $versionName (build $versionCode) |
-        | Device Model | $manufacturer $model |
-
-        ## 🔁 Steps to Reproduce
-
-        1.
-        2.
-        3.
-
-        ## ❌ Error Details
-
-        ```
-        paste error here
-        ```
-
-        ## ✅ Expected Behavior
-
-
-
-        ## 🗂️ Additional Information
-
-    """.trimIndent()
-
-    val encodedBody = java.net.URLEncoder.encode(body, "UTF-8")
-    // Title carries a "[Bug] " prefix with a trailing space so the cursor
-    // lands after it on GitHub's page; encode the space as %20 explicitly
-    // since URLEncoder turns spaces into '+' which GitHub also accepts but
-    // the spec calls for the literal "[Bug] " form.
-    val title = java.net.URLEncoder.encode("[Bug] ", "UTF-8")
-    return ProjectRepo.ISSUES_NEW_URL +
-        "?template=bug_report.md" +
-        "&title=$title" +
-        "&body=$encodedBody"
-}
-
-/**
- * Compose a `mailto:` URL with a prefilled subject and body that include
- * app version, Android version, and device model. Mirrors iOS
- * `ContentView.makeFeedbackEmailURL()`.
- */
-private fun buildFeedbackMailto(): String {
-    val body = """
-        Please describe your feedback:
-
-
-        ---
-        App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})
-        Android Version: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})
-        Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}
-
-        Screenshot (optional): Please attach a screenshot if relevant.
-    """.trimIndent()
-    val subject = java.net.URLEncoder.encode("Minis Feedback", "UTF-8")
-    val encodedBody = java.net.URLEncoder.encode(body, "UTF-8")
-    return "mailto:dev@openminis.app?subject=$subject&body=$encodedBody"
-}
-
-// [v3-P2-2] The private SettingsSection / SettingsItem / FeedbackSheetItem
-// that used to live here were folded into the shared primitives in
-// SettingsComponents.kt (SettingsSection / SettingsRow). The feedback-sheet
-// rows keep their bare-icon look via SettingsRow's `leading` slot instead of
-// a private composable.
-
-

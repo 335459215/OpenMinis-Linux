@@ -35,6 +35,7 @@ import com.openminis.app.sandbox.offload.SuOffloadHandler
 import com.openminis.app.sandbox.offload.ToastOffloadHandler
 import com.openminis.app.sandbox.offload.WeatherOffloadHandler
 import com.openminis.app.session.ChatSessionBinder
+import kotlinx.coroutines.launch
 
 /** Startup wiring boundary between Application and containerized repositories. */
 object AppGraph {
@@ -111,6 +112,39 @@ object AppGraph {
                 .shellSharedStorageBinds(app, publish = false)
                 .containsKey(com.openminis.app.sandbox.SharedStorageBindPlan.SDCARD)
         }
+        // [T-audit-room-persist] Mirror the gate's audit chain into Room
+        // (audit_entries). The gate must stay a pure JVM class — no Room, no
+        // Context — so persistence is inverted: the app installs this sink at
+        // the same place it wires the gate's other app-provided hooks above.
+        // Fire-and-forget by contract: the gate already runCatching-wraps the
+        // call, and here every failure is swallowed again so audit persistence
+        // can never influence a tool decision; the gate's in-memory trail
+        // remains the review surface when a write fails. Session attribution
+        // is best-effort — the foreground chat id at call time (the decision
+        // path carries no caller identity through the sink signature);
+        // "" means "no visible session". The database handle is resolved per
+        // call so a backup-restore swap (closeForRestore) is picked up
+        // automatically instead of writing into a closed instance.
+        com.openminis.app.security.SecurityGateHolder.gate.auditSink = { entry ->
+            minisApp.appContainer.database?.let { db ->
+                minisApp.appCoroutineScopes.io.launch {
+                    runCatching {
+                        db.auditEntryDao().insert(
+                            com.openminis.app.data.db.AuditEntryEntity(
+                                sessionId = chatBinderOrNull()?.activeSessionId.orEmpty(),
+                                tool = entry.toolName,
+                                decision = entry.decision,
+                                // Room TEXT has no length; the 400-char cap is
+                                // the writer's contract (see AuditEntryEntity).
+                                resultPreview = entry.result?.take(400),
+                                hash = entry.hash,
+                                createdAt = entry.timestamp,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
         // [T-android-scheduled-tasks-full] minis-scheduled — create/list/run
         // timed AI tasks (new chat / follow-up / re-run), mirroring the in-app
         // Scheduled Tasks editor and the iOS Shortcuts intent set.
@@ -142,6 +176,38 @@ object AppGraph {
                 "minis-debug",
             ) { com.openminis.app.sandbox.offload.DebugOffloadHandler(app) }
         }
+
+        attachMemoryEmbeddings(app)
+    }
+
+    /**
+     * [T-memory-embedding-recall] Attach the #27 semantic-memory runtime when
+     * the prefs switch is on. Default is OFF — the prefs snapshot read returns
+     * null and this costs nothing: no provider object, no table query, recall
+     * stays keyword-only (the engine gets a null [com.openminis.app.data.
+     * memory.MemoryEmbeddingSupport]). A config change takes effect on the
+     * next process start, matching the attach-once contract of this wiring
+     * point.
+     */
+    private fun attachMemoryEmbeddings(app: Context) {
+        val minisApp = app as? com.openminis.app.MinisApp ?: return
+        val config = com.openminis.app.data.memory.EmbeddingPrefs.snapshot(app) ?: return
+        val indexer = runCatching {
+            val provider = com.openminis.app.data.memory.OpenAICompatibleEmbeddingProvider(
+                baseUrl = config.baseUrl,
+                apiKey = config.apiKey,
+                model = config.model,
+            )
+            val dao = minisApp.appContainer.database?.memoryEmbeddingDao()
+                ?: error("database not wired yet")
+            com.openminis.app.data.memory.MemoryEmbeddingIndexer(
+                provider = provider,
+                model = config.model,
+                dao = dao,
+                scope = minisApp.appCoroutineScopes.io,
+            )
+        }.getOrNull() ?: return
+        com.openminis.app.data.memory.MemoryEmbeddingRuntime.attach(indexer)
     }
 
     /**

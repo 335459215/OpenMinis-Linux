@@ -11,7 +11,7 @@
     <string name="approval_default_preview">Agent 请求执行敏感操作</string>
     <string name="approval_action_approve">同意</string>
     <string name="approval_action_deny">拒绝</string>
-    <string name="approval_action_allow_all_session">本次会话全部允许</string>
+    <string name="approval_action_allow_all_session">本会话总是允许（当前目标）</string>
 
     <!-- Crash recovery (ChatScreen) -->
     <string name="crash_recovery_snackbar">上次有中断的生成（模型 %1$s，开始于 %2$s）——中断前的内容已保留在对话中</string>
@@ -21,8 +21,8 @@
     <string name="attachment_pick_truncated_files">仅附加了前 %1$d 个文件。</string>
 
     <!-- Chat screen misc -->
-    <string name="chat_move_to_capsule">Move to…</string>
-    <string name="attachment_no_app_toast">No app available to open this attachment.</string>
+    <string name="chat_move_to_capsule">移动到…</string>
+    <string name="attachment_no_app_toast">没有应用可打开此附件。</string>
 
     <!-- Sub-agent live bar + detail sheet (ChatSubAgentBar) -->
     <string name="subagent_waiting_first_output">思考中，还没有输出</string>

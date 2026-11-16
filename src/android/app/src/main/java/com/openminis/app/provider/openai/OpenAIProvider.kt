@@ -99,6 +99,18 @@ class OpenAIProvider private constructor(
     var thinkingRuleInstanceId: String? = null
 
     /**
+     * [T-codex-client-fingerprint] 由 ProviderFactory 在构造后写入，与
+     * [thinkingRuleInstanceId] 同一套注入方式（API-key 与 OAuth 两条构造
+     * 路径都存在，用构造参数会在两处重复）。
+     *
+     * 打开后，自定义 base URL 的 /chat/completions 与 /responses 请求都会带上
+     * 官方 Codex 客户端身份头（originator / session-id / thread-id /
+     * x-codex-app-version / x-codex-turn-metadata）与 body client_metadata，
+     * 用来过 sub2api 的 codex_cli_only 之类准入校验。默认关闭。
+     */
+    var codexClientFingerprintEnabled: Boolean = false
+
+    /**
      * [port-upstream-1.16][T-quota-codex-subscription] Instance tag set by
      * ProviderFactory for Codex OAuth instances, so replies' x-codex-* headers
      * reach the quota store. Null = not quota-tracked.
@@ -171,7 +183,15 @@ class OpenAIProvider private constructor(
         oauthTokenProvider: suspend () -> String,
         model: LLMModel = LLMModel.codexMini,
         codexAccountId: String? = null,
-    ) : this(apiKey = null, oauthTokenProvider = oauthTokenProvider, model = model, codexAccountId = codexAccountId)
+        // [GH#221] 用户自定义请求头；OAuth 路径同样可注入（同名头以用户为准）。
+        extraHeaders: Map<String, String> = emptyMap(),
+    ) : this(
+        apiKey = null,
+        oauthTokenProvider = oauthTokenProvider,
+        model = model,
+        extraHeaders = extraHeaders,
+        codexAccountId = codexAccountId,
+    )
 
     companion object {
         /**
@@ -201,11 +221,14 @@ class OpenAIProvider private constructor(
             oauthTokenProvider: suspend () -> String,
             model: LLMModel,
             basePath: String,
+            // [GH#221] 自定义请求头，透传给主构造。
+            extraHeaders: Map<String, String> = emptyMap(),
         ): OpenAIProvider = OpenAIProvider(
             apiKey = null,
             oauthTokenProvider = oauthTokenProvider,
             model = model,
             basePath = basePath,
+            extraHeaders = extraHeaders,
             forceChatCompletions = true,
         )
     }
@@ -435,7 +458,9 @@ class OpenAIProvider private constructor(
         get() = isOpenRouter && model.id.lowercase().startsWith("anthropic/")
 
     /** Detect DashScope (Alibaba Qwen) base URL. */
-    private val isDashScope: Boolean = basePath.contains("dashscope")
+    // [GH#520] Same Bailian predicate as the voice factory / media router so a
+    // *.maas.aliyuncs.com instance is classified identically everywhere.
+    private val isDashScope: Boolean = com.openminis.app.data.model.BailianEndpoint.matches(basePath)
 
     /**
      * [T-android-mistral-reasoning-422] (GH OpenMinis#87, iOS 29065ca0)
@@ -504,30 +529,12 @@ class OpenAIProvider private constructor(
         }
 
     /**
-     * [T-thinking-off-explicit] The wire value for "thinking OFF", or null to
-     * keep the historical omit-the-field behavior. ALLOWLIST, not blanket
-     * (mirrors iOS OpenAIAgentProvider.explicitOffEffort): only vendors whose
-     * off tier is DOCUMENTED get an explicit value —
-     *   • official OpenAI base (non-Azure) → "none" (documented off tier);
-     *   • Volcano Ark (volces/ark bases, seed/doubao families) → "minimal"
-     *     (their smallest tier — Ark's non-off default is what motivated this).
-     * Everyone else (relays, NIM, xAI, MiMo, …) keeps field omission = the
-     * vendor's own default. Azure stays omission too: its off tier is
-     * model-dependent ('none' on gpt-5.1+, 'minimal' on original gpt-5,
-     * unsupported on o1/o3), so an explicit value risks a 400.
+     * [T-thinking-off-explicit] The explicit OFF tier for this endpoint, or
+     * null to omit the field. The allowlist + [OpenMinis#377] model-family
+     * floor logic lives in [OpenAIOffEffort] (kept out of this file for the
+     * architecture-policy line ceiling).
      */
-    private fun explicitOffEffort(): String? {
-        if (isAzure) return null
-        val base = basePath.lowercase()
-        if (base.startsWith("https://api.openai.com")) return "none"
-        val lid = model.id.lowercase()
-        if (base.contains("volces") || base.contains("ark.") ||
-            lid.contains("seed-") || lid.contains("doubao")
-        ) {
-            return "minimal"
-        }
-        return null
-    }
+    private fun explicitOffEffort(): String? = OpenAIOffEffort.resolve(isAzure, basePath, model)
 
     /**
      * Non-streaming entry point. Some providers (e.g. GPT-5.x via certain
@@ -545,6 +552,7 @@ class OpenAIProvider private constructor(
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse = withContext(Dispatchers.IO) {
         val textBuf = StringBuilder()
         var stopReason: String? = null
@@ -555,14 +563,8 @@ class OpenAIProvider private constructor(
         // LLMResponse.mediaAttachments and can write the image to --output.
         val media = mutableListOf<LLMMediaAttachment>()
         rawStreamMessage(
-            messages = messages,
-            systemPrompt = systemPrompt,
-            maxTokens = maxTokens,
-            temperature = temperature,
-            imageParts = imageParts,
-            tools = tools,
-            thinkingLevel = thinkingLevel,
-            stream = false,
+            messages, systemPrompt, maxTokens, temperature, imageParts, tools,
+            thinkingLevel, stream = false, extraHeaders = extraHeaders,
         ).collect { chunk ->
             when (chunk) {
                 is LLMStreamChunk.Text -> textBuf.append(chunk.text)
@@ -584,9 +586,11 @@ class OpenAIProvider private constructor(
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int,
+        extraHeaders: Map<String, String>,
     ): Flow<LLMStreamChunk> = rawStreamMessage(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
         stream = true,
+        extraHeaders = extraHeaders,
     ).failOnSilentEmptyCompletion(name)
 
 
@@ -1565,13 +1569,14 @@ class OpenAIProvider private constructor(
         override val chatExtraHeaders get() = this@OpenAIProvider.chatExtraHeaders
         override val absoluteEndpointOverride get() = this@OpenAIProvider.absoluteEndpointOverride
         override val isOpenRouter get() = this@OpenAIProvider.isOpenRouter
-        override val needsOpenRouterAnthropicCacheControl get() =
-            this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
+        override val needsOpenRouterAnthropicCacheControl get() = this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
         override val isMistral get() = this@OpenAIProvider.isMistral
         override val isDashScope get() = this@OpenAIProvider.isDashScope
+        override val compatFlags get() = com.openminis.app.provider.compat.CompatResolver.forBasePath(basePath, model.id)
         override val isXAI get() = this@OpenAIProvider.isXAI
         override val usesUnifiedReasoningEffort get() = this@OpenAIProvider.usesUnifiedReasoningEffort
         override val thinkingRuleInstanceId get() = this@OpenAIProvider.thinkingRuleInstanceId
+        override val codexClientFingerprintEnabled get() = this@OpenAIProvider.codexClientFingerprintEnabled
         override fun resolvedServiceTier() = this@OpenAIProvider.resolvedServiceTier()
         override fun endpointURL(defaultPath: String) = this@OpenAIProvider.endpointURL(defaultPath)
         override fun azureUrl(path: String) = this@OpenAIProvider.azureUrl(path)
@@ -1630,33 +1635,15 @@ class OpenAIProvider private constructor(
      */
 
     /**
-     * [T-reasoning-effort-data-driven] Snap an effort string onto the tiers the
-     * model actually declares. Mirrors iOS
-     * `OpenAIAgentProvider.clampEffort(_:to:)` — keep both in sync.
-     *
-     * Necessary because the catalog's effort sets are far from uniform
-     * (["low","medium","high"], ["high","max"], ["high","xhigh"], …). Sending an
-     * undeclared tier is the same class of failure the MiMo/Agnes xhigh clamp
-     * already guards against ("Invalid reasoning_effort: xhigh" 400s).
-     *
-     * Nearest-tier semantics: step down to the closest declared tier at or below
-     * the request; only if none exists step up to the lowest declared one.
-     * Downgrading is preferred because overshooting costs money and latency the
-     * user did not ask for. Null/empty values pass the string through unchanged.
+     * [T-reasoning-effort-data-driven] The provider-level clamp member was
+     * removed: it duplicated [com.openminis.app.provider.thinking.ThinkingEffort.clampEffort]
+     * with a stale upward-jump fallback (a LOW ask against a [high,max] set was
+     * lifted to "high" — P2 3-9) and had ZERO production callers (the wire path
+     * resolves through ThinkingRuleResolver). The duplicate was a drift hazard:
+     * a future edit to one copy silently left the other pinning the old
+     * contract in tests. The live clamp lives in ThinkingEffort.clampEffort
+     * and its contract is pinned there.
      */
-    internal fun clampEffort(effort: String, values: List<String>?): String {
-        if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
-        val want = ladder.indexOf(effort)
-        if (want < 0) return effort
-        val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
-        }.sortedBy { it.first }
-        if (declared.isEmpty()) return effort
-        return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second
-    }
 
 
 

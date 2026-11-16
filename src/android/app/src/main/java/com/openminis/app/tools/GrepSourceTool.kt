@@ -14,29 +14,28 @@ import org.json.JSONObject
  * sub-agent turns. Cheaper than shell_execute (`grep -n`) because there is no
  * PersistentShell round-trip, and it can also fan out across a directory.
  *
+ * The scan itself lives in [GrepStreamScan]: a bounded streaming pipeline
+ * (pi's bounded-enumeration contract) — the tree is never materialized as a
+ * list, symlink cycles are broken by a visited set, a wall-clock deadline
+ * bounds the whole call, and every truncation reason (deadline, walk guard,
+ * match/output cap plus the unscanned remainder) is reported explicitly.
+ *
  * Deliberately NOT registered in the main-session tool list: the coordinator
  * already has shell_execute for this. See AgentTools.makeSubAgentExtraTools.
  */
 object GrepSourceTool {
     const val NAME = "grep_source"
 
-    private const val DEFAULT_CONTEXT = 2
-    private const val MAX_CONTEXT = 6
-    private const val MAX_MATCHES = 50
-    private const val MAX_FILES = 200
-    private const val MAX_FILE_BYTES = 512 * 1024
-    private const val OUTPUT_HARD_CAP = 40_000
-
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
-        description = "Search file(s) for a pattern and return matching lines with ±context in ONE call. Prefer this over paging file_read through a big file or running shell grep — it saves turns. Sub-agents only.",
+        description = "Search ALL files under a path for a pattern and return matching lines with ±context in ONE call (noise dirs like .git/node_modules/build are pruned; files >512 KB are skipped and counted). Prefer this over paging file_read or running shell grep — it saves turns. Sub-agents only.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this search does, shown to the user."),
             "pattern" to AgentToolParam("string", "Text or regex to match (case-insensitive when is_regex=false)."),
             "path" to AgentToolParam("string", "Absolute file or directory path to search (default /var/minis/workspace)."),
             "context" to AgentToolParam("integer", "Lines of context around each match (0-6, default 2)."),
             "is_regex" to AgentToolParam("boolean", "Treat pattern as a regex (default false = literal substring)."),
-            "max_matches" to AgentToolParam("integer", "Cap on matches returned (default 50)."),
+            "max_matches" to AgentToolParam("integer", "Cap on matches returned (default 50, max 500)."),
         ),
         required = listOf("tool_title", "pattern"),
         propertyOrdering = listOf("tool_title", "pattern", "path", "context", "is_regex", "max_matches"),
@@ -51,13 +50,16 @@ object GrepSourceTool {
                 return ToolExecutionResult("Error: 'pattern' is required", false, toolTitle = toolTitle)
             }
             val rawPath = args.optString("path", "/var/minis/workspace").ifBlank { "/var/minis/workspace" }
-            val ctx = args.optInt("context", DEFAULT_CONTEXT).coerceIn(0, MAX_CONTEXT)
+            val ctx = args.optInt("context", GrepStreamScan.DEFAULT_CONTEXT).coerceIn(0, GrepStreamScan.MAX_CONTEXT)
             val isRegex = args.optBoolean("is_regex", false)
-            val maxMatches = args.optInt("max_matches", MAX_MATCHES).coerceIn(1, 200)
+            val maxMatches = args.optInt("max_matches", GrepStreamScan.MAX_MATCHES).coerceIn(1, GrepStreamScan.MAX_MATCHES_CAP)
 
+            // [T-grep-source-regex-case] is_regex=true honours the pattern's
+            // case (schema contract: "case-insensitive when is_regex=false")
+            // — the old ALWAYS-IGNORE_CASE silently widened matches.
             val matcher: (String) -> Boolean = if (isRegex) {
                 val re = try {
-                    Regex(pattern, setOf(RegexOption.IGNORE_CASE))
+                    Regex(pattern)
                 } catch (e: Exception) {
                     return ToolExecutionResult("Error: invalid regex: ${e.message}", false, toolTitle = toolTitle)
                 }
@@ -73,73 +75,22 @@ object GrepSourceTool {
                 return ToolExecutionResult("Error: Path not found: $rawPath", false, toolTitle = toolTitle)
             }
 
-            val files: List<java.io.File> = when {
-                root.isFile -> listOf(root)
-                root.isDirectory -> root.walkTopDown()
-                    .filter { it.isFile && it.length() in 1..MAX_FILE_BYTES.toLong() }
-                    .take(MAX_FILES)
-                    .toList()
-                else -> emptyList()
-            }
-            if (files.isEmpty()) {
-                return ToolExecutionResult("No searchable files under: $rawPath", false, toolTitle = toolTitle)
-            }
-
-            val out = StringBuilder()
-            var totalMatches = 0
-            var hitFiles = 0
-            var scanned = 0
-            for (f in files) {
-                if (totalMatches >= maxMatches) break
-                scanned++
-                val lines = try {
-                    f.bufferedReader().useLines { it.toList() }
-                } catch (_: Exception) {
-                    continue // binary or unreadable — skip
-                }
-                val hitIdx = lines.indices.filter { matcher(lines[it]) }
-                if (hitIdx.isEmpty()) continue
-                hitFiles++
-                out.append("=== ").append(f.absolutePath).append(" ===\n")
-                var lastPrinted = -1
-                for (i in hitIdx) {
-                    if (totalMatches >= maxMatches) {
-                        out.append("  … more matches in this file (cap) …\n")
-                        break
-                    }
-                    val lo = (i - ctx).coerceAtLeast(0)
-                    val hi = (i + ctx).coerceAtMost(lines.size - 1)
-                    if (lo > lastPrinted + 1 && lastPrinted >= 0) out.append("  --\n")
-                    for (n in lo..hi) {
-                        if (n <= lastPrinted) continue
-                        val mark = if (n == i) ">" else " "
-                        out.append(mark).append(n + 1).append(": ").append(lines[n]).append('\n')
-                        lastPrinted = n
-                    }
-                    totalMatches++
-                }
-            }
-
-            if (totalMatches == 0) {
-                return ToolExecutionResult(
-                    "No matches for \"$pattern\" in $rawPath (scanned $scanned file(s))",
-                    true, toolTitle = toolTitle,
-                )
-            }
-
-            var body = out.toString().trimEnd()
-            var note = ""
-            if (body.length > OUTPUT_HARD_CAP) {
-                body = body.take(OUTPUT_HARD_CAP)
-                note = "\n…[output truncated at ${OUTPUT_HARD_CAP} chars — narrow path or pattern]…"
-            }
-            val header = buildString {
-                append("[grep_source: \"$pattern\" in $rawPath — ")
-                append(totalMatches).append(" match(es) across ").append(hitFiles)
-                append(" file(s), scanned ").append(scanned).append("]")
-                if (totalMatches >= maxMatches) append(" (match cap reached)")
-            }
-            ToolExecutionResult(header + "\n\n" + body + note, true, toolTitle = toolTitle)
+            // [T-grep-source-coverage] Bounded streaming scan of the FULL tree
+            // (noise dirs pruned, walk never materialized): coverage is bounded
+            // by max_matches/output caps, not by a file count that silently
+            // truncates the search domain — and every truncation (deadline,
+            // walk guard, caps) is reported with the unscanned remainder so
+            // the model can narrow the path instead of guessing.
+            val stats = GrepStreamScan.scan(
+                root,
+                matcher,
+                GrepStreamScan.Options(maxMatches = maxMatches, contextLines = ctx),
+            )
+            ToolExecutionResult(
+                GrepStreamScan.formatReport(pattern, rawPath, stats, maxMatches),
+                true,
+                toolTitle = toolTitle,
+            )
         } catch (e: Exception) {
             ToolExecutionResult("Error: ${e.message ?: e.javaClass.simpleName}", false, toolTitle = toolTitle)
         }

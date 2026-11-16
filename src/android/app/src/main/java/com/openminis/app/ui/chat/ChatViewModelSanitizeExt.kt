@@ -29,38 +29,44 @@ internal fun ChatViewModel.sanitizeAgentHistory() {
 
         val toolUseIds = toolUses.map { it.id }.toSet()
 
-        // Check next message for matching tool_results
-        val next = agentHistory.getOrNull(i + 1)
-        val nextResultIds = next?.contentParts
-            ?.filterIsInstance<AgentContentPart.ToolResult>()
-            ?.map { it.id }?.toSet() ?: emptySet()
+        // [T-sanitize-orphan-removal] Pair against the WHOLE remaining history,
+        // not just the next row: a compaction divider (a system message) can sit
+        // between the tool_use and its tool_result, and scanning only the next
+        // message would call a correctly paired call an orphan.
+        val resultIdsAhead = HashSet<String>()
+        for (j in (i + 1)..agentHistory.lastIndex) {
+            for (part in agentHistory[j].contentParts) {
+                if (part is AgentContentPart.ToolResult) resultIdsAhead.add(part.id)
+            }
+        }
 
-        val missingIds = toolUseIds - nextResultIds
+        val missingIds = toolUseIds - resultIdsAhead
         if (missingIds.isEmpty()) { i++; continue }
 
-        // Some tool_uses have no matching tool_result in the next message.
-        // If next message is a user message, add the missing results to it.
-        // Otherwise, inject a new user message with placeholder results.
-        val placeholders = toolUses.filter { it.id in missingIds }.map { use ->
+        // ZCode session-persistence: a visible call that produced no result
+        // gets a NEUTRAL interrupted result, never deletion and never a
+        // failure. Every emitted call owns exactly one result, and the model
+        // must not re-issue it as if it had failed.
+        val interrupted = toolUses.filter { it.id in missingIds }.map { use ->
             AgentContentPart.ToolResult(
                 id = use.id, name = use.name,
-                content = "Tool execution was interrupted by an unexpected error.",
-                isError = true,
+                content = "[Tool execution was interrupted before resume]",
+                isError = false,
             )
         }
-        Log.w(ChatViewModel.TAG, "sanitize: injecting ${placeholders.size} placeholder tool_result(s) after history[$i]")
-
+        Log.w(
+            ChatViewModel.TAG,
+            "sanitize: pairing ${interrupted.size} interrupted tool_result(s) after history[$i]",
+        )
+        val next = agentHistory.getOrNull(i + 1)
         if (next != null && next.role == LLMMessage.Role.USER &&
-            next.contentParts.any { it is AgentContentPart.ToolResult }) {
-            // Append missing results to the existing user message
-            agentHistory[i + 1] = next.copy(
-                contentParts = next.contentParts + placeholders
-            )
+            next.contentParts.any { it is AgentContentPart.ToolResult }
+        ) {
+            agentHistory[i + 1] = next.copy(contentParts = next.contentParts + interrupted)
         } else {
-            // Insert a new user message with just the placeholder results
             agentHistory.add(i + 1, LLMMessage(
                 role = LLMMessage.Role.USER, content = "",
-                contentParts = placeholders,
+                contentParts = interrupted,
             ))
             trimAgentHistory()
         }

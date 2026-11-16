@@ -74,6 +74,10 @@ private inline fun ChatViewModel.compactAllImpl(
         appendSystemInfo(context.getString(R.string.vm_compact_empty_session), "compact")
         return
     }
+    // [GH#325] Compact is an explicit user action (or an in-loop recovery of
+    // a live session), not a delete: mark the session retained so the exit
+    // cleanup cannot remove its row + workspace if the tail becomes empty.
+    markSessionExplicitlyEmptied("compact")
     // ─── v2 unified anchor model ───────────────────────────────────
     //
     // anchor = last active agentHistory entry. The compacted range is
@@ -303,6 +307,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 return@launch
             }
             _compactSummary.value = summary
+            stateHydrationPending = true  // [T-state-hydration] folded history lost the state copy
             // Keep the marker in memory so effectiveAgentHistory() can
             // resolve the boundary on the very next outgoing turn.
             // Mirrors iOS `cachedLatestMarker = marker`.
@@ -427,6 +432,11 @@ private inline fun ChatViewModel.compactAllImpl(
                 )
             }
             compactSucceeded = true
+            // [T-recall-turn-dedup] The compacted context no longer carries the
+            // announced block — forget it so the same memories can be
+            // re-announced on the next turn.
+            // [T-recall-once] Delivered-memory bookkeeping survives compaction:
+            // a compacted note that is re-selected would be a repeated injection.
         } catch (e: TimeoutCancellationException) {
             // [T-android-compact-runaway] MUST precede the CancellationException
             // arm — TimeoutCancellationException extends it, so the generic

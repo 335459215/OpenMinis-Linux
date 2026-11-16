@@ -14,9 +14,9 @@ import com.openminis.app.service.ToolOutcome
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolCallLane
 import com.openminis.app.tools.ToolCallLanes
+import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolOutputSpill
-import com.openminis.app.provider.ToolJsonRepair
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -67,11 +67,18 @@ internal class ToolTurnContext(
     val accumulatedText: String,
     val turn: Int,
     val turnFinishReason: String?,
-    val truncatedToolTurn: Boolean,
     val agentTools: List<AgentToolDefinition>,
     val replayRenamedIds: Set<String>,
     val allToolBlocks: MutableList<AssistantBlock>,
     val toolInputChunkRings: MutableMap<String, MutableList<String>>,
+    /**
+     * [GH#61/#83/#146] Per-call raw `arguments` tail the provider could not
+     * parse. Consulted by preflight AFTER the ToolInputDelta ring, so the
+     * exact final payload wins over a stale stride-gated delta.
+     */
+    val toolCallRawArgs: MutableMap<String, String>,
+    /** [T-tool-execution-ledger] Run-scoped: a replayed call reuses its result. */
+    val ledger: ToolExecutionLedger,
 )
 
 /**
@@ -97,10 +104,9 @@ internal class ToolTurnPlan(
     val refusedParts: Map<String, AgentContentPart.ToolResult>,
 )
 
-/** Phase-2 output: per-id executed parts plus the spawn fan-out results. */
+/** Phase-2 output: per-id executed parts, keyed by call id for phase-3 assembly. */
 internal class ToolTurnExecution(
     val executedParts: ConcurrentHashMap<String, AgentContentPart.ToolResult>,
-    val parallelSubResults: MutableMap<String, ToolExecutionResult>,
 )
 
 /**
@@ -122,76 +128,55 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         currentCoroutineContext().ensureActive()
         activeRun?.associateSession(ctx.activeSessionId)
         activeRun?.setCurrentTool(id, name, args.toString())
-        // JSON repair (T-tool-json-repair b2c4f8a6): salvage truncated /
-        // type-mismatched / typo'd args BEFORE preflight rejects them.
-        // Mutates `args` in place; downstream argsStr and preflight see
-        // the repaired payload. Mirrors iOS repairToolArgs in
-        // AIChatViewModel.swift.
-        val repairs = ToolJsonRepair.repair(
-            name, args, ctx.toolInputChunkRings[id]?.lastOrNull(), ctx.agentTools,
+        // [GH#61/#83/#146][GH#119] ONE shared preflight layer for every
+        // model tool-call execution entry point: JSON repair, invalid
+        // argument-stream refusal, truncated-write refusal and truncated-turn
+        // refusal are implemented once in [ToolCallPreflight] and called here,
+        // in SubAgentRunner and in the group-chat loop. Keeping any of that
+        // logic at a call site is what let sub-agents/group chat execute the
+        // `{}` payload the provider substituted for an unparseable stream.
+        // 中文：参数流修复/拒绝只在共享层实现，三个执行入口不再各写一份。
+        // Prefer the provider's exact unparsed tail over the ring's last
+        // stride-gated delta: a final fragment may never have been emitted as
+        // ToolInputDelta, and repairing a stale prefix can produce a
+        // syntactically valid but semantically older argument set.
+        val rawArgumentTail = ctx.toolCallRawArgs[id]?.takeIf { it.isNotBlank() }
+            ?: ctx.toolInputChunkRings[id]?.lastOrNull()
+        val preflight = ToolCallPreflight.finalize(
+            toolName = name,
+            args = args,
+            rawArgumentTail = rawArgumentTail,
+            advertisedTools = ctx.agentTools,
+            turnFinishReason = ctx.turnFinishReason,
         )
-        if (repairs.isNotEmpty()) {
-            AppLogger.warning(
-                "ToolPreflight",
-                "[ToolRepair] REPAIRED tool=$name id=$id strategies=[${repairs.joinToString(", ")}] " +
-                    "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}] " +
-                    "rawTail=<<<${ctx.toolInputChunkRings[id]?.lastOrNull()?.take(500) ?: ""}>>>"
-            )
-        }
-        // [T-truncated-args-visibility #119] Non-null when THIS call's
-        // arguments arrived truncated and were auto-closed. Only the
-        // truncation strategy means the VALUE was cut short; coercion
-        // and fuzzy-name repairs fix the shape of a complete argument.
-        // Mirrors iOS truncationRepairTag.
-        val truncationRepairTag: String? = repairs.firstOrNull { it.startsWith("truncation+") }
-
-        // [T-truncated-args-visibility #119] Refuse truncated WRITES.
-        // Auto-closing an unterminated JSON string is indistinguishable
-        // from the model ending `content` there, so a half file lands on
-        // disk while UI and tool result both report success. For writes a
-        // partial artifact is silent corruption of user data and is worse
-        // than no write at all; read-only and shell tools keep the
-        // repair-and-run behaviour. Mirrors iOS ConcurrentTools.
-        if (truncationRepairTag != null && (name == "file_write" || name == "file_edit")) {
-            val path = args.optString("path", "").ifBlank { args.optString("file_path", "") }
-            AppLogger.warning(
-                "ToolPreflight",
-                "[ToolRepair] REFUSED truncated write tool=$name id=$id strategy=$truncationRepairTag path=$path"
-            )
-            val modelMessage = buildString {
-                append("Error: This call was NOT executed. Its argument stream was truncated ")
-                append("in transit (repair strategy: $truncationRepairTag), so the `content` ")
-                append("your client sent was cut short and would have written an incomplete file")
-                if (path.isNotBlank()) append(" to $path")
-                append(". Nothing was written to disk — the target file is unchanged.\n\n")
-                append("The most likely cause is the response hitting its output-token limit ")
-                append("mid-argument. Re-issue this write in smaller pieces: write the first ")
-                append("part, then append the rest with follow-up calls, rather than repeating ")
-                append("the same oversized call.")
-            }
+        if (preflight is ToolCallPreflight.Outcome.Rejected) {
             val refusedIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
             if (refusedIdx >= 0) {
                 val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[refusedIdx].startTimeMs
                 ctx.allToolBlocks[refusedIdx] = ctx.allToolBlocks[refusedIdx].copy(
                     toolStatus = ToolBlockStatus.FAILED,
-                    content = "Blocked: arguments were truncated in transit",
+                    content = preflight.uiMessage,
                     durationMs = elapsed,
                 )
-                withContext(Dispatchers.Main) {
-                    updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
-                }
             }
-            toolLoopDetector.record(name, parseToolParams(args.toString()),
-                result = null, errorMessage = modelMessage, toolCallId = id)
+            toolLoopDetector.record(
+                name, parseToolParams(args.toString()),
+                result = null, errorMessage = preflight.modelMessage, toolCallId = id,
+            )
             refusedParts[id] = AgentContentPart.ToolResult(
                 id = id, name = name,
-                content = modelMessage,
+                content = preflight.modelMessage,
                 isError = true,
             )
             ctx.toolInputChunkRings.remove(id)
+            ctx.toolCallRawArgs.remove(id)
+            withContext(Dispatchers.Main) {
+                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
+            }
             continue
         }
-        val argsStr = args.toString()
+        val truncationRepairTag = (preflight as ToolCallPreflight.Outcome.Ready).truncationRepairTag
+        val argsStr = preflight.argsStr
         val paramsMap = parseToolParams(argsStr)
         // [T-android-duplicate-toolcall-replay] Refuse a replayed
         // ToolCallComplete (same raw id + name + serialized args as a call
@@ -258,85 +243,15 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             continue
         }
 
-        // Preflight: reject empty / missing-required-field tool calls
-        // BEFORE the UI flips to RUNNING and BEFORE executeTool() does
-        // any actual work. Mirrors iOS preflightValidateToolCall in
-        // AIChatViewModel.swift. Synthesizes a tool_result error so the
-        // model can self-correct on the next turn without us spawning
-        // shells or touching the filesystem on `{}` args.
-        val preflightError = preflightValidateToolCall(name, args, ctx.agentTools)
-        if (preflightError != null) {
-            val chunkRing: List<String> = ctx.toolInputChunkRings.remove(id) ?: emptyList()
-            AppLogger.warning(
-                "ToolPreflight",
-                "BLOCKED tool=$name id=$id reason=\"$preflightError\" " +
-                    "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}] " +
-                    "chunkCount=${chunkRing.size} " +
-                    "lastChunk=<<<${chunkRing.lastOrNull()?.take(500) ?: ""}>>>"
-            )
-            chunkRing.forEachIndexed { i, snap ->
-                AppLogger.warning(
-                    "ToolPreflight",
-                    "  chunk[$i] bytes=${snap.toByteArray(Charsets.UTF_8).size} raw=<<<${snap.take(500)}>>>"
-                )
-            }
-            // English literal — string resource lookup intentionally
-            // avoided to keep this commit independent of any in-flight
-            // strings.xml refactor in other sessions. Promote to a
-            // localized R.string entry in a follow-up if needed.
-            val uiMessage = "Blocked invalid tool call"
-            val modelMessage = "Error: Tool call rejected before execution. $preflightError The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
-            val blockIdxPre = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdxPre >= 0) {
-                val elapsedPre = System.currentTimeMillis() - ctx.allToolBlocks[blockIdxPre].startTimeMs
-                ctx.allToolBlocks[blockIdxPre] = ctx.allToolBlocks[blockIdxPre].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = uiMessage,
-                    durationMs = elapsedPre,
-                )
-            }
-            toolLoopDetector.record(
-                toolName = name, params = paramsMap,
-                result = null, errorMessage = modelMessage, toolCallId = id
-            )
-            refusedParts[id] = AgentContentPart.ToolResult(
-                id = id, name = name,
-                content = modelMessage,
-                isError = true,
-            )
-            withContext(Dispatchers.Main) {
-                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
-            }
-            continue
-        }
-
+        // [F3 GH#61] Empty / missing-required-field tool calls are refused by the
+        // SHARED preflight above ([ToolCallPreflight.finalize], called at the top
+        // of this loop): the old main-loop-only `preflightValidateToolCall` check
+        // that lived here never ran for sub-agents or group chat, so those entries
+        // executed a parsed-but-empty `{}`. One layer, three entry points.
         currentCoroutineContext().ensureActive()
-        // [T-truncated-tool-call-reject] 流因长度限制被切断（finish_reason=
-        // length/max_tokens），此工具调用的参数极可能是半截 JSON。拒执行，
-        // 让模型看到失败结果后下一轮重新完整调用。镜像 Eta AGENT_RUNTIME.md。
-        if (ctx.truncatedToolTurn) {
-            val truncatedMsg = "Error: This tool call was rejected because the " +
-                "model output was truncated (finish_reason=${ctx.turnFinishReason}). " +
-                "The arguments are likely incomplete. Re-read any relevant " +
-                "context and re-issue the call with complete arguments."
-            val blockIdxTr = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdxTr >= 0) {
-                val elapsedTr = System.currentTimeMillis() - ctx.allToolBlocks[blockIdxTr].startTimeMs
-                ctx.allToolBlocks[blockIdxTr] = ctx.allToolBlocks[blockIdxTr].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = truncatedMsg,
-                    durationMs = elapsedTr,
-                )
-            }
-            toolLoopDetector.record(name, paramsMap,
-                result = null, errorMessage = truncatedMsg, toolCallId = id)
-            refusedParts[id] = AgentContentPart.ToolResult(
-                id = id, name = name,
-                content = truncatedMsg,
-                isError = true,
-            )
-            continue
-        }
+        // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 的整轮
+        // 拒绝已在共享 preflight（ToolCallPreflight.finalize）里完成，三个执行
+        // 入口共用同一判定；此处不再重复检查，避免只有主循环受保护。
 
         // [T-parallel-tool-calls] Lane assignment. Local command-template
         // plugins materialize into shell commands, so they inherit the
@@ -412,7 +327,18 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             } else {
                 result.output
             }
-            val mergedContent = if (existingContent.length > resultContent.length) existingContent else resultContent
+            // [T-shell-detail-stale-output GH#339] The streamed preview stops
+            // updating at process exit and is capped to its last 50 lines; the
+            // old "keep whichever is longer" rule could therefore keep the
+            // STALE preview over the final result whenever the preview happened
+            // to be longer than the head-trimmed result, leaving the completed
+            // card showing an out-of-order tail. For shell_execute the result
+            // is authoritative — use it whenever it says anything.
+            val mergedContent = when {
+                name == "shell_execute" && resultContent.isNotBlank() -> resultContent
+                existingContent.length > resultContent.length -> existingContent
+                else -> resultContent
+            }
             val childPrefix = "$id#sub-"
             val childCount = ctx.allToolBlocks.count { it.id.startsWith(childPrefix) }
             val finalContent = if (childCount > 0) {
@@ -431,6 +357,23 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
                 result.timedOut -> ToolBlockStatus.TIMEOUT
                 else -> ToolBlockStatus.FAILED
             }
+            // [GH#119] Name the truncation and the bytes the tool reported;
+            // "success" with no marker is exactly what let a half-written
+            // file become the basis for the next steps.
+            val truncatedWrittenBytes = if (truncationRepairTag != null) {
+                TruncatedArgsNotice.writtenBytes(result.output)
+            } else {
+                null
+            }
+            val finalContentWithNotice = if (truncationRepairTag != null) {
+                TruncatedArgsNotice.uiLine(
+                    truncationRepairTag,
+                    truncatedWrittenBytes,
+                    TruncatedArgsNotice.argumentBytes(call.argsStr),
+                ) + "\n\n" + finalContent
+            } else {
+                finalContent
+            }
             // T-bg-overlay phase 1: tool finished — drop the
             // notification's indeterminate progress bar so the
             // user can tell streaming has paused (LLM step) vs
@@ -446,11 +389,11 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
                 else -> ToolOutcome.Unknown
             }
             SessionActivityTracker.clearToolRunning(toolOutcome)
-            Log.d("ToolChain[VM]", "[turn=${ctx.turn}] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContent.length}")
+            Log.d("ToolChain[VM]", "[turn=${ctx.turn}] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContentWithNotice.length}")
             ctx.allToolBlocks[blockIdx] = ctx.allToolBlocks[blockIdx].copy(
                 toolStatus = finalStatus,
-                content = finalContent,
-                toolTitle = result.toolTitle.ifEmpty { ctx.allToolBlocks[blockIdx].toolTitle },
+                content = finalContentWithNotice,
+                toolTitle = resolveToolTitle(name, call.argsStr, ctx.allToolBlocks[blockIdx].toolTitle),
                 durationMs = elapsed,
                 browserURL = result.pageURL ?: ctx.allToolBlocks[blockIdx].browserURL,
                 imageFilePath = result.imageFilePath ?: ctx.allToolBlocks[blockIdx].imageFilePath,
@@ -468,20 +411,28 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     // that ran. Mirrors iOS ConcurrentTools.
     currentCoroutineContext().ensureActive()
     val outputForLLMWithNote = if (truncationRepairTag != null) {
-        outputForLLM + "\n\n<system-reminder>The argument stream for this call was " +
-            "truncated in transit and auto-closed by the client (repair strategy: " +
-            "$truncationRepairTag) before execution. The arguments actually used may be " +
-            "incomplete — verify the result and re-issue the call with complete " +
-            "arguments if anything is missing.</system-reminder>"
+        outputForLLM + "\n\n" + TruncatedArgsNotice.modelNote(
+            truncationRepairTag,
+            TruncatedArgsNotice.writtenBytes(result.output),
+            TruncatedArgsNotice.argumentBytes(call.argsStr),
+        )
     } else {
         outputForLLM
     }
+    // [T-tool-output-offload-loop GH#343] A read of an existing spill file —
+    // `file_read` OR a shell `cat/head/tail … tool-spill/…` — must not be
+    // re-spilled (the full text is still over the limit, so the naive call
+    // would hand the model another placeholder pointing at a copy). The shared
+    // resolver covers every read-back spelling; #343 was reported because this
+    // branch only knew `file_read`.
+    val spillSourcePath = ToolOutputSpill.sourcePathForTool(call.canonicalName, call.argsStr)
     val outputSpilled = ToolOutputSpill.maybeSpill(
         context = context,
         sessionId = ctx.activeSessionId,
         toolName = name,
         toolId = id,
         output = outputForLLMWithNote,
+        sourcePath = spillSourcePath,
     )
     return AgentContentPart.ToolResult(
         id = id,
@@ -494,46 +445,120 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     )
 }
 
-/** Execute one planned call on its lane coroutine. */
+/**
+ * [T-tool-execution-ledger] Terminal status for a call whose result came from
+ * the ledger instead of a fresh execution. Kept as a pure, testable mapping so
+ * the serial lane and spawn fan-out settle replayed cards identically.
+ */
+internal fun settledReplayStatus(part: AgentContentPart.ToolResult): ToolBlockStatus =
+    if (part.isError) ToolBlockStatus.FAILED else ToolBlockStatus.SUCCESS
+
+/**
+ * [T-tool-execution-ledger] Settle a replayed call's UI card.
+ *
+ * Phase 1 creates every tool_use block as PENDING. The owner path flips it
+ * RUNNING then SUCCESS/FAILED in [finalizePlannedCall], but a replay NEVER
+ * enters the producer: the old code left the card spinning on RUNNING, and
+ * skipping the producer would leave it PENDING forever. Both lanes call this
+ * from their onReuse callback so a replay shows the recorded result in a
+ * terminal state — user experience, and a card the model's transcript agrees
+ * with.
+ */
+private suspend fun ChatViewModel.settleReplayedCall(
+    ctx: ToolTurnContext,
+    callId: String,
+    part: AgentContentPart.ToolResult,
+) {
+    synchronized(ctx.allToolBlocks) {
+        val idx = ctx.allToolBlocks.indexOfFirst { it.id == callId }
+        if (idx >= 0) {
+            val prev = ctx.allToolBlocks[idx]
+            ctx.allToolBlocks[idx] = prev.copy(
+                toolStatus = settledReplayStatus(part),
+                content = part.content,
+                toolTitle = displayToolTitle(prev.toolName, prev.toolArgs, prev.toolTitle),
+            )
+        }
+    }
+    withContext(Dispatchers.Main) {
+        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+    }
+}
+
+/**
+ * Execute one planned call on its lane coroutine.
+ *
+ * [T-tool-execution-ledger] The ledger's [ToolExecutionLedger.executeOnce] is
+ * the single execution boundary: it claims (id, name, args) BEFORE any side
+ * effect. A replay (or a concurrent duplicate) returns the recorded result and
+ * skips the whole producer — tool dispatch, UI status flip, failure-memory
+ * write and finalization all live INSIDE the producer so none of them can run
+ * twice. This is the same contract the spawn fan-out uses; the two lanes must
+ * never diverge on when the ledger is consulted.
+ */
 private suspend fun ChatViewModel.runPlannedCall(
     ctx: ToolTurnContext,
     call: PlannedToolCall,
     executedParts: ConcurrentHashMap<String, AgentContentPart.ToolResult>,
 ) {
     currentCoroutineContext().ensureActive()
-    // [T-android-overlay-tool-title] Pull tool_title uniformly from
-    // args for ALL tools, at the moment execution actually starts.
-    // [P1-17] Routed through the shared extractToolTitle (complete-JSON path
-    // first, streaming partial fallback); blank/absent → null, as before.
-    val dispatchToolTitle = extractToolTitle(call.argsStr, fallback = null)
-    SessionActivityTracker.updateToolStatus(
-        status = "Running: ${call.name}",
-        toolName = call.name,
-        isRunning = true,
-        toolTitle = dispatchToolTitle,
-    )
-    // Flip PENDING → RUNNING right before the execute dispatch so the UI
-    // (tool pill spinner) shows the exact moment execution begins.
-    synchronized(ctx.allToolBlocks) {
-        val preIdx = ctx.allToolBlocks.indexOfFirst { it.id == call.id }
-        if (preIdx >= 0 && ctx.allToolBlocks[preIdx].toolStatus == ToolBlockStatus.PENDING) {
-            ctx.allToolBlocks[preIdx] = ctx.allToolBlocks[preIdx].copy(toolStatus = ToolBlockStatus.RUNNING)
+    val ledgerArgsSha = com.openminis.app.util.Digest.sha256Hex(call.argsStr)
+    val part = ctx.ledger.executeOnce(
+        call.id, call.name, ledgerArgsSha,
+        onReuse = { prior ->
+            AppLogger.warning(
+                ChatViewModel.TAG_STREAM,
+                "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
+            )
+            settleReplayedCall(ctx, call.id, prior)
+        },
+    ) {
+        // Owner-only: everything below has a side effect and must run once.
+        // [T-tool-title-single-source GH#344] The status bar shows the same
+        // concrete title as the card: model title / args summary / friendly
+        // label. A bare name never reaches the overlay.
+        val dispatchToolTitle = resolveToolTitle(call.name, call.argsStr)
+        SessionActivityTracker.updateToolStatus(
+            status = "Running: ${call.name}",
+            toolName = call.name,
+            isRunning = true,
+            toolTitle = dispatchToolTitle,
+        )
+        // Flip PENDING → RUNNING right before the execute dispatch so the UI
+        // (tool pill spinner) shows the exact moment execution begins.
+        synchronized(ctx.allToolBlocks) {
+            val preIdx = ctx.allToolBlocks.indexOfFirst { it.id == call.id }
+            if (preIdx >= 0 && ctx.allToolBlocks[preIdx].toolStatus == ToolBlockStatus.PENDING) {
+                ctx.allToolBlocks[preIdx] = ctx.allToolBlocks[preIdx].copy(toolStatus = ToolBlockStatus.RUNNING)
+            }
         }
+        withContext(Dispatchers.Main) {
+            updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+        }
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
+        val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
+        // [T-known-failure] Feed the outcome back into the failure ledger the
+        // dispatch gate reads: a success clears the record, a failure arms it
+        // for the next identical call. Fire-and-forget; never affects the
+        // result the model sees.
+        com.openminis.app.tools.ToolFailureMemory.recordOutcome(
+            context, activeSessionId, call.name, call.argsStr, result.success, result.output,
+        )
+        currentCoroutineContext().ensureActive()
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
+        // [T-working-memory-ledger] Host-side one-line record of this round
+        // for the evict-then-deliver handover (the tail budget drops
+        // unsummarized rounds; this line is what gets delivered in their
+        // place). INSIDE the owner-only producer and BEFORE the tail
+        // expression: a replay must not record the same work twice, and the
+        // producer must yield the ToolResult.
+        WorkingMemoryStore.append(
+            ctx.activeSessionId, ctx.turn, call.name,
+            ledgerArgsSha.take(8), result.output.take(120),
+        )
+        finalizePlannedCall(ctx, call, result)
     }
-    withContext(Dispatchers.Main) {
-        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
-    }
-    Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
-    val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
-    // [T-known-failure] Feed the outcome back into the failure ledger the dispatch
-    // gate reads: a success clears the record, a failure arms it for the next
-    // identical call. Fire-and-forget; never affects the result the model sees.
-    com.openminis.app.tools.ToolFailureMemory.recordOutcome(
-        context, activeSessionId, call.name, call.argsStr, result.success, result.output,
-    )
-    currentCoroutineContext().ensureActive()
-    Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
-    executedParts[call.id] = finalizePlannedCall(ctx, call, result)
+    executedParts[call.id] = part
 }
 
 /**
@@ -542,15 +567,34 @@ private suspend fun ChatViewModel.runPlannedCall(
  * multi-agent semaphore, the barrier awaits them all), then each peer's
  * result goes through the shared finalize path so spawn cards are
  * indistinguishable from serial ones.
+ *
+ * [T-tool-execution-ledger] Root-cause fix for the single-execution contract
+ * violation: the ledger is consulted INSIDE each peer's async, BEFORE
+ * [executeRunSubAgent] is dispatched. The old code ran every peer first
+ * (awaitAll of executeRunSubAgent) and only then called ledger.reuse() — by
+ * which point a replayed spawn had already launched a SECOND wave of
+ * sub-agents; reuse only swapped which result was shown, it could not undo
+ * the side effect. Routing the whole execute + finalize through
+ * [ToolExecutionLedger.executeOnce] makes replay/in-flight duplicates skip
+ * dispatch entirely and gives spawn the identical contract as the serial
+ * lane. The barrier still awaits all peers; finalization is concurrency-safe
+ * (loop detector and tool blocks are synchronized, UI pushes use snapshots),
+ * exactly as it is for concurrent serial reads.
  */
 private suspend fun ChatViewModel.fanOutSpawnCalls(
     ctx: ToolTurnContext,
     plannedCalls: List<PlannedToolCall>,
     execution: ToolTurnExecution,
 ) {
+    // [T-tool-execution-ledger] Single-execution boundary (from #332):
+    // ledger.executeOnce claims (id, name, argsSha) BEFORE any side effect;
+    // replays and in-flight duplicates join the owner's result instead of
+    // launching a second sub-agent wave. [T-working-memory-ledger] The
+    // owner-only producer also records one WorkingMemory line — replays are
+    // NOT recorded again (the same work was logged when it first ran).
+    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.name) }
     val cap = MultiAgentSettings.clampConcurrent(multiAgentSettings.maxConcurrent.value)
     val sem = Semaphore(cap)
-    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.name) }
     val writerCount = peers.sumOf { peer ->
         parseSubAgentBatch(peer.argsStr, ToolLimitPrefs.subagentMaxTurns())
             .count { spawn -> SubAgentKind.canWrite(spawn.kind) }
@@ -558,26 +602,39 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
     coroutineScope {
         peers.mapIndexed { peerIdx, peer ->
             async {
-                val peerResult = executeRunSubAgent(
-                    peer.argsStr,
-                    peer.id,
-                    ctx.allToolBlocks,
-                    ctx.assistantId,
-                    ctx.accumulatedText,
-                    limiter = sem,
-                    parallelWriters = writerCount,
-                    waveIndex = peerIdx,
-                    waveSize = peers.size,
-                )
-                synchronized(execution.parallelSubResults) {
-                    execution.parallelSubResults[peer.id] = peerResult
+                val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
+                val part = ctx.ledger.executeOnce(
+                    peer.id, peer.name, peerArgsSha,
+                    onReuse = { prior ->
+                        AppLogger.warning(
+                            ChatViewModel.TAG_STREAM,
+                            "[ToolLedger] reused recorded result for replayed spawn id=${peer.id} name=${peer.name}",
+                        )
+                        settleReplayedCall(ctx, peer.id, prior)
+                    },
+                ) {
+                    // Owner-only: dispatching a sub-agent wave is the side
+                    // effect. A replay must never reach this line.
+                    val peerResult = executeRunSubAgent(
+                        peer.argsStr,
+                        peer.id,
+                        ctx.allToolBlocks,
+                        ctx.assistantId,
+                        ctx.accumulatedText,
+                        limiter = sem,
+                        parallelWriters = writerCount,
+                        waveIndex = peerIdx,
+                        waveSize = peers.size,
+                    )
+                    WorkingMemoryStore.append(
+                        ctx.activeSessionId, ctx.turn, peer.name,
+                        peerArgsSha.take(8), peerResult.output.take(120),
+                    )
+                    finalizePlannedCall(ctx, peer, peerResult)
                 }
+                execution.executedParts[peer.id] = part
             }
         }.awaitAll()
-    }
-    for (peer in peers) {
-        val peerResult = execution.parallelSubResults[peer.id] ?: continue
-        execution.executedParts[peer.id] = finalizePlannedCall(ctx, peer, peerResult)
     }
 }
 
@@ -591,7 +648,6 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
 ): ToolTurnExecution {
     val execution = ToolTurnExecution(
         executedParts = ConcurrentHashMap(),
-        parallelSubResults = mutableMapOf(),
     )
     if (plan.plannedCalls.isEmpty()) return execution
     val laneSemaphore = Semaphore(ToolLimitPrefs.toolCallConcurrency())

@@ -52,6 +52,18 @@ jobs:
       - name: Architecture policy ratchet
         run: python3 scripts/ci/check_architecture_policy.py
 
+      # [T-tool-execution-ledger] Same structural ratchet as pr-check.yml:
+      # a direct push to main must never reintroduce "dispatch, then reuse".
+      - name: Tool single-execution contract (both lanes)
+        run: python3 scripts/ci/check_tool_execution_contract.py
+
+      # [T-preanchor-dynamic-budget / T-tool-title-single-source GH#344]
+      # A direct push to main must never bring back the 15k ceiling, the
+      # inline corridor, a bare canonical title fallback, or an
+      # ifEmpty{toolName} renderer.
+      - name: preAnchor budget + tool title contract
+        run: python3 scripts/ci/check_tool_title_and_budget_contract.py
+
   # [T-main-unit-test-gate] pr-check.yml only fires on pull_request, so a
   # direct push to main never ran the JVM suite — a4706d0f landed with a
   # source-drift guard failure and every later PR inherited a red merge
@@ -102,7 +114,7 @@ jobs:
           # Unprivileged on purpose: the cached dirs must stay owned by the
           # runner user or actions/cache cannot extract into them on a hit.
           if [ ! -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
-            curl -fsSL -o /tmp/cmdline-tools.zip \
+            curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/cmdline-tools.zip \
               "https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip"
             unzip -q /tmp/cmdline-tools.zip -d /tmp/sdk
             mv /tmp/sdk/cmdline-tools /usr/local/lib/android/sdk/cmdline-tools/latest
@@ -174,10 +186,11 @@ jobs:
           restore-keys: |
             gradle-${{ runner.os }}-
 
+      # [T-rolling-apk-blocked] apt 镜像 DNS 故障曾把 #861 挡死在 native-deps
+      # 同款步骤：预装检测优先（零 apt 依赖），真缺才走带重试的 apt 兜底。
       - name: Install native build dependencies
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y curl tar unzip make gawk sed file python3 cmake ninja-build g++ git
+          bash scripts/ci/ensure-build-tools.sh curl tar unzip make gawk sed file python3 cmake ninja g++ git
 
       # Every run used to re-download the platform, build-tools, CMake and the
       # whole NDK (~2.5 GB) even though only the Gradle home was cached. The key

@@ -4,13 +4,38 @@ import android.util.Log
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.ui.chat.retention.ResidentWindow
 import kotlinx.coroutines.flow.first
 
-internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
+/**
+ * [T-android-inloop-compact-truthful-gate] The effective history in two
+ * flavors:
+ *  - default (`applyProgressiveTrim = true`) — what the next request actually
+ *    carries, after [progressivelyTrimmed] stripped thinking / offloaded old
+ *    tool outputs. Used for calibration and display.
+ *  - `applyProgressiveTrim = false` — the same slice UNTRIMMED, i.e. what the
+ *    request would weigh without the emergency diet. The in-loop / send-time
+ *    compact gates read this: ProgressiveTrim masks a 270k-token pile-up down
+ *    to ~41k of stubs, which let the 80% threshold stay silent forever while
+ *    900 stale tool rounds were re-assembled every turn. Compaction shrinks
+ *    THIS slice (the marker moves forward), so the post-compact check passes
+ *    and the gate cannot thrash — unlike a raw `agentHistory` floor, which
+ *    stays over-threshold after a successful compact and would trip the
+ *    "already compacted" dead end.
+ *
+ * v1 (legacy) markers and the unresolvable-anchor fallback intentionally
+ * bypass [progressivelyTrimmed] in BOTH flavors — their wire format is frozen
+ * by contract.
+ */
+internal fun ChatViewModel.effectiveAgentHistoryUncounted(
+    applyProgressiveTrim: Boolean = true,
+): List<LLMMessage> {
     val summary = _compactSummary.value
     val marker = _cachedLatestMarker
     // No compact in play → return full history untouched.
-    if (summary.isNullOrBlank() || marker == null) return progressivelyTrimmed(agentHistory.toList())
+    if (summary.isNullOrBlank() || marker == null) {
+        return maybeProgressivelyTrimmed(agentHistory.toList(), applyProgressiveTrim)
+    }
 
     val summaryWrappedText = "<context-summary>\n" +
         "The following is a summary of the earlier conversation that was compacted to save context space.\n" +
@@ -76,6 +101,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
             // tail instead. Logged once per detection, not per call.
             if (!_compactMarkerDetached) {
                 _compactMarkerDetached = true
+                stateHydrationPending = true  // [T-state-hydration]
                 AppLogger.warning(
                     ChatViewModel.TAG,
                     "[Compact] marker ${marker.id.take(8)} anchor ${anchorId?.take(8) ?: "nil"} " +
@@ -83,7 +109,10 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
                         "summary+tail injection (tail=${DETACHED_TAIL_MESSAGES})",
                 )
             }
-            return progressivelyTrimmed(detachedCompactHistory(effectiveSummaryWrappedText))
+            return maybeProgressivelyTrimmed(
+                foldHarnessNotes(detachedCompactHistory(effectiveSummaryWrappedText)),
+                applyProgressiveTrim,
+            )
         }
 
         // Step 1: walk back from anchor collecting user-text turns. Stop
@@ -96,10 +125,25 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         // [T-compact-preanchor-prune, port iOS 8b76cd74]
         val keepN = ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS
         val preAnchorCap = 100
+        // [T-preanchor-dynamic-budget GH#344] SINGLE source: 20% of the
+        // model's effective window, floor 8k, ceiling 40k (no window → 40k).
+        // The old inline min(15k, max(0.2w, 8k)) saturated at 15k for every
+        // window ≥ 75k, so the dynamic term never ran on 128k/200k models.
+        val windowTokens = effectiveContextWindowTokens()
+        val preAnchorBudget = WalkBack.preAnchorTokenBudget(windowTokens)
         val walkBack = walkBackUserTurnsBounded(
             anchorIdx = anchorIdx,
             maxUserTextTurns = keepN,
             maxMessages = preAnchorCap,
+            // [T-compact-token-budget-first] With a token budget supplied,
+            // WalkBack decides on tokens FIRST and the message cap stops
+            // vetoing: an agent-dense session can put 100+ tool rounds
+            // between the anchor and the last user-text turn, and the bare
+            // cap made preAnchor permanently empty (live: 605-message run,
+            // 432 rounds dropped by the tail budget, walkBack returning 0
+            // every request — the work memory between summary and tail
+            // vanished on every request).
+            maxEstimatedTokens = preAnchorBudget,
         )
         val priorIdxResolved: Int? = walkBack.priorIdx
         val priorIdx = walkBack.priorIdx ?: (anchorIdx + 1) // empty preAnchor sentinel
@@ -171,14 +215,72 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         val result = mutableListOf<LLMMessage>()
         result.addAll(preAnchorPruned)
 
+        // [T-harness-note-fold] Fold harness USER messages into the prefix of
+        // the first real user message. All harness notes (goal/recall/state/
+        // WorkingMemory/plan-retry) are materialized as role=USER messages by
+        // the host, but the provider wire format serializes each as an
+        // independent user turn — which the model interprets as "the user
+        // spoke again" and produces interstitial prose between tool calls.
+        // The fold makes the model see them as part of the original request
+        // rather than as separate "turn to speak" invitations.
+        // One change covers ALL injection sources (goal/recall/state/
+        // WorkingMemory/plan-retry/once-notices). Transcript/DB/UI/ledger
+        // all untouched — this is request-assembly only.
+
         // [T-android-agenthistory-cme] postAnchor is held across ~50 lines —
         // it must be a view over an immutable snapshot, never over the live
         // COWAL (whose subList views throw CME if the parent array swaps).
         val postAnchorSnap = agentHistory.toList()
-        val postAnchor = if (anchorIdx + 1 < postAnchorSnap.size) {
+        val postAnchorRaw = if (anchorIdx + 1 < postAnchorSnap.size) {
             postAnchorSnap.subList(anchorIdx + 1, postAnchorSnap.size)
         } else {
             emptyList()
+        }
+
+        // [T-android-postanchor-tail-budget] Hard tail window on the active
+        // region. Without a marker move for hours the postAnchor slice grows
+        // unbounded (observed: 909 stale tool rounds fully re-assembled every
+        // turn) — the summary covers those rounds, so keep only the newest
+        // ones that fit the budget and drop the oldest WHOLE rounds (never a
+        // half turn: the splitter decides only at user-round boundaries, so a
+        // tool_use is never orphaned from its tool_result). Request-assembly
+        // only; DB persistence is untouched. The dropped-rounds notice is
+        // injected at the head of the kept slice as a USER text line.
+        //
+        // [T-compact-window-scaled-budget] postAnchor tail budget scales with
+        // the model's window too (≤35%, ceiling 60k) — preAnchorBudget was
+        // computed above (≤20%) so summary + preAnchor + postAnchor stays
+        // under the 80% compact threshold on every model (no oscillation).
+        val postAnchorBudget = if (windowTokens != null) {
+            minOf(PostAnchorTail.BUDGET_TOKENS, (windowTokens * 0.35).toInt().coerceAtLeast(8_000))
+        } else {
+            PostAnchorTail.BUDGET_TOKENS
+        }
+        val tailBudget = PostAnchorTail.Budget(
+            budgetTokens = postAnchorBudget,
+            estimate = WalkBack::estimateMessageTokens,
+        )
+        val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
+        val postAnchor = postAnchorOutcome.kept
+        if (postAnchorOutcome.droppedRounds > 0) {
+            // [T-working-memory-ledger] The dropped rounds were never
+            // summarized (compact did not fire — the trimmed request sits
+            // under the threshold), so their knowledge lives only in the
+            // WorkingMemory ledger. Flag the hydration ONLY when the ledger
+            // has undelivered lines: flagging unconditionally made every
+            // postAnchor drop fire a hydration, which committed a new USER
+            // note every turn — the model then narrated about each note
+            // instead of working (the prose-fragment loop on device).
+            if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
+                stateHydrationPending = true
+            }
+            AppLogger.info(
+                ChatViewModel.TAG,
+                "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
+                    "droppedRounds=${postAnchorOutcome.droppedRounds} " +
+                    "droppedMessages=${postAnchorOutcome.droppedMessages} " +
+                    "droppedTokens≈${postAnchorOutcome.droppedTokens} budget=${tailBudget.budgetTokens}",
+            )
         }
 
         // DIAG: explain how the slice was sized using post-prune /
@@ -215,8 +317,19 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
             result.addAll(postAnchor)
             result.add(LLMMessage(role = LLMMessage.Role.USER, content = effectiveSummaryWrappedText))
         }
-        return progressivelyTrimmed(result)
+        // [T-harness-note-fold] Fold harness USER messages into the nearest
+        // preceding real user turn, across the whole sequence. Harness notes
+        // (goal/recall/state/WorkingMemory/plan-retry/dropped-rounds) are
+        // materialized as role=USER messages at the history TAIL by the
+        // host before each loop request, but the provider wire format
+        // serializes each as an independent user turn — which the model
+        // interprets as "the user spoke again" and produces interstitial
+        // prose between tool calls. The fold makes the model see them as
+        // part of the original request. Transcript/DB/UI/ledger all
+        // untouched — request-assembly only.
+        return maybeProgressivelyTrimmed(foldHarnessNotes(result), applyProgressiveTrim)
     }
+
 
     // ─── v1 (legacy) markers ──────────────────────────────────────
     //
@@ -271,6 +384,96 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
     // the same projection pipeline as every other branch.
     return progressivelyTrimmed(agentHistory.toList())
 }
+
+/**
+ * [T-harness-note-fold] Fold harness USER messages into the nearest PRECEDING
+ * real user turn, across the whole sequence — not just the head.
+ *
+ * Why whole-sequence: every committed note lands at the TAIL of agentHistory
+ * (ChatViewModelAgentLoopExt commits notices before each loop request), so in
+ * any live session the note's predecessors include real user turns and
+ * assistant/tool rounds — a head-only fold (the original implementation)
+ * closed its fold window on the very first message and folded nothing. On
+ * device that made the fix a no-op: every recall/goal/state/WorkingMemory
+ * note still went out as an independent "the user spoke again" user turn,
+ * and the model answered each with interstitial prose between tool calls.
+ *
+ * Destination: the note's text is appended onto the nearest preceding USER
+ * message that is NOT itself a harness note — a real user turn or the
+ * tool-result carrier of the current round. This is exactly the shape
+ * Z-Code produces by merging reminders into the tool result, and the same
+ * shape ToolIdNormalization.mergeConsecutiveUserTurns already tolerates
+ * (text-only follower rides the carrier message). When no preceding user
+ * turn exists (notes before the first user message), the notes collapse
+ * into the first following real user turn's prefix — the original head
+ * behavior.
+ *
+ * Ordering guarantee: relative order among folded notes is preserved
+ * (append-only onto one target), so the model still reads them
+ * chronologically inside the merged turn.
+ *
+ * Transcript/DB/UI/ledger all untouched — request-assembly only.
+ */
+internal fun foldHarnessNotes(history: List<LLMMessage>): List<LLMMessage> {
+    // Fast path: no harness notes anywhere → return the input untouched
+    // (byte-identical to the pre-fold behavior; sessions without notices
+    // never pay a copy).
+    if (history.none { HarnessNoteMarkers.isUserHarnessNote(it) }) {
+        return history
+    }
+    val out = ArrayList<LLMMessage>(history.size)
+    // Pending notes with no preceding real user turn yet: carried until the
+    // first real user message appears, then prepended to it.
+    val leadingNotes = StringBuilder()
+    // Index of the last out-entry that can absorb a note: a USER message
+    // that is not itself a harness note (real user turn or tool-result
+    // carrier). -1 = none yet.
+    var lastUserTarget = -1
+    for (msg in history) {
+        if (HarnessNoteMarkers.isUserHarnessNote(msg)) {
+            if (lastUserTarget >= 0) {
+                // Fold forward onto the nearest preceding user turn.
+                val target = out[lastUserTarget]
+                out[lastUserTarget] = target.copy(
+                    content = target.content + "\n\n" + msg.content.trimStart(),
+                )
+            } else {
+                leadingNotes.append(msg.content.trimStart()).append("\n")
+            }
+            continue
+        }
+        if (msg.role == LLMMessage.Role.USER) {
+            // A real user turn: first flush any leading notes into its prefix.
+            val flushed = leadingNotes.isNotEmpty()
+            if (flushed) {
+                val prefix = leadingNotes.toString().trimEnd()
+                leadingNotes.clear()
+                out.add(msg.copy(content = prefix + "\n\n" + msg.content))
+            } else {
+                out.add(msg)
+            }
+            lastUserTarget = out.lastIndex
+            continue
+        }
+        out.add(msg)
+    }
+    // History ends with notes and no following user turn: flush the leading
+    // remainder as a standalone user turn (matches the old tail fallback).
+    if (leadingNotes.isNotEmpty()) {
+        out.add(LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = leadingNotes.toString().trimEnd(),
+            contentParts = listOf(AgentContentPart.Text(leadingNotes.toString().trimEnd())),
+        ))
+    }
+    return out
+}
+
+/** Apply [progressivelyTrimmed] only when the caller asked for it. */
+private fun ChatViewModel.maybeProgressivelyTrimmed(
+    list: List<LLMMessage>,
+    apply: Boolean,
+): List<LLMMessage> = if (apply) progressivelyTrimmed(list) else list
 
 /**
  * [T-android-progressive-trim] Apply progressive context trimming to an
@@ -336,6 +539,17 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
         return enforced
     }
     if (trimmed !== list) {
+        // [T-state-hydration] Reclaimed content may include the only copy of
+        // the plan/report/lane state; the host restores it before the next request.
+        // [T-working-memory-ledger] Gate on NEW handover content: this path
+        // runs EVERY turn (long sessions trim every request), and an
+        // unconditional flag made commitSessionNoticesOnce commit a fresh
+        // USER note every turn — the model narrated about each note instead
+        // of working (the prose-fragment loop on device). The snapshot path
+        // is sha-deduped; the ledger path has undelivered lines to give.
+        if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
+            stateHydrationPending = true
+        }
         AppLogger.info(
             ChatViewModel.TAG,
             "[ProgressiveTrim] level=$level window=$window untrimmedEst=$untrimmed " +
@@ -343,4 +557,70 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
         )
     }
     return trimmed
+}
+
+// ── Bounded-history append + trim + DB rebuild ──────────────────────────────
+// [T-android-split-chat-agenthistory] Moved verbatim from ChatViewModel.kt
+// (mechanical split, zero behavior change); member functions became ChatViewModel
+// extensions with identical signatures.
+
+/**
+ * Rebuild model context from the newest persisted rows only. The database
+ * remains the complete transcript; no operation may parse the whole session
+ * merely to continue, retry, edit, or delete it.
+ */
+
+internal fun ChatViewModel.appendBoundedHistory(message: LLMMessage) {
+    agentHistory.add(message)
+    trimAgentHistory()
+}
+
+internal fun ChatViewModel.appendBoundedHistoryAll(messages: Collection<LLMMessage>) {
+    agentHistory.addAll(messages)
+    trimAgentHistory()
+}
+
+internal fun ChatViewModel.trimAgentHistory() {
+    val dropped = ArrayList<LLMMessage>()
+    val byCount = ResidentWindow.countCut(agentHistory, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    if (byCount > 0) {
+        dropped.addAll(agentHistoryHeadSnapshot(byCount))
+        removeAgentHistoryHead(byCount)
+        llmHistoryStartOffset += byCount
+    }
+    val byBytes = ResidentWindow.byteCut(agentHistory)
+    if (byBytes > 0) {
+        dropped.addAll(agentHistoryHeadSnapshot(byBytes))
+        removeAgentHistoryHead(byBytes)
+        llmHistoryStartOffset += byBytes
+    }
+    if (dropped.isNotEmpty()) {
+        rememberDigestLines(dropped.map { HistoryDigest.fromMessage(it) })
+    }
+}
+
+/**
+ * Rebuild the request-side history from Room immediately before a new send.
+ * The UI is intentionally paged, so `_messages` and the resident cache are
+ * not authoritative for model memory. This also repairs a ViewModel that was
+ * reopened on the tail and never had its older UI pages loaded.
+ */
+internal suspend fun ChatViewModel.rebuildAgentHistoryFromDatabase(sid: String) {
+    val tail = chatRepository.loadRequestHistory(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    val parsed = tail.map { toLLMMessage(it) }
+    agentHistory.clear()
+    toolLoopDetector.reset()
+    appendBoundedHistoryAll(parsed)
+    llmHistoryStartOffset = (
+        chatRepository.dao.messageCountForSession(sid) - tail.size
+    ).coerceAtLeast(0)
+}
+
+internal suspend fun ChatViewModel.awaitBoundedHistoryRebuild(
+    sid: String,
+): List<com.openminis.app.data.db.MessageEntity> {
+    rebuildAgentHistoryFromDatabase(sid)
+    return chatRepository.hydrateDisplayRows(
+        chatRepository.loadMessagesTail(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES),
+    )
 }

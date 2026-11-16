@@ -134,6 +134,8 @@ private fun ChatViewModel.supervisorBaseTools(entry: ModelEntry): List<AgentTool
         memoryEnabled = false,
         subAgentEnabled = false,
         hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+        // [GH#298] Same web_search master switch.
+        webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
     )
 
 /** Supervisor seat: the session model, or null when it has no usable provider. */
@@ -367,8 +369,16 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
-                thinkingLevel = supervisorEntry.effectiveMaxThinkingLevel,
+                // [T-thinking-three-faces-unified] Session level clamped to
+                // the supervisor model's ceiling — the shared
+                // laneSessionThinkingLevel policy, same as spawn lanes.
+                thinkingLevel = laneSessionThinkingLevel(
+                    _thinkingLevel.value,
+                    forcedThinkingCeilingFor(supervisorEntry),
+                ),
                 stopWhenClosing = false,
+                // [GH#221] Same per-instance header channel as the main loop.
+                extraHeaders = providerExtraHeaders(supervisorEntry.providerInstanceId),
                 onStatus = {},
             )
         }
@@ -381,6 +391,12 @@ private suspend fun ChatViewModel.runSupervisorSession(
         SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.EXECUTING, objective, workerRound)
         val bubbleId = "supervisor-worker-$sessionId-$workerRound"
         upsertGroupBubble(bubbleId, workerSpeaker, "", analyzing = true)
+        // [GH#521/#188/#199] Worker seat = nested SubAgentRunner; give it the same
+        // first-token/idle budget the main loop resolves so a stalled worker
+        // stream cannot hang the supervisor round on the 600s read timeout.
+        val workerFirstEventMs = com.openminis.app.data.GroupRoutingState.resolveFirstEventTimeoutMs(
+            providerRepository, _selectedGroupId.value, workerEntry.effectiveMaxThinkingLevel.isEnabled,
+        )
         val result = WritePathGuard.withPaths(writePaths) {
             SubAgentRunner.run(
                 provider = workerProvider,
@@ -390,12 +406,15 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                executeTool = { name, json ->
+                executeTool = { name, json, callId ->
                     val result = if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
                     } else {
                         grepSourceToolResult(name, json)
-                            ?: executeTool(name, json, "")
+                            // [F1 GH#343] Third parameter is the tool call id; the
+                            // old blank id made every supervisor worker call spill
+                            // to the same `tool.txt`.
+                            ?: executeTool(name, json, callId)
                     }
                     // [T-m9-supervisor-experience] Fold this executed call into
                     // the session's tool profile; a failed fold never blocks the
@@ -407,7 +426,17 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 kind = SubAgentKind.WORKER,
                 writePaths = writePaths,
                 maxTurns = multiAgentSettings.subagentMaxTurns.value,
-                thinkingLevel = workerEntry.effectiveMaxThinkingLevel,
+                // [T-thinking-three-faces-unified] Session level clamped to
+                // the worker model's ceiling — the shared
+                // laneSessionThinkingLevel policy, same as spawn lanes.
+                thinkingLevel = laneSessionThinkingLevel(
+                    _thinkingLevel.value,
+                    forcedThinkingCeilingFor(workerEntry),
+                ),
+                // [GH#221] Worker seat speaks through its own provider instance.
+                extraHeaders = providerExtraHeaders(workerEntry.providerInstanceId),
+                firstEventTimeoutMs = workerFirstEventMs,
+                streamIdleTimeoutMs = workerFirstEventMs * 2,
             )
         }
         upsertGroupBubble(bubbleId, workerSpeaker, result.output, analyzing = false)

@@ -52,8 +52,13 @@ data class SessionSnapshotRow(
     val pinnedAt: Long? = null,
     val editCount: Int = 0,
     val thinkingOverride: String? = null,
+    // [T-thinking-dormant-restore] (P2 1-8) Full-fidelity mapping: the park
+    // rides along so the snapshot round-trip drops nothing (additive, nullable
+    // — ignoreUnknownKeys absorbs snapshots written before it existed).
+    val dormantThinkingOverride: String? = null,
     val folderId: String? = null,
     val permissionMode: String? = "ASK",
+    val archivedAt: Long? = null,
 )
 
 @Serializable
@@ -102,8 +107,10 @@ internal fun ChatSessionEntity.toSnapshotRow() = SessionSnapshotRow(
     pinnedAt = pinnedAt,
     editCount = editCount,
     thinkingOverride = thinkingOverride,
+    dormantThinkingOverride = dormantThinkingOverride,
     folderId = folderId,
     permissionMode = permissionMode,
+    archivedAt = archivedAt,
 )
 
 internal fun SessionSnapshotRow.toEntity() = ChatSessionEntity(
@@ -120,8 +127,10 @@ internal fun SessionSnapshotRow.toEntity() = ChatSessionEntity(
     pinnedAt = pinnedAt,
     editCount = editCount,
     thinkingOverride = thinkingOverride,
+    dormantThinkingOverride = dormantThinkingOverride,
     folderId = folderId,
     permissionMode = permissionMode,
+    archivedAt = archivedAt,
 )
 
 internal fun FolderEntity.toSnapshotRow() = FolderSnapshotRow(

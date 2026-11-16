@@ -1,31 +1,14 @@
 package com.openminis.app.git
 
+import android.util.Log
 import com.openminis.app.sandbox.SessionWorkspace
 import org.eclipse.jgit.api.Git
-import org.eclipse.jgit.diff.DiffAlgorithm
-import org.eclipse.jgit.diff.DiffEntry
-import org.eclipse.jgit.diff.DiffFormatter
-import org.eclipse.jgit.diff.Edit
-import org.eclipse.jgit.diff.RawText
-import org.eclipse.jgit.diff.RawTextComparator
-import org.eclipse.jgit.dircache.DirCache
-import org.eclipse.jgit.dircache.DirCacheIterator
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.revwalk.RevCommit
-import org.eclipse.jgit.revwalk.RevSort
 import org.eclipse.jgit.revwalk.RevWalk
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder
-import org.eclipse.jgit.treewalk.CanonicalTreeParser
-import org.eclipse.jgit.treewalk.EmptyTreeIterator
-import org.eclipse.jgit.treewalk.FileTreeIterator
-import org.eclipse.jgit.treewalk.TreeWalk
-import org.eclipse.jgit.util.io.DisabledOutputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 
 /**
  * [T-git-panel-native] Host-native git operations for the Git panel, backed by
@@ -47,53 +30,93 @@ import java.io.FileInputStream
  */
 object GitHostRepo {
 
+    /** logcat tag for every swallowed-ref failure in the git panel stack. */
+    private const val TAG = "GitPanel"
+
     /** Host directory of the session workspace (bind root of /var/minis/workspace). */
     fun workspaceDir(filesDir: File, sessionId: String): File =
         SessionWorkspace.hostDir(filesDir, sessionId, "workspace")
 
     /**
-     * Open the repo at [dir]; null when the directory is not a git work tree
-     * or HEAD is unresolvable. The handle is closed on the failure paths so a
-     * failed open cannot leak a Repository (the panel opens one per refresh).
+     * Open the repo at [dir]; null when the directory is not a git work tree.
+     * HEAD is NOT checked: identity is independent of history — an empty repo
+     * is a repo, and a broken-HEAD repo stays servable ([logPage] walks refs,
+     * sandbox parity). Reads needing HEAD's tree fail there; [status] reports
+     * the error. Closed on failure so open cannot leak a Repository.
      */
-    private fun open(dir: File): Git? = try {
-        val g = Git.open(dir)
-        try {
-            g.repository.resolve(Constants.HEAD)
-            g
-        } catch (_: Exception) {
-            runCatching { g.close() }
-            null
-        }
+    internal fun open(dir: File): Git? = try {
+        // [T-git-hostrepo-fresh-open] Git.open() parks the Repository in
+        // JGit's RepositoryCache; the sandbox shell (pull/commit via the git
+        // CLI) mutates refs behind that cache's back and the cached
+        // RefDatabase kept serving a stale packed-refs upstream — the
+        // divergence badge reported ahead=1 on a fully-synced repo. Build a
+        // fresh FileRepository per call (no cache): probe IO stays tens of
+        // ms and every read sees exactly what the CLI just wrote.
+        val repo = org.eclipse.jgit.storage.file.FileRepositoryBuilder()
+            .setWorkTree(dir).setMustExist(true).build()
+        val g = Git(repo)
+        runCatching { repo.repositoryState }.fold(
+            onSuccess = { g },
+            onFailure = { runCatching { g.close() }; null },
+        )
     } catch (_: Exception) {
         null
+    }
+
+    /** Graph/checkout entry ([GitHostRepoGraph] owns the multi-ref walk). */
+    internal fun openForGraph(dir: File): Git? = open(dir)
+
+    /** First resolvable ref sha walking HEAD → every ref, or null. */
+    private fun resolveHeadOrAnyRef(repo: Repository): ObjectId? {
+        // HEAD's sha can resolve while its OBJECT is missing (resolve only
+        // reads the ref file) — validate by parsing, then fall to other refs.
+        runCatching {
+            repo.resolve(Constants.HEAD)?.let { head ->
+                RevWalk(repo).use { it.parseCommit(head) }
+                return head
+            }
+        }
+        for (ref in repo.refDatabase.getRefs()) {
+            val id = ref.objectId ?: continue
+            if (id == ObjectId.zeroId()) continue
+            if (runCatching { RevWalk(repo).use { it.parseCommit(id) } }.isSuccess) return id
+        }
+        return null
     }
 
     // ── probe ───────────────────────────────────────────────────────────────
 
     /**
      * Repo identity for the header card, or isRepo=false outside a work tree.
-     * A repo whose HEAD points at a missing object also reports false: every
-     * host read would throw on it, and the sandbox path has the graceful
-     * per-ref fallback for that case.
+     * Identity is decoupled from history: an empty repo (zero commits) is a
+     * repo (sandbox parity) and a broken HEAD stays servable via [logPage].
      */
     fun probe(dir: File): GitCli.GitRepoInfo {
         val git = open(dir) ?: return GitCli.GitRepoInfo(isRepo = false)
         git.use { g ->
             val repo = g.repository
-            val head = repo.resolve(Constants.HEAD)
-            if (head != null && !runCatching {
-                    RevWalk(repo).use { it.parseCommit(head) }
-                }.isSuccess
-            ) return GitCli.GitRepoInfo(isRepo = false)
-            val branch = repo.branch ?: ""
-            val cfg = repo.config
+            val branch = runCatching { repo.branch }.getOrDefault("")
+            // [T-git-panel-probe-config] repo.config lazy-loads the stored
+            // config (+ the user config chain); a parse hiccup here used to
+            // escape as a raw exception and killed the whole native source
+            // for that refresh — the only unguarded call in this block. Fold
+            // it like the rest so a config problem degrades to missing
+            // identity fields instead of a probe crash.
+            val (userName, userEmail) = runCatching {
+                val cfg = repo.config
+                Pair(cfg.getString("user", null, "name"), cfg.getString("user", null, "email"))
+            }.getOrDefault(Pair(null, null))
+            val shallow = runCatching {
+                java.io.File(repo.directory, "shallow").isFile ||
+                    java.io.File(repo.commonDirectory, "shallow").isFile
+            }.getOrDefault(false)
             return GitCli.GitRepoInfo(
                 isRepo = true,
                 root = dir.absolutePath,
                 branch = branch,
-                userName = cfg.getString("user", null, "name"),
-                userEmail = cfg.getString("user", null, "email"),
+                userName = userName,
+                userEmail = userEmail,
+                shallow = shallow,
             )
         }
     }
@@ -102,8 +125,10 @@ object GitHostRepo {
 
     /**
      * One history page, newest first, with parent hashes for the graph.
-     * Maps JGit RevCommit onto [GitCli.GitCommit] so the ViewModel/UI stay
-     * unchanged across the host/sandbox switch.
+     * Delegates to [GitHostRepoGraph.logPage] — the ZCode-aligned multi-ref
+     * walk (`--branches --tags --remotes --date-order --topo-order` shape)
+     * with `%D` decorations; the old HEAD-only walk made every side branch
+     * invisible to the History tab.
      */
     /** [T-git-host-checkout] JGit 检出；失败时调用方回落沙盒路径。 */
     fun checkout(dir: File, localName: String, createFrom: String? = null): Result<Unit> = runCatching {
@@ -118,41 +143,8 @@ object GitHostRepo {
         Unit
     }
 
-    fun logPage(dir: File, offset: Int, limit: Int): List<GitCli.GitCommit> {
-        val git = open(dir) ?: return emptyList()
-        git.use { g ->
-            val walk = RevWalk(g.repository)
-            walk.isRetainBody = true
-            // Deterministic pagination: `git log -n N --skip M` walks the
-            // default order, newest commit first. Sorting explicitly keeps
-            // offset/limit stable across refreshes.
-            walk.sort(RevSort.COMMIT_TIME_DESC)
-            try {
-                val headId = g.repository.resolve(Constants.HEAD) ?: return emptyList()
-                walk.markStart(walk.parseCommit(headId))
-                val commits = ArrayList<GitCli.GitCommit>(limit)
-                var skipped = 0
-                for (rev in walk) {
-                    if (skipped < offset) {
-                        skipped++
-                        continue
-                    }
-                    if (commits.size >= limit) break
-                    commits += GitCli.GitCommit(
-                        hash = rev.name,
-                        shortHash = rev.abbreviate(8).name(),
-                        author = rev.authorIdent.name,
-                        epochSeconds = rev.commitTime.toLong(),
-                        subject = rev.shortMessage,
-                        parents = rev.parents.map { it.name },
-                    )
-                }
-                return commits
-            } finally {
-                walk.dispose()
-            }
-        }
-    }
+    fun logPage(dir: File, offset: Int, limit: Int): List<GitCli.GitCommit> =
+        GitHostRepoGraph.logPage(dir, offset, limit)
 
     // ── status ──────────────────────────────────────────────────────────────
 
@@ -161,7 +153,11 @@ object GitHostRepo {
         val git = open(dir) ?: return GitCli.GitStatus(error = "not a git repository")
         git.use { g ->
             val repo = g.repository
-            val s = g.status().call()
+            // Broken HEAD: JGit throws where real `git status` fails the same
+            // way — carry it as GitStatus.error, the sandbox path's shape.
+            val s = runCatching { g.status().call() }.getOrElse { e ->
+                return GitCli.GitStatus(error = (e.message ?: "status failed").take(500))
+            }
             val entries = ArrayList<GitCli.GitFileEntry>()
             // Direct set mapping mirrors porcelain XY columns exactly:
             // staged = added/changed/removed, unstaged = modified/missing,
@@ -186,17 +182,15 @@ object GitHostRepo {
     }
 
     /**
-     * [T-git-shallow-guard] Ahead/behind vs the tracked upstream.
+     * Ahead/behind vs the tracked upstream; (0,0,null) when none.
      *
-     * shallow clone 的 grafted 边界会让 RevWalk.parseCommit 抛
-     * MissingObjectException —— 整个 status() 一起失败，面板就成了「假干净树
-     * + 红条」。这里整段兜底：拿不到就回 (0,0,upstreamName)，状态照常渲染。
+     * [T-git-panel-shallow-guard] Two guards the old version lacked:
+     * shallow clones (`.git/shallow` present — the graft boundary's missing
+     * parents throw MissingObjectException mid-walk) skip the count
+     * entirely, and ANY walk failure degrades to (0,0,upstream) instead of
+     * poisoning the whole [status] into a false "clean tree" + error bar.
      */
-    private fun aheadBehind(repo: Repository): Triple<Int, Int, String?> = runCatching {
-        aheadBehindUnsafe(repo)
-    }.getOrElse { Triple(0, 0, null) }
-
-    private fun aheadBehindUnsafe(repo: Repository): Triple<Int, Int, String?> {
+    private fun aheadBehind(repo: Repository): Triple<Int, Int, String?> {
         val branch = repo.branch ?: return Triple(0, 0, null)
         val remote = repo.config.getString("branch", branch, "remote")
         val merge = repo.config.getString("branch", branch, "merge")
@@ -204,22 +198,25 @@ object GitHostRepo {
             "$remote/${merge.removePrefix("refs/heads/")}"
         } else null
         ?: return Triple(0, 0, null)
+        repo.directory?.let { d -> if (File(d, "shallow").exists()) return Triple(0, 0, upstreamName) }
         val upstreamId = repo.resolve(upstreamName) ?: return Triple(0, 0, upstreamName)
         val headId = repo.resolve(Constants.HEAD) ?: return Triple(0, 0, upstreamName)
-        val aheadWalk = RevWalk(repo).apply { isRetainBody = false }
-        val behindWalk = RevWalk(repo).apply { isRetainBody = false }
-        try {
-            aheadWalk.markStart(aheadWalk.parseCommit(headId))
-            aheadWalk.markUninteresting(aheadWalk.parseCommit(upstreamId))
-            val ahead = aheadWalk.asSequence().count()
-            behindWalk.markStart(behindWalk.parseCommit(upstreamId))
-            behindWalk.markUninteresting(behindWalk.parseCommit(headId))
-            val behind = behindWalk.asSequence().count()
-            return Triple(ahead, behind, upstreamName)
-        } finally {
-            aheadWalk.dispose()
-            behindWalk.dispose()
-        }
+        return runCatching {
+            val aheadWalk = RevWalk(repo).apply { isRetainBody = false }
+            val behindWalk = RevWalk(repo).apply { isRetainBody = false }
+            try {
+                aheadWalk.markStart(aheadWalk.parseCommit(headId))
+                aheadWalk.markUninteresting(aheadWalk.parseCommit(upstreamId))
+                val ahead = aheadWalk.asSequence().count()
+                behindWalk.markStart(behindWalk.parseCommit(upstreamId))
+                behindWalk.markUninteresting(behindWalk.parseCommit(headId))
+                val behind = behindWalk.asSequence().count()
+                Triple(ahead, behind, upstreamName)
+            } finally {
+                aheadWalk.dispose()
+                behindWalk.dispose()
+            }
+        }.getOrElse { Triple(0, 0, upstreamName) }
     }
 
     // ── branches ────────────────────────────────────────────────────────────
@@ -229,8 +226,26 @@ object GitHostRepo {
         val git = open(dir) ?: return emptyList()
         git.use { g ->
             val repo = g.repository
-            val result = ArrayList<GitCli.GitBranchRef>()
-            val branchList = g.branchList().call()
+            val locals = ArrayList<GitCli.GitBranchRef>()
+            val remotes = ArrayList<GitCli.GitBranchRef>()
+            // [T-git-panel-refs-degrade] branchList().call() runs the full
+            // ListBranchCommand on top of RefDatabase enumeration; if THAT
+            // enumeration misbehaves at runtime (some ART environments return
+            // an empty listing where the JVM probe lists every ref), the
+            // whole function used to explode into the caller's
+            // runCatching→emptyList and the panel painted "no branches" over
+            // a healthy repo. Enumerate through the RefDatabase directly —
+            // same data, one layer less to fail — and keep the command as a
+            // fallback for THROWN failures only; an empty-but-clean result
+            // rides the ViewModel's sandbox degrade instead (the command
+            // layer would only return the same empty listing).
+            val branchList = runCatching {
+                repo.refDatabase.getRefsByPrefix("refs/heads/")
+            }.recoverCatching {
+                g.branchList().call().map { it }
+            }.onFailure {
+                Log.w(TAG, "branch enumeration failed: ${it.javaClass.simpleName}: ${it.message}")
+            }.getOrDefault(emptyList())
             val walk = RevWalk(repo)
             walk.isRetainBody = false
             try {
@@ -240,16 +255,24 @@ object GitHostRepo {
                     } catch (_: Exception) {
                         ""
                     }
-                    result += GitCli.GitBranchRef(
-                        name = ref.name.removePrefix("refs/heads/"),
+                    val short = ref.name.removePrefix("refs/heads/")
+                    locals += GitCli.GitBranchRef(
+                        name = short,
                         isCurrent = ref.name == repo.fullBranch,
                         lastSubject = commit,
+                        // Tracking short name from branch.<n>.remote/merge —
+                        // the for-each-ref %(upstream:short) equivalent.
+                        upstream = upstreamShort(repo, short),
                     )
                 }
                 // Remote-tracking branches, newest commit first (the sandbox
                 // sorts by -committerdate desc; packed-refs order is arbitrary),
                 // capped to keep the switcher readable.
-                val remoteRefs = repo.refDatabase.getRefsByPrefix("refs/remotes/origin/")
+                val remoteRefs = runCatching {
+                    repo.refDatabase.getRefsByPrefix("refs/remotes/origin/")
+                }.onFailure {
+                    Log.w(TAG, "remote-ref enumeration failed: ${it.javaClass.simpleName}: ${it.message}")
+                }.getOrDefault(emptyList())
                 val byRecency = remoteRefs.sortedByDescending { ref ->
                     try {
                         walk.parseCommit(ref.objectId).commitTime
@@ -265,20 +288,39 @@ object GitHostRepo {
                     } catch (_: Exception) {
                         ""
                     }
-                    result += GitCli.GitBranchRef(
+                    remotes += GitCli.GitBranchRef(
                         name = "origin/$short",
                         isCurrent = false,
                         lastSubject = commit,
+                        // [T-git-sandbox-checkout-route] The switcher entries
+                        // must carry their ref source — checkout routing
+                        // treats only non-remote entries as "exists locally".
+                        isRemote = true,
                     )
                 }
             } finally {
                 walk.dispose()
             }
-            return result.distinctBy { it.name }
+            // [T-git-panel-zcode-order] Group by REF SOURCE, not by slash:
+            // a local "feature/x" branch contains '/' but must stay in the
+            // local group (the old name-based partition demoted it to the
+            // remote section). Current branch first, then alphabetical;
+            // remotes keep their recency order behind the locals.
+            val sortedLocals = locals.sortedWith(
+                compareByDescending<GitCli.GitBranchRef> { it.isCurrent }.thenBy { it.name },
+            )
+            return (sortedLocals + remotes).distinctBy { it.name }
         }
     }
 
     // ── stashes ─────────────────────────────────────────────────────────────
+
+    /** `branch.<n>.remote` + `branch.<n>.merge` → `origin/main` short form. */
+    private fun upstreamShort(repo: Repository, branch: String): String? {
+        val remote = repo.config.getString("branch", branch, "remote") ?: return null
+        val merge = repo.config.getString("branch", branch, "merge") ?: return null
+        return "$remote/${merge.removePrefix("refs/heads/")}"
+    }
 
     fun stashes(dir: File): List<GitCli.GitStashEntry> {
         val git = open(dir) ?: return emptyList()
@@ -311,409 +353,18 @@ object GitHostRepo {
     // ── workspace discovery ─────────────────────────────────────────────────
 
     /**
-     * Host-side counterpart of `GitCliCmd.DISCOVER_CMD`: the session workspace
-     * itself, or a repo nested one or two levels below it
-     * (`workspace/<repo>`, `workspace/<group>/<repo>`). Ties break by most
-     * recently active (`.git/HEAD` mtime — every commit and checkout touches
-     * it), mirroring the sandbox discovery's activity signal. Returns the
-     * host root plus its path relative to the workspace ("" = workspace
-     * itself); null when no repo is found.
+     * Host-side repo discovery: workspace itself + repos nested up to four
+     * levels below. Delegates to [GitHostRepoDiscovery] — the ZCode-aligned
+     * walk that covers the SAME set as the sandbox DISCOVER_CMD (the old
+     * two-level host walk vs mindepth-2 sandbox find disagreed, flipping the
+     * panel between its fast and slow paths).
      */
-    fun locate(workspaceDir: File): Pair<File, String>? {
-        if (!workspaceDir.isDirectory) return null
-        // [T-git-host-discovery] 统一走 4 层发现（含 workspace 自身），
-        // 与沙盒侧 mindepth1/maxdepth5 覆盖同一集合；同层多仓时按 .git/HEAD
-        // 的 mtime 取最近活跃的那个。
-        val repos = GitHostRepoDiscovery.discover(workspaceDir, maxDepth = 4)
-        if (repos.isEmpty()) return null
-        val best = repos.maxByOrNull { File(it, ".git/HEAD").lastModified() } ?: return null
-        val relative = best.relativeTo(workspaceDir).path.replace('\\', '/')
-        return best to relative
-    }
+    fun locate(workspaceDir: File): Pair<File, String>? =
+        GitHostRepoDiscovery.locate(workspaceDir)
 
-    fun guestPath(relative: String): String =
-        if (relative.isBlank()) GUEST_WORKSPACE else "$GUEST_WORKSPACE/$relative"
+    /** Guest-side absolute path of a repo discovered under the workspace. */
+    fun guestPath(relative: String): String = GitHostRepoDiscovery.guestPath(relative)
 
-    /** The workspace's fixed mount point inside the PRoot sandbox. */
-    const val GUEST_WORKSPACE = "/var/minis/workspace"
-
-    // ── numstat (staged / unstaged) ─────────────────────────────────────────
-
-    /**
-     * Numstat rows for the staged diff (HEAD vs index), keyed by path.
-     * The index side is a [DirCacheIterator] — `dc.writeTree(inserter)` would
-     * write a fresh loose tree object into .git/objects on EVERY refresh,
-     * polluting the user's repository object database with garbage.
-     */
-    fun numstatStaged(dir: File): Map<String, GitCli.NumStat> {
-        val git = open(dir) ?: return emptyMap()
-        git.use { g ->
-            val repo = g.repository
-            val baos = ByteArrayOutputStream()
-            val df = DiffFormatter(baos)
-            df.setRepository(repo)
-            try {
-                val headId = repo.resolve(Constants.HEAD)
-                val dc = DirCache.read(repo)
-                if (headId != null) {
-                    repo.newObjectReader().use { reader ->
-                        val headTree = RevWalk(repo).use { it.parseCommit(headId).tree }
-                        df.format(
-                            CanonicalTreeParser().apply { reset(reader, headTree) },
-                            DirCacheIterator(dc),
-                        )
-                    }
-                } else {
-                    df.format(EmptyTreeIterator(), DirCacheIterator(dc))
-                }
-                return parseNumstatText(baos.toString(Charsets.UTF_8.name()))
-            } catch (_: Exception) {
-                return emptyMap()
-            } finally {
-                df.close()
-            }
-        }
-    }
-
-    /** Numstat rows for the unstaged diff (index vs working tree), keyed by path. */
-    fun numstatUnstaged(dir: File): Map<String, GitCli.NumStat> {
-        val git = open(dir) ?: return emptyMap()
-        git.use { g ->
-            val repo = g.repository
-            val baos = ByteArrayOutputStream()
-            val df = DiffFormatter(baos)
-            df.setRepository(repo)
-            try {
-                val dc = DirCache.read(repo)
-                // ADD in the index-vs-worktree scan = a worktree file with no
-                // index entry = untracked. The sandbox `git diff --numstat`
-                // never lists untracked files — filter them out.
-                val entries = df.scan(DirCacheIterator(dc), FileTreeIterator(repo))
-                    .filter { it.changeType != DiffEntry.ChangeType.ADD }
-                df.format(entries)
-            } catch (_: Exception) {
-                return emptyMap()
-            } finally {
-                df.close()
-            }
-            return parseNumstatText(baos.toString(Charsets.UTF_8.name()))
-        }
-    }
-
-    /**
-     * Staged diff text (HEAD vs index) for AI commit-message generation.
-     * On an unborn HEAD (first commit) the staged files are listed as added —
-     * exactly what the sandbox `git diff --cached` prints, and the generator
-     * needs that content to write a useful message.
-     */
-    fun stagedDiff(dir: File): String {
-        val git = open(dir) ?: return ""
-        git.use { g ->
-            val repo = g.repository
-            val headId = repo.resolve(Constants.HEAD)
-            val dc = DirCache.read(repo)
-            val baos = ByteArrayOutputStream()
-            val df = DiffFormatter(baos)
-            df.setRepository(repo)
-            try {
-                if (headId != null) {
-                    repo.newObjectReader().use { reader ->
-                        val headTree = RevWalk(repo).use { it.parseCommit(headId).tree }
-                        df.format(
-                            CanonicalTreeParser().apply { reset(reader, headTree) },
-                            DirCacheIterator(dc),
-                        )
-                    }
-                } else {
-                    df.format(EmptyTreeIterator(), DirCacheIterator(dc))
-                }
-            } catch (_: Exception) {
-                return ""
-            } finally {
-                df.close()
-            }
-            val text = baos.toString(Charsets.UTF_8.name())
-            return if (text.length > DIFF_MAX_CHARS) {
-                text.take(DIFF_MAX_CHARS) + System.lineSeparator() + "…"
-            } else {
-                text
-            }
-        }
-    }
-
-    private const val DIFF_MAX_CHARS = 200_000
-
-    /**
-     * Parse a unified diff text into per-file numstat. Paths come from the
-     * `--- a/` / `+++ b/` header lines (exact even when a path itself
-     * contains " b/", which the old `substringAfterLast(" b/")` mangled), a
-     * `Binary files` marker sets the binary flag the way the sandbox numstat
-     * prints `-\t-\t<path>`, and +/- lines are only counted inside hunks so
-     * content lines that start with `+++`/`---` count as content, not headers.
-     */
-    internal fun parseNumstatText(text: String): Map<String, GitCli.NumStat> {
-        val result = HashMap<String, GitCli.NumStat>()
-        var currentPath: String? = null
-        var added = 0
-        var deleted = 0
-        var binary = false
-        var inHunk = false
-        fun flush() {
-            currentPath?.let { result[it] = GitCli.NumStat(added, deleted, binary) }
-            currentPath = null
-            added = 0; deleted = 0; binary = false; inHunk = false
-        }
-        for (line in text.lines()) {
-            when {
-                line.startsWith("diff --git") -> {
-                    flush()
-                    currentPath = headerPath(line)
-                }
-                !inHunk && line.startsWith("+++ b/") ->
-                    currentPath = line.removePrefix("+++ b/")
-                !inHunk && line.startsWith("--- a/") && currentPath == null ->
-                    currentPath = line.removePrefix("--- a/") // deletion: +++ is /dev/null
-                !inHunk && line.startsWith("Binary files") -> binary = true
-                line.startsWith("@@") -> inHunk = true
-                inHunk && line.startsWith("+") -> added++
-                inHunk && line.startsWith("-") -> deleted++
-            }
-        }
-        flush()
-        return result
-    }
-
-    /**
-     * Path from a `diff --git a/X b/Y` header. DiffFormatter runs without
-     * rename detection, so X == Y and the body is `a/P b/P` — the path is
-     * the first half of the remainder. Null when the shape differs.
-     */
-    private fun headerPath(line: String): String? {
-        val body = line.removePrefix("diff --git ")
-        if (!body.startsWith("a/")) return null
-        val rest = body.removePrefix("a/")
-        val split = (rest.length - 3) / 2
-        if (split <= 0 || !rest.startsWith(" b/", split)) return null
-        return rest.substring(0, split)
-    }
-
-    /**
-     * Slice one file's unified-diff section out of a multi-file diff: from
-     * the file's `diff --git` header to the next `diff --git` header (or the
-     * end). Works for deletions (`+++ /dev/null`) and binary files (no `@@`
-     * hunks at all), both of which broke the old `@@`-anchored extraction.
-     */
-    internal fun diffSection(full: String, path: String): String? {
-        val header = "diff --git a/$path b/$path"
-        var idx = full.indexOf(header)
-        while (idx >= 0) {
-            // Only a header at line start counts; a content line could echo it.
-            if (idx == 0 || full[idx - 1] == '\n') {
-                val end = full.indexOf("\ndiff --git", idx + header.length)
-                return full.substring(idx, if (end >= 0) end else full.length)
-            }
-            idx = full.indexOf(header, idx + 1)
-        }
-        return null
-    }
-
-    // ── commit detail ───────────────────────────────────────────────────────
-
-    /** Full metadata for the commit-detail sheet. */
-    fun commitDetail(dir: File, hash: String): GitCli.GitCommitDetail? {
-        val git = open(dir) ?: return null
-        git.use { g ->
-            val repo = g.repository
-            val id = repo.resolve(hash) ?: return null
-            val rev = RevWalk(repo).use { it.parseCommit(id) }
-            val author = rev.authorIdent
-            val committer = rev.committerIdent
-            val body = rev.fullMessage.removePrefix(rev.shortMessage).trimStart()
-            return GitCli.GitCommitDetail(
-                hash = rev.name,
-                author = author.name,
-                authorEmail = author.emailAddress,
-                authorEpoch = author.getWhen().time / 1000,
-                committer = committer.name,
-                committerEmail = committer.emailAddress,
-                committerEpoch = committer.getWhen().time / 1000,
-                subject = rev.shortMessage,
-                body = body,
-            )
-        }
-    }
-
-    /** Per-file stats of one commit (git show --numstat equivalent). */
-    fun commitNumstat(dir: File, hash: String): List<GitCli.CommitFileStat> {
-        val git = open(dir) ?: return emptyList()
-        git.use { g ->
-            val repo = g.repository
-            val id = repo.resolve(hash) ?: return emptyList()
-            val walk = RevWalk(repo)
-            try {
-                val commit = walk.parseCommit(id)
-                val parent = if (commit.parentCount > 0) walk.parseCommit(commit.getParent(0)) else null
-                val baos = ByteArrayOutputStream()
-                val df = DiffFormatter(baos)
-                df.setRepository(repo)
-                try {
-                    if (parent != null) {
-                        df.format(parent.tree, commit.tree)
-                    } else {
-                        formatRootDiff(df, repo, commit.tree)
-                    }
-                    return parseNumstatText(baos.toString(Charsets.UTF_8.name())).map { (path, stat) ->
-                        GitCli.CommitFileStat(path, stat.added, stat.deleted, stat.binary)
-                    }
-                } finally {
-                    df.close()
-                }
-            } finally {
-                walk.dispose()
-            }
-        }
-    }
-
-    // ── diff of one file in one commit ──────────────────────────────────────
-
-    /**
-     * Unified diff of [path] at [hash] vs its first parent. The file's own
-     * section is sliced between its `diff --git` header and the next one —
-     * the old `@@`-anchored extraction leaked the rest of the commit's diff
-     * into this file's view, and deletions (no `+++ b/` marker) or binary
-     * files (no hunks at all) returned the wrong range or nothing.
-     */
-    fun commitFileDiff(dir: File, hash: String, path: String): String {
-        val git = open(dir) ?: return "(diff unavailable)"
-        git.use { g ->
-            val repo = g.repository
-            val id = repo.resolve(hash) ?: return "(unknown commit)"
-            val walk = RevWalk(repo)
-            try {
-                val commit = walk.parseCommit(id)
-                val parent = if (commit.parentCount > 0) walk.parseCommit(commit.getParent(0)) else null
-                val baos = ByteArrayOutputStream()
-                val df = DiffFormatter(baos)
-                df.setRepository(repo)
-                try {
-                    if (parent != null) {
-                        df.format(parent.tree, commit.tree)
-                    } else {
-                        formatRootDiff(df, repo, commit.tree)
-                    }
-                } finally {
-                    df.close()
-                }
-                val full = baos.toString(Charsets.UTF_8.name())
-                return diffSection(full, path) ?: "(no diff for $path)"
-            } finally {
-                walk.dispose()
-            }
-        }
-    }
-
-    // ── diff of a working-tree file ─────────────────────────────────────────
-
-    /** Unified diff of one working-tree file vs HEAD. */
-    /**
-     * Unified diff of one working-tree entry, mirroring the sandbox's three
-     * commands: untracked → `--no-index /dev/null` (whole file added),
-     * staged → `--cached` (HEAD vs index), unstaged → index vs worktree.
-     * Binary content short-circuits to the same text `git diff` prints, the
-     * worktree read is capped, and the output truncates like the sandbox.
-     */
-    fun fileDiff(dir: File, path: String, staged: Boolean, untracked: Boolean): String {
-        val git = open(dir) ?: return "(diff unavailable)"
-        git.use { g ->
-            val repo = g.repository
-            val headBytes = repo.resolve(Constants.HEAD)?.let { h ->
-                RevWalk(repo).use { walk ->
-                    TreeWalk.forPath(repo, path, walk.parseCommit(h).tree)
-                        ?.let { tw -> repo.open(tw.getObjectId(0)).bytes }
-                }
-            }
-            val indexBytes = DirCache.read(repo).getEntry(path)?.let { repo.open(it.objectId).bytes }
-            val workBytes = readWorkBytes(File(dir, path))
-            val oldBytes: ByteArray
-            val newBytes: ByteArray
-            when {
-                untracked -> { oldBytes = ByteArray(0); newBytes = workBytes }
-                staged -> { oldBytes = headBytes ?: ByteArray(0); newBytes = indexBytes ?: ByteArray(0) }
-                else -> { oldBytes = indexBytes ?: ByteArray(0); newBytes = workBytes }
-            }
-            if (isBinary(oldBytes) || isBinary(newBytes)) {
-                return "Binary files a/$path and b/$path differ"
-            }
-            val oldText = RawText(oldBytes)
-            val newText = RawText(newBytes)
-            val edits = histogram().diff(RawTextComparator.DEFAULT, oldText, newText)
-            val sb = StringBuilder("--- a/$path\n+++ b/$path\n")
-            for (e in edits) {
-                sb.append("@@ -${e.beginA + 1},${e.endA - e.beginA} +${e.beginB + 1},${e.endB - e.beginB} @@\n")
-                for (i in e.beginA until e.endA) sb.append("-").append(oldText.getString(i)).append("\n")
-                for (i in e.beginB until e.endB) sb.append("+").append(newText.getString(i)).append("\n")
-            }
-            val text = sb.toString()
-            return if (text.length > DIFF_MAX_CHARS) {
-                text.take(DIFF_MAX_CHARS) + System.lineSeparator() + "…"
-            } else {
-                text
-            }
-        }
-    }
-
-    /** Worktree bytes capped at 8 MB — one huge asset cannot OOM the panel. */
-    private fun readWorkBytes(file: File): ByteArray {
-        if (!file.isFile) return ByteArray(0)
-        val cap = 8 * 1024 * 1024
-        val size = file.length()
-        if (size <= cap) return file.readBytes()
-        val buf = ByteArray(cap)
-        FileInputStream(file).use { it.readNBytes(buf, 0, cap) }
-        return buf
-    }
-
-    // ── commit diff (whole commit) ──────────────────────────────────────────
-
-    /** Unified diff of [hash] vs its first parent (concatenated per file). */
-    fun commitDiff(dir: File, hash: String): String {
-        val git = open(dir) ?: return "(diff unavailable)"
-        git.use { g ->
-            val repo = g.repository
-            val id = repo.resolve(hash) ?: return "(no changes)"
-            val walk = RevWalk(repo)
-            try {
-                val commit = walk.parseCommit(id)
-                val parent = if (commit.parentCount > 0) walk.parseCommit(commit.getParent(0)) else null
-                val baos = ByteArrayOutputStream()
-                val df = DiffFormatter(baos)
-                df.setRepository(repo)
-                try {
-                    if (parent != null) {
-                        df.format(parent.tree, commit.tree)
-                    } else {
-                        formatRootDiff(df, repo, commit.tree)
-                    }
-                } finally {
-                    df.close()
-                }
-                return baosToString(baos)
-            } finally {
-                walk.dispose()
-            }
-        }
-    }
-
-    /**
-     * Format a root commit's full diff: the empty tree as the old side, so
-     * every file is listed as added. The object reader lives exactly as long
-     * as the format call that reads through it — the old treeParser leaked it.
-     */
-    private fun formatRootDiff(df: DiffFormatter, repo: Repository, treeId: ObjectId) {
-        repo.newObjectReader().use { reader ->
-            df.format(EmptyTreeIterator(), CanonicalTreeParser().apply { reset(reader, treeId) })
-        }
-    }
 
     // ── stage / unstage (host-native) ───────────────────────────────────────
 
@@ -774,17 +425,4 @@ object GitHostRepo {
             }
         }
     }
-
-    private fun baosToString(baos: ByteArrayOutputStream): String =
-        baos.toString(Charsets.UTF_8.name())
-
-    private fun histogram() =
-        DiffAlgorithm.getAlgorithm(DiffAlgorithm.SupportedAlgorithm.HISTOGRAM)
-
-    private fun isBinary(bytes: ByteArray): Boolean {
-        val cap = minOf(bytes.size, 8000)
-        for (i in 0 until cap) if (bytes[i] == 0.toByte()) return true
-        return false
-    }
-
 }

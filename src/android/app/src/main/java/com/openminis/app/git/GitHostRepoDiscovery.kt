@@ -3,28 +3,95 @@ package com.openminis.app.git
 import java.io.File
 
 /**
- * [T-git-host-discovery] Host 侧仓库发现。
+ * [T-git-panel-zcode-discovery] Workspace-anchored repo discovery, HOST side.
  *
- * 沙盒 find 与 host walk 的深度语义差 1（find 的深度从子项算，walk 从自身算），
- * 两边不一致就会漏掉 workspace 自身。这里统一成「含自身，向下 maxDepth 层」，
- * 与沙盒侧 mindepth1/maxdepth5 覆盖同一集合。
+ * ZCode's `resolveRepository` anchors at the workspace path and trusts
+ * `git rev-parse --show-toplevel` for everything inside it; the Android
+ * counterpart must find the repo WITHOUT a shell, so discovery walks the
+ * workspace tree. The two sources (this walk and the sandbox
+ * `GitCliCmd.DISCOVER_CMD`) previously disagreed — the host saw only two
+ * levels while the sandbox find skipped the workspace's own `.git` — and a
+ * repo one source could see and the other could not flipped the panel
+ * between its fast and slow paths. Both now cover the SAME set: the
+ * workspace itself plus repos nested up to FOUR levels below it.
+ *
+ * Ties break by most recently active (`.git/HEAD` mtime — every commit and
+ * checkout touches it), mirroring the sandbox discovery's activity signal.
  */
 object GitHostRepoDiscovery {
-    private val SKIP = setOf("node_modules", ".gradle", "build", "target", "dist", ".git")
 
-    /** 含 [root] 自身在内，向下 [maxDepth] 层内所有 git 工作树。 */
-    fun discover(root: File, maxDepth: Int = 4): List<File> {
-        if (!root.isDirectory) return emptyList()
-        val out = ArrayList<File>()
-        fun walk(dir: File, depth: Int) {
-            if (depth > maxDepth) return
-            if (File(dir, ".git").exists()) out += dir
-            if (depth == maxDepth) return
-            dir.listFiles()?.forEach { child ->
-                if (child.isDirectory && child.name !in SKIP) walk(child, depth + 1)
+    /** Max repo depth below the workspace (ZCode rev-parse resolves any depth). */
+    private const val MAX_DEPTH = 4
+
+    /** Backoff before a discovery retry (transient VFS hiccup rescue). */
+    private const val DISCOVERY_RETRY_BACKOFF_MS = 120L
+
+    /** True when [dir] contains a `.git` entry (dir or gitfile for worktrees). */
+    private fun isRepo(dir: File): Boolean = File(dir, ".git").exists()
+
+    /**
+     * The session workspace itself, or a repo nested up to [MAX_DEPTH] levels
+     * below it. Returns the host root plus its path relative to the workspace
+     * ("" = workspace itself); null when no repo is found.
+     */
+    fun locate(workspaceDir: File): Pair<File, String>? {
+        if (!workspaceDir.isDirectory) return null
+        if (isRepo(workspaceDir)) return workspaceDir to ""
+        val candidates = ArrayList<Pair<File, String>>()
+        walk(workspaceDir, depth = 0, relative = "") { dir, relative ->
+            if (isRepo(dir)) candidates += dir to relative
+        }
+        // [T-git-panel-discovery-retry] One clean pass is not enough on a
+        // phone: a transient VFS hiccup (listFiles returning null mid-walk,
+        // a .git probe flipping false) silently shrinks the candidate set
+        // and the panel flips between "found" and "not a repository" across
+        // 2s auto-refreshes. A second pass after a short backoff costs
+        // nothing when the first was complete and rescues the flaky case.
+        if (candidates.isEmpty()) {
+            Thread.sleep(DISCOVERY_RETRY_BACKOFF_MS)
+            walk(workspaceDir, depth = 0, relative = "") { dir, relative ->
+                if (isRepo(dir)) candidates += dir to relative
             }
         }
-        walk(root, 0)
-        return out.distinctBy { it.absolutePath }.sortedBy { it.absolutePath }
+        if (candidates.isEmpty()) return null
+        return candidates.maxByOrNull { (dir, _) ->
+            File(dir, ".git/HEAD").takeIf { it.isFile }?.lastModified() ?: 0L
+        }
     }
+
+    // [T-git-discovery-prune] Same noise-dir pruning as GrepSourceTool: a
+    // workspace with node_modules walked tens of thousands of directories
+    // per refresh. NOT applied at depth 0 — a workspace literally named
+    // build/ is the user's own mount and must still be searched.
+    private val PRUNED_DIR_NAMES = setOf(
+        "node_modules", "build", ".gradle", "dist", "target",
+        ".venv", "venv", "__pycache__", ".cache",
+    )
+
+    private fun walk(dir: File, depth: Int, relative: String, visit: (File, String) -> Unit) {
+        if (depth >= MAX_DEPTH) return
+        val children = dir.listFiles(File::isDirectory)
+        // A null listing (transient I/O error) must not cut the walk short:
+        // retry once before giving up on this subtree.
+        var retry = children
+        if (retry == null) {
+            Thread.sleep(DISCOVERY_RETRY_BACKOFF_MS)
+            retry = dir.listFiles(File::isDirectory)
+        }
+        if (retry == null) return
+        for (child in retry) {
+            if (child.name == ".git") continue
+            if (depth > 0 && child.name in PRUNED_DIR_NAMES) continue
+            val rel = if (relative.isEmpty()) child.name else "$relative/${child.name}"
+            visit(child, rel)
+            walk(child, depth + 1, rel, visit)
+        }
+    }
+
+    /** Guest-side absolute path of a repo discovered under the workspace. */
+    fun guestPath(relative: String): String =
+        if (relative.isBlank()) GUEST_WORKSPACE else "$GUEST_WORKSPACE/$relative"
+
+    /** The workspace's fixed mount point inside the PRoot sandbox. */
+    const val GUEST_WORKSPACE = "/var/minis/workspace"
 }

@@ -11,6 +11,8 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.compat.MaxTokensField
+import com.openminis.app.provider.thinking.ThinkingEffort
 import com.openminis.app.provider.thinking.ThinkingResolveContext
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import okhttp3.MediaType.Companion.toMediaType
@@ -38,6 +40,7 @@ internal class OpenAIRequestBodies(
         val needsOpenRouterAnthropicCacheControl: Boolean
         val isMistral: Boolean
         val isDashScope: Boolean
+        val compatFlags: com.openminis.app.provider.compat.CompatFlags // [T-compat-flags] pi compat-schema.ts switch table
         val isXAI: Boolean
         val usesUnifiedReasoningEffort: Boolean
         val thinkingRuleInstanceId: String?
@@ -48,6 +51,8 @@ internal class OpenAIRequestBodies(
         fun explicitOffEffort(): String?
         fun applyKeyAuth(builder: Request.Builder, token: String): Request.Builder
         val codexClientVersion: String
+        /** [T-codex-client-fingerprint] Opt-in Codex-official identity headers. */
+        val codexClientFingerprintEnabled: Boolean
         fun clampThinkingLevel(level: ThinkingLevel): ThinkingLevel
         val provider: com.openminis.app.provider.LLMProvider
     }
@@ -85,10 +90,17 @@ internal class OpenAIRequestBodies(
         val supportsImages = host.model.hasImageInput
         val body = JSONObject()
         body.put("model", host.model.id)
-        if (host.isOpenRouter) {
-            body.put("max_tokens", maxTokens)
-        } else {
-            body.put("max_completion_tokens", maxTokens)
+        // [T-android-dashscope-max-tokens #35][T-compat-flags] Endpoint-level
+        // output-limit field name. OpenAI's newer Chat Completions wants
+        // `max_completion_tokens`, but several OpenAI-compatible vendors (most
+        // visibly DashScope / Bailian) only accept the legacy `max_tokens` and
+        // 400 the whole request on the other name. Resolution lives in
+        // CompatFlags.maxTokensField (pi compat-schema.ts; URL-matched family
+        // tables, not capability guesses); OpenRouter already had this shape,
+        // DashScope joins it.
+        when (host.compatFlags.maxTokensField) {
+            MaxTokensField.MAX_TOKENS -> body.put("max_tokens", maxTokens)
+            MaxTokensField.MAX_COMPLETION_TOKENS -> body.put("max_completion_tokens", maxTokens)
         }
         body.put("stream", stream)
 
@@ -104,7 +116,7 @@ internal class OpenAIRequestBodies(
             SamplingIdentity.of(host.provider), host.model.id, temperature, thinkingLevel.isEnabled,
         )?.let { body.put("temperature", it) }
 
-        if (stream && !host.isOpenRouter) {
+        if (stream && host.compatFlags.supportsUsageInStreaming) { // [T-compat-flags] pi supportsUsageInStreaming
             body.put("stream_options", JSONObject().put("include_usage", true))
         }
 
@@ -246,6 +258,15 @@ internal class OpenAIRequestBodies(
                         val textParts = msg.contentParts.filterIsInstance<AgentContentPart.Text>()
                         val imageParts = msg.contentParts.filterIsInstance<AgentContentPart.ImageData>()
 
+                        // [GH#293/#352] Tool results MUST be contiguous after
+                        // the assistant tool_calls message. The image-carrier
+                        // user messages used to be emitted INSIDE this loop,
+                        // so with two image-bearing results the wire read
+                        // tool,tool,user,tool — strict gateways answered
+                        // "Messages with role 'tool' must be a response to a
+                        // preceding message with 'tool_calls'". Collect them
+                        // and append after every tool reply instead.
+                        val toolResultImageMessages = mutableListOf<JSONObject>()
                         for (tr in toolResults) {
                             messagesArray.put(JSONObject().apply {
                                 put("role", "tool")
@@ -274,7 +295,7 @@ internal class OpenAIRequestBodies(
                                     tr.imageMimeType ?: "image/jpeg"
                                 } else "image/jpeg"
                                 val b64 = Base64.encodeToString(safeBytes, Base64.NO_WRAP)
-                                messagesArray.put(JSONObject().apply {
+                                toolResultImageMessages += JSONObject().apply {
                                     put("role", "user")
                                     put("content", JSONArray().apply {
                                         put(JSONObject().apply {
@@ -291,9 +312,12 @@ internal class OpenAIRequestBodies(
                                             })
                                         })
                                     })
-                                })
+                                }
                             }
                         }
+                        // [GH#293/#352] All tool replies first, then the
+                        // image carriers — never interleaved.
+                        toolResultImageMessages.forEach { messagesArray.put(it) }
                         // T132: emit text + image_url parts as a structured user
                         // message. The previous structured-contentParts branch
                         // dropped AgentContentPart.ImageData entirely — only the
@@ -453,7 +477,23 @@ internal class OpenAIRequestBodies(
         // "Duplicate value for tool_call_id ... in message[N]" whenever
         // any id repeats across the full messages array.
         globallyDedupeToolCallIds(messagesArray)
-        body.put("messages", messagesArray)
+        // [GH#222/#293/#352/#382] Last gate before the provider validates:
+        // drop orphan/duplicate `role:"tool"` replies, close any assistant
+        // `tool_calls` block that lost its replies, and refuse malformed
+        // calls. Logged because a silent repair here used to leave no trace
+        // of why a session had started "working again".
+        val pairing = ChatToolPairSanitizer.sanitize(messagesArray)
+        if (pairing.changed) {
+            android.util.Log.w(
+                "OpenAIProvider",
+                "[sanitize-chat-tool-pairing] droppedOrphanResults=" +
+                    "${pairing.droppedOrphanResults} droppedDuplicateResults=" +
+                    "${pairing.droppedDuplicateResults} insertedMissingResults=" +
+                    "${pairing.insertedMissingResults} droppedMalformedCalls=" +
+                    "${pairing.droppedMalformedCalls}",
+            )
+        }
+        body.put("messages", pairing.messages)
 
         // [T-android-model-use-passthrough-mode GH#72] Merge user-supplied extra
         // body fields verbatim (no OpenAI→native conversion — callers own the
@@ -574,6 +614,10 @@ internal class OpenAIRequestBodies(
             // Minis UA here: the ChatGPT OAuth backend validates the
             // client identity against this header.
             builder.applyUserAgentOverride(host.customUserAgent, defaultUserAgent = null)
+            // [T-codex-client-fingerprint] 可选：把上面那组 hand-rolled 头补齐
+            // （session-id / thread-id / x-codex-window-id / x-codex-app-version /
+            // x-codex-turn-metadata）。默认关闭时上面那段字节不变。
+            applyCodexFingerprintHeaders(builder)
             return builder.build()
         }
 
@@ -621,8 +665,52 @@ internal class OpenAIRequestBodies(
         // /responses (this builder serves both). Applied after extraHeaders
         // so the per-provider override wins. null/blank → default UA.
         builder.applyUserAgentOverride(host.customUserAgent)
+        // [T-codex-client-fingerprint] Opt-in: send Codex-official client
+        // identity so codex_cli_only relays accept the request. Runs AFTER
+        // applyUserAgentOverride so the Codex UA wins over the branded default
+        // (a user-supplied customUserAgent still takes precedence inside).
+        applyCodexFingerprintHeaders(builder)
         return builder.build()
     }
+
+    /**
+     * [T-codex-client-fingerprint] 给 builder 打上官方 Codex 客户端身份头。
+     *
+     * 只在 `host.codexClientFingerprintEnabled` 打开时生效，所以未开启的实例
+     * 出站字节与之前完全一致。身份按 provider 实例 id 确定性派生：同一实例重启
+     * 后得到同一组 installation/session ID，不会因重启就换一个“新客户端”。
+     *
+     * 头顺序按 [CodexFingerprint.headers] 的顺序逐个 header() 写入，因为顺序
+     * 本身在严格风控侧可观测。
+     */
+    private fun applyCodexFingerprintHeaders(builder: Request.Builder) {
+        if (!host.codexClientFingerprintEnabled) return
+        val identity = codexIdentity() ?: return
+        val profile = CodexFingerprint.DEFAULT_PROFILE
+        for ((name, value) in CodexFingerprint.headers(
+            identity = identity,
+            version = host.codexClientVersion,
+            profile = profile,
+           // 官方 CLI 直连用 text/event-stream；中转的兼容层两者都要，否则被当非法
+            accept = if (host.isOAuth) "text/event-stream" else "application/json, text/event-stream",
+        )) {
+            builder.header(name, value)
+        }
+        // Codex 客户端 UA 与 originator 恒等：若用户没设自定义 UA，这里再压一次，
+        // 保它不被上游的 applyUserAgentOverride 默认值覆盖。
+        if (host.customUserAgent.isNullOrBlank()) {
+            builder.header("User-Agent", profile.userAgent(host.codexClientVersion))
+        }
+    }
+
+    /** 每个 provider 实例一份稳定身份；lazy 保证一次进程只算一次。 */
+    private val cachedCodexIdentity: CodexFingerprint.Identity by lazy {
+        CodexFingerprint.newIdentity(
+            CodexFingerprint.seedFor(host.thinkingRuleInstanceId, host.model.id),
+        )
+    }
+
+    private fun codexIdentity(): CodexFingerprint.Identity? = cachedCodexIdentity
 
     /**
      * [T-android-xhigh-effort-clamp] Clamp the reasoning-effort string for
@@ -667,6 +755,10 @@ internal class OpenAIRequestBodies(
             instanceId = host.thinkingRuleInstanceId,
             supportsReasoning = host.model.supportsReasoning,
             declaredEffortValues = host.model.reasoningEffortValues,
+            // [T-thinking-ultra-manual] Folded operator ceiling — a
+            // picker-selected ULTRA wires the literal tier: the manual
+            // override IS the operator's vocabulary assertion.
+            ceilingOverride = host.model.maxThinkingLevel,
             budgetTokensMin = host.model.budgetTokensMin,
             budgetTokensMax = host.model.budgetTokensMax,
             // [OpenMinis#163] null (catalog silent) must read as false here —
@@ -831,10 +923,18 @@ internal class OpenAIRequestBodies(
         // and would send xhigh too. MiMo-2.5/Agnes normally use Chat Completions
         // (the reported 400/422), but a user could flip useResponsesAPI on, so
         // guard it here as well — only xhigh for those two families is affected.
-        // [T-android-thinking-level-arch] `thinkingLevel` is already clamped by
-        // LLMProvider.streamMessage/sendMessage before reaching here.
+        // [T-android-thinking-level-arch] Pre-clamped by LLMProvider — that
+        // clamp is override-aware since the ULTRA-manual fix, so a manual-
+        // ULTRA ceiling arrives here as ULTRA. [T-thinking-ultra-declared]
+        // [T-thinking-ultra-manual] Second injection site outside the
+        // resolver: shared rule — declared OR manually-asserted "ultra" gets
+        // the literal; only vocabulary-less models fold to "max".
         val effort = if (thinkingLevel.isEnabled) {
-            mapThinkingLevelToResponsesEffort(thinkingLevel)?.let { clampEffortForModel(it) }
+            ThinkingEffort.effortOrDeclaredUltra(
+                thinkingLevel,
+                host.model.reasoningEffortValues,
+                host.model.maxThinkingLevel,
+            ).let { clampEffortForModel(it) }
         } else null
         when {
             // [T-android-mistral-reasoning-422] Mistral rejects the reasoning
@@ -1202,108 +1302,14 @@ internal class OpenAIRequestBodies(
         // chat-completions builder. Skipped for Codex OAuth inside mergeChatExtraBody.
         mergeChatExtraBody(body)
 
+        // [T-codex-client-fingerprint] client_metadata 是 Responses API 的合法
+        // 字段，中转站的引擎指纹校验会读 client_metadata.x-codex-window-id /
+        // x-codex-installation-id。只在这一条路径注入：chat/completions 带未知
+        // 顶层字段会被严格后端 400，而那边的身份已经由请求头承担。
+        if (host.codexClientFingerprintEnabled) {
+            CodexFingerprint.applyToBody(body, cachedCodexIdentity)
+        }
+
         return body
     }
-
-    private fun splitResponsesAPIIds(combined: String): Pair<String, String?> {
-        val sep = combined.indexOf('|')
-        return if (sep < 0) combined to null
-        else combined.substring(0, sep) to combined.substring(sep + 1)
-    }
-
-    /** Responses-API ids must be ≤64 chars; truncate defensively to avoid 400s. */
-    private fun capResponsesId(id: String): String =
-        if (id.length <= 64) id else id.substring(0, 64)
-
-    /**
-     * [T-android-tool-call-id-too-long] Chat-Completions `tool_calls[].id` /
-     * `tool_call_id` must be ≤64 chars — OpenAI-compatible endpoints reject longer
-     * ids with a 400 ("string too long. Expected a string with maximum length 64").
-     * Two ways an id gets over 64 here:
-     *   - a Responses-origin history turn stores the combined "call_…|fc_…" id
-     *     (splitResponsesAPIIds' form) which is replayed verbatim on a Chat
-     *     Completions request;
-     *   - memory-tool / synthetic ids that are long by construction.
-     * We keep only the call_-id half (before any '|') and, if still >64, replace
-     * it with a deterministic SHA-256-derived id. Determinism matters: the SAME
-     * raw id must map to the SAME capped id so the assistant tool_call and its
-     * matching tool result still pair up (a mismatch is its own 400). The
-     * downstream dedupe pass then guarantees uniqueness within the request.
-     */
-    private fun capChatToolCallId(id: String): String {
-        val callHalf = id.substringBefore('|')
-        if (callHalf.length <= 64) return callHalf
-        val digest = java.security.MessageDigest.getInstance("SHA-256")
-            .digest(callHalf.toByteArray(Charsets.UTF_8))
-        val hex = digest.joinToString("") { "%02x".format(it) }
-        // "call_" + 56 hex chars = 61 chars, safely under 64 and clearly a call id.
-        return "call_${hex.take(56)}"
-    }
-
-    /**
-     * Derives a stable per-conversation `prompt_cache_key` for the Responses
-     * API. Mirrors iOS derivePromptCacheKey (OpenAIAgentProvider.swift:515).
-     * The first user message is re-sent verbatim on every turn → its hash is
-     * stable across turns within the same chat, distinct between chats.
-     * Falls back to a random UUID when there is no user text yet (first
-     * turn with attachments-only input, etc.).
-     */
-    private fun derivePromptCacheKey(messages: List<LLMMessage>): String {
-        for (msg in messages) {
-            if (msg.role != LLMMessage.Role.USER) continue
-            val text = msg.contentParts
-                .filterIsInstance<AgentContentPart.Text>()
-                .joinToString("") { it.text }
-                .ifEmpty { msg.content }
-            if (text.isNotEmpty()) {
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(text.toByteArray(Charsets.UTF_8))
-                val hex = digest.joinToString("") { "%02x".format(it) }
-                return "minis-${hex.take(32)}"
-            }
-        }
-        return "minis-${java.util.UUID.randomUUID().toString().lowercase()}"
-    }
-
-    /**
-     * Map ThinkingLevel → Responses API `reasoning.effort` string. Mirrors
-     * iOS reasoningEffort(for:level:) (OpenAIAgentProvider.swift:531).
-     * Returns null when the level is OFF — caller decides whether to omit
-     * the `reasoning` field entirely or fall back to "low" (Codex requires it).
-     */
-    private fun mapThinkingLevelToResponsesEffort(level: ThinkingLevel): String? = when (level) {
-        ThinkingLevel.OFF -> null
-        ThinkingLevel.LOW -> "low"
-        ThinkingLevel.MEDIUM -> "medium"
-        ThinkingLevel.HIGH -> "high"
-        ThinkingLevel.XHIGH -> "xhigh"
-        // [T-android-thinking-level-arch] MAX → "max"; ULTRA also → "max" —
-        // the Responses/Codex endpoint rejects a literal "ultra"; ultra is a
-        // client-side "Max + orchestration" concept only (mirrors iOS).
-        ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
-    }
-
-    /**
-     * Responses-API tool shape — flat {type, name, description, parameters},
-     * NOT the Chat Completions wrapper {type, function:{...}}. Mirrors iOS
-     * convertToolsResponsesAPI (OpenAIAgentProvider.swift:977).
-     */
-    private fun AgentToolDefinition.toResponsesAPIJson(): JSONObject {
-        val props = JSONObject()
-        for ((key, param) in parameters) {
-            props.put(key, param.toJson())
-        }
-        val params = JSONObject().apply {
-            put("type", "object")
-            put("properties", props)
-            if (required.isNotEmpty()) put("required", JSONArray(required))
-        }
-        return JSONObject().apply {
-            put("type", "function")
-            put("name", name)
-            put("description", description)
-            put("parameters", params)
-        }
-    }
-
 }

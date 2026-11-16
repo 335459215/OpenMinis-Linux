@@ -15,9 +15,14 @@ import android.content.SharedPreferences
  *   - true (the default): crossing the compact threshold before a send
  *     compacts silently and then sends.
  *   - false: the same crossing PROMPTS the user.
- * Threshold percent defaults to 75 (compact while there is still headroom;
- * the old 90% default effectively waited until the window was nearly full)
- * and is user-configurable.
+ * Threshold percent defaults to 75 and is user-configurable.
+ *
+ * [GH#74] The default moved 90 → 75: at 90 a long tool-heavy turn can cross the
+ * provider's real ceiling between the pre-send check and the next iteration,
+ * which is exactly the `context_length_exceeded` case the loop then has to
+ * recover from. 75 leaves room for the summary + re-appended recent turns
+ * before the hard limit. Explicit per-model overrides (and previously saved
+ * global values) still win; only the untouched default changed.
  *
  * Global rather than per-session on purpose: iOS persists it so "future
  * conversations inherit it", which is the whole point of the one-tap opt-in

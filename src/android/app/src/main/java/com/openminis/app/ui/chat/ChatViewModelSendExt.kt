@@ -50,9 +50,47 @@ internal fun ChatViewModel.sendMessage(
     // here — clearing at this point would strip the content out from under
     // a send that then bails on the context-check paths below.
     val trimmed = text.trim()
-    // While streaming, enqueue instead of silently dropping (iOS: send vs enqueuePrompt).
+    // [T-agent-steering] While streaming, offer the text to the pi steering queue
+    // FIRST: it lands as a real user message at the NEXT turn boundary and never
+    // cuts the current turn (drainSteeringIntoRun consumes it inside the live
+    // run). enqueuePrompt — the iOS-parity INTERRUPT queue — is only the
+    // fallback for the tiny race where the stream ended between the caller's
+    // check and steerPrompt's own guard, and the only path for attachment
+    // sends: steering carries text only, and an image the user just picked
+    // must not be silently dropped. Every user-text entry funnels here
+    // (composer, overlay bus, voice, headless), so no caller keeps its own
+    // streaming-dispatch branch.
+    //
+    // [T-send-mode-semantics] The offer is gated on the user's 发送方式: only
+    // 插话 (INTERRUPT) may hand the text to the RUNNING turn. 排队 stays a
+    // plain queue item (the post-loop drain owns it) and 自动 rides the queue
+    // tagged non-steer so the post-tool boundary picks it up — offering those
+    // to the steering queue would make all three modes behave like 插话.
     if (_isStreaming.value && !forceImmediate) {
-        enqueuePrompt(text)
+        val steerAllowed =
+            com.openminis.app.data.ChatSendModePrefs.mode() ==
+                com.openminis.app.data.ChatSendModePrefs.MODE_INTERRUPT
+        if (_attachments.value.isEmpty() && steerAllowed) {
+            // [T-agent-steering-dedupe] Gate the offer with the SAME text
+            // fingerprint the enqueue path uses — the offer used to bypass the
+            // gate entirely, so a streaming double-tap delivered the text twice.
+            // Check-only first (no record): the fingerprint is committed only
+            // when the offer is ACCEPTED, so if steerPrompt loses the
+            // end-of-stream race below, the enqueue fallback still meets an
+            // unrecorded fingerprint and its own atomic gate stays the sole
+            // record point on that path (no mis-reject of a legitimate send).
+            if (requestDedupeSeen(activeSessionId, trimmed)) {
+                notifyDuplicateSendDropped()
+                return
+            }
+            if (steerPrompt(text)) {
+                requestDedupeRecord(activeSessionId, trimmed)
+                return
+            }
+            // steerPrompt returned false: the stream ended between the funnel's
+            // check and the offer's own guard — fall through to enqueuePrompt.
+        }
+        enqueuePrompt(text, steer = steerAllowed)
         return
     }
     // T180: allow attachments-only sends (no caption). Mirrors iOS, where
@@ -398,6 +436,15 @@ internal fun ChatViewModel.sendMessage(
             ))
             // [T-context-ring] Refresh after user appends.
             refreshContextUsage()
+            // [T-memory-embedding-wiring] The user row is in the window, no
+            // assistant message exists for this turn yet — the state the first
+            // request's live-recall render will read. Fire the semantic prefetch
+            // NOW so the embeddings request overlaps the OAuth/prompt-assembly
+            // work below and the first turn's render hits the engine's cache.
+            // Fire-and-forget: silent, non-blocking, no-op when the feature is
+            // off (default). liveRecallInput() is the SAME construction the
+            // render uses, so the cache key matches.
+            prefetchSemanticRecall()
         }
 
         // Refresh OAuth token if needed before sending (mirrors iOS validAccessToken)
@@ -432,13 +479,10 @@ internal fun ChatViewModel.sendMessage(
         // [P0-5] Prompt assembly reloads skills/MCP repos from disk and reads
         // memory fragments — move it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; the fields it writes
-        // (personaHistorySteering, systemPromptStablePrefixLen) are @Volatile.
+        // systemPromptStablePrefixLen is @Volatile.
         val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-            val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
-            if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
-            else "$prefix\n\n${baseSystemPrompt ?: ""}"
-        } else baseSystemPrompt
+        val systemPrompt =
+            wrapSystemPromptForOAuth(provider, baseSystemPrompt)
 
         // Start agent loop with fallback. _isStreaming was set synchronously at top.
         streamLaunched = true

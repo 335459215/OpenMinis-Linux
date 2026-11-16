@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import kotlinx.serialization.json.Json
@@ -8,7 +9,44 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-internal fun ChatViewModel.buildSystemPrompt(): String? {
+/**
+ * The plain system prompt for every request-side caller (send / retry / resume /
+ * rerun-tail / queue-drain). Delegates to [buildSystemPromptWithSections] and
+ * keeps only the prompt — byte-identical behaviour for these callers, zero
+ * awareness of the sections payload.
+ */
+internal fun ChatViewModel.buildSystemPrompt(): String? = buildSystemPromptWithSections().first
+
+/**
+ * [#25][T-context-breakdown-race] System prompt build that carries the
+ * per-section texts of THIS build in its return value instead of publishing
+ * them into a process-global registry.
+ *
+ * The old side channel (the global ContextBreakdownRegistry.lastSystemSections,
+ * written
+ * mid-build and read by the context-usage sheet after the call) had a
+ * read-side race: `buildSystemPrompt` for session A and the sheet's
+ * `buildContextBreakdown` for session B could interleave, and B would measure
+ * A's sections; if the build threw, the sheet silently measured stale sections
+ * from an arbitrary earlier build. Returning the sections from the call that
+ * produced them removes both failure modes with no registry to keep coherent.
+ *
+ * The prompt itself and every side effect (stable-prefix length, persona
+ * steering, assembly snapshot) are unchanged — [buildSystemPrompt] callers see
+ * byte-identical behaviour.
+ */
+internal fun ChatViewModel.buildSystemPromptWithSections(
+    /**
+     * [#25-publish-gate] Side-effect gate for the VM-level
+     * `systemPromptStablePrefixLen`. The Token Usage sheet measures with the
+     * SAME builder — without this gate its build (possibly against NEWER
+     * skill/memory state than the in-flight run's) overwrites the boundary
+     * the run loop still consumes, pointing the Anthropic cache_control
+     * breakpoint into per-turn content: full-prompt cache miss every turn
+     * for the rest of the run.
+     */
+    publishStablePrefix: Boolean = true,
+): Pair<String, List<Pair<ContextBlockKey, String>>> {
     // Cache-friendly layout: keep `base` byte-stable by stripping out anything
     // that varies per request, then append the per-turn / per-day fragments at
     // the very end. OpenAI / DeepSeek prompt caching is prefix-based, so the
@@ -18,11 +56,12 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
     // follow-up could land on a different minute and pay full ingestion.
     //
     // The prompt therefore has exactly one stable/dynamic boundary: everything
-    // up to and including the daily-memory fragment is byte-stable for a
-    // session within a day; everything after it (WorldBook keyword hits,
-    // scene-classified learned prefs, FTS recall keyed on the latest user
-    // message, runtime context) varies per turn or per day. The boundary offset
-    // is published as [ChatViewModel.systemPromptStablePrefixLen] so
+    // up to and including the STANDING rules (project AGENTS.md / session
+    // GLOBAL.md / app-global) is byte-stable for a session within a day;
+    // everything after it (daily memory window, WorldBook keyword hits,
+    // scene-classified learned prefs, StandingContract tail re-assertion,
+    // runtime context) varies per turn or per day. The boundary offset is
+    // published as [ChatViewModel.systemPromptStablePrefixLen] so
     // AnthropicProvider can put its system cache_control breakpoint exactly
     // there instead of at the end of a tail that changes every turn.
     val today = java.time.LocalDate.now()
@@ -70,9 +109,16 @@ internal fun ChatViewModel.buildSystemPrompt(): String? {
         context,
         recentWorldBookText(),
     )
-    personaHistorySteering = identitySection.contains(
-        com.openminis.app.agent.SoulStore.PERSONALITY_HEADER_MARKER,
-    )
+    // [T-persona-stack-once] Personality lives only in the identity section.
+    // Rewriting the latest user turn (personaHistorySteering) put a second
+    // BINDING order on top of the user's task; that stays forbidden. The
+    // dynamic tail is a different surface — a per-request system-prompt
+    // suffix, rebuilt every request, never touching user content — and the
+    // identity section alone is not enough in long sessions: measured on
+    // 2026-11-14 (context-assembly snapshot of a 17k-record chat), the
+    // persona sits at char 0 of an ~87k prompt with the whole transcript
+    // after it, and adherence decays exactly there. The tail slot
+    // re-asserts the contract without stacking anything on user turns.
     // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
     // gate: when memory is disabled for this session, replace the
     // "memory_write / memory_get" tool bullets and the "Memory system:"
@@ -138,7 +184,16 @@ Memory system (currently DISABLED):
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
     }
+    // [T-tool-prompt-fragments] Dynamic mirror of the makeAgentTools gates:
+    // a fragment whose tool is not registered this turn must not render — an
+    // announced tool the model cannot call is the dead instruction this
+    // registry and check_announced_tools.py exist to prevent.
+    val unregisteredFragmentKeys = ToolPromptFragments.allFragments
+        .map { it.key }
+        .filterNot { key -> key in agentTools.mapTo(HashSet()) { it.name } }
+        .toSet()
     val base = identitySection + """[T-no-restate] Continuity rule: never open a reply by restating the previous turn's conclusion, findings, or plan. The transcript already holds them and the user has read them. Continue from where the work actually stands — next action, next result, or the answer. A reply that repeats what was just said is treated as a defect, not as politeness.
+
 
 When the active session has a persistent Goal, call update_goal(op=get) before deciding whether the current user request advances it. Continue automatically only while it remains active; respect pause, completion, blocked state, and token budget.
 
@@ -157,6 +212,7 @@ Available tools:
 - read_session: Load a past session transcript by session_id (paginated, 600 chars/message).
 - ask_user_question: Pose 1–4 structured multiple-choice questions when a choice is genuinely ambiguous. Do not use it to ask permission for routine tool calls.
 - cronjob: Create/list/remove AlarmManager tasks. Schedules: any duration (90s, 7m, 45m, 3h, 1h30m) or every N (every 15m). Prefer this over crontab/at.
+${ToolPromptFragments.render(excluded = unregisteredFragmentKeys)}
 - browser_use: Web browsing (navigate, screenshot, click, type, get_text, scroll, scroll_and_collect, get_readable, get_backbone, fetch, etc.). Starts with a desktop Chrome user agent. Use screenshot to see the page.
   当 browser_use 触达 Google 登录 / OAuth 页（accounts.google.com、signin.google.com、myaccount.google.com、oauth2.googleapis.com 等）或网页返回 "disallowed_useragent" / 403 包含 "browser is not secure" 字样时，**不要重试或尝试登录** — Google 永久禁止 in-app WebView 完成登录，重试只会浪费 turn。改为告诉用户："此页面需要在系统 Chrome 完成登录" 并给出可点击的 Markdown link [在 Chrome 中打开](https://accounts.google.com/...)。点该 link 时 app 会跳出 Custom Tab；用户在 Chrome 完成操作后，请他**把所需结果（邮件正文 / 文档摘要 / 表格数据）粘贴回 chat**，你再继续帮他处理。这是 Android 平台限制，不是 bug。${toolListMemoryBullets}${toolListSubAgentBullet}
 
@@ -202,11 +258,14 @@ File creation guidelines:
 - File search: when looking for user files, do NOT scan the whole filesystem. Search under /var/minis/ first (workspace/attachments/shared for the current session, mounts/* for user-provided external folders). Only widen the scope if the file is clearly not under /var/minis/.
 
 Tool call style:
-- Action discipline: while executing a task, do NOT emit message text between tool calls. Your `tool_title` already tells the user what each call does; interstitial prose between calls costs a full reasoning pass, interrupts the work, and pushes the tool cards down — codex-class harnesses call the next tool directly and so do you. The reasoning channel is where your thinking belongs; the message channel is for the user.
+- Every tool call MUST set the `tool_title` parameter when the tool schema exposes it: a concise 5-10 word summary of what this call does, in the user's language (e.g. '查看现有源码目录', '读技能避坑说明'). It is the human-readable line shown on the tool card while it runs and in the session history. Never pass the bare tool name or a truncated path as `tool_title`; when a tool schema has no `tool_title`, the app derives a readable label from the complete arguments.
+- Reasoning stays FULL: action discipline governs ONLY the message channel, never your thinking. Before EVERY tool call, reason through the step in your reasoning channel at the user's chosen effort — what the goal needs, what the last result means, what to verify, what to do next — then issue the call. Think → call; think → call. Skipping reasoning to save time produces wrong tool calls, which costs far more than it saves.
+- Do NOT emit message text between tool calls: your `tool_title` already tells the user what each call does, and interstitial prose pushes the tool cards down. The visible silence is by design — the thinking still happens, it just never lands in the message channel.
 - Emit message text only when: you completed a milestone and are reporting it, you need to ask the user something, or the task is done and you are delivering the final answer.
-- Host `<system-reminder>` notes are bookkeeping, not prompts — never acknowledge, summarize, or narrate about them; continue with the next tool call.
+- Host `<system-reminder>` notes are bookkeeping, not prompts — never acknowledge or narrate about them, but DO reason over any new information they carry, then continue with the next tool call.
 - When a tool exists for an action, use it directly instead of explaining what you plan to do or asking the user to confirm.
 - Use reasonable defaults and contextual inference to fill in missing details (e.g. 'tonight' means today, 'remind me' implies creating a reminder immediately). Only ask for clarification when genuinely ambiguous — then call `ask_user_question` (structured choices) instead of a free-form chat question.
+
 
 Tone and style:
 - Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.
@@ -246,7 +305,7 @@ Environment variables:
 - Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](minis://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, plugins, mcp, multi-agent (sub-agent slots, thinking depth, AI group discussion), memory, storage, shared-folders (Shared Folders: /var/minis/{shared,skills}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors; includes Ubuntu build profiles and China mirror switching), tool-limits. Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the minis:// section above: only /var/minis resource URLs may go to browser_use).
 - To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}
 
-Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
+Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)""" + (parallelToolCallsPrompt(agentTools)?.let { "\n\n" + it } ?: "")
 
     // Match iOS order exactly: skills → global memory → recent daily memory.
     // See ios/Agent/Chat/AIChatViewModel.swift:4375-4387. Each fragment is
@@ -256,8 +315,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // the file_write hook below) becomes visible on the very next user
     // turn instead of "after kill app". Cheap: loadAll is a SQLite
     // SELECT + listFiles, no network.
-    skillRepository?.reloadFromDisk()
-    val skillFragment = skillRepository?.skillPromptFragment(activeSessionId)
+    // [T-skill-manifest] pi skills.ts:358 progressive loading (default ON, SkillPromptPrefs); OFF = legacy one-line fragment byte-identical.
+    val skillFragment = skillRepository?.let { it.reloadFromDisk(); com.openminis.app.data.repository.SkillManifest.sessionFragment(it, activeSessionId, context) }
     // [T-mcp-integration-android] Re-read servers.json (the CLI / file
     // browser may have changed it out-of-band) then build the Top-20
     // enabled-MCP disclosure, injected right after the skills fragment.
@@ -307,7 +366,16 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val sessionGlobal = if ("session-global" in keptInstructionKeys) {
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
-    val dailyFragments = sessionMem?.loadRecentDailyFragments().orEmpty()
+    // [T-daily-recall-gate] Resident daily injection is today's log + the
+    // MemoryIndex TOC; older days return only on relevance. The gate query is
+    // the same live-recall fold the per-turn block uses (latest user text +
+    // assistant tail) — a pure state read, zero network, zero engine calls.
+    // A fold too short to query (liveRecallInput null) falls back to the
+    // DIAG_TASK_KEYWORDS vocabulary inside the gate.
+    val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
+    val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
+    val dailyFragments = dailyInjection?.fragments.orEmpty()
+    residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
@@ -342,24 +410,38 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             daily = dailyFragments,
             header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
         ) { excludeDates ->
-            com.openminis.app.data.repository.MemoryIndex.fragment(
+            val toc = com.openminis.app.data.repository.MemoryIndex.fragment(
                 sessionDir = com.openminis.app.sandbox.SessionWorkspace
                     .memoryDir(context.filesDir, memorySessionId),
                 sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
                 excludeDates = excludeDates,
             )
+            // [T-daily-recall-gate] The budget note rides AFTER the index rows
+            // (same block, next line) so the model sees why older notes are
+            // missing and how to fetch them. Non-null only when the hard
+            // budget actually dropped days; those days are also TOC rows, so
+            // nothing becomes invisible.
+            listOfNotNull(toc, dailyInjection?.budgetNote)
+                .joinToString("\n")
+                .takeIf { it.isNotBlank() }
         }
     } else null
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
     // own rules. Null when memory is off or nothing was admitted.
     val memoryAllocation = memoryAssembly?.allocation
-    val globalMemoryFragment = memoryAllocation?.rendered
+    // [GH#357] Split the block: standing rules stay in the byte-stable head,
+    // while the daily-log window (+TOC) moves to the dynamic tail. A single
+    // memory_write rewrites a daily log, and before this split that was a
+    // cache-prefix miss for the whole prompt on the following turn.
+    val memoryBlocks = com.openminis.app.data.repository.MemoryBlockSplit.split(memoryAllocation)
+    val globalMemoryFragment = memoryBlocks.stable
+    val dailyMemoryFragment = memoryBlocks.transient
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
     // [T-memory-recall-live] Recall moved out of the run-level system prompt and
-    // into per-turn injection (see [liveRecallPrompt]). Computed once per RUN, the
+    // into a one-shot note (see [newRecallReminder]). Computed once per RUN, the
     // query was the last user message — which does not change during a long tool
     // loop — so the fragment stayed frozen for up to maxTurns while the subtask
     // moved on. Null here keeps the dynamic-tail assembly byte-shape unchanged.
@@ -382,47 +464,76 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "worldBookChars=${worldBookFragment.length} " +
             "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
             "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
+            // [T-daily-recall-gate] D2 honesty: how many older daily files the
+            // gate/budget kept out of this build, and their full-text chars —
+            // the kept= list above lists only what was truly injected.
+            "dailyOmitted=${dailyInjection?.omittedCount ?: 0}(${dailyInjection?.omittedChars ?: 0}c) " +
             "globalChars=${globalMemoryFragment?.length ?: 0} " +
             "recall=perTurn",
     )
 
-    var stablePrefixLen = -1
-    val prompt = buildString {
-        append(base)
-        if (skillFragment != null) {
-            append("\n\n")
-            append(skillFragment)
+    // [#25] Capture the assembled tail in a local so the context-usage
+    // breakdown can publish the exact string appended below (the call is
+    // pure, so hoisting it out of buildString changes nothing).
+    val dynamicTail = assembleDynamicTail(
+        worldBookFragment = worldBookFragment,
+        learnedPrefsFragment = learnedPrefsFragment,
+        recalledMemoryFragment = recalledMemoryFragment,
+        runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
+        personalityReminder = StandingContract.block(
+            com.openminis.app.agent.SoulStore.cachedMetadata.value.name,
+            // [T-standing-contract-rules-line] Assert binding-ness ONLY for the
+            // rule blocks this build actually injected (dedupe may have kept
+            // just the narrowest scope; a disabled memory gate injects none).
+            hasSessionRules = "session-global" in keptInstructionKeys,
+            hasGlobalRules = "app-global" in keptInstructionKeys,
+            hasProjectRules = "project-rules" in keptInstructionKeys,
+        ),
+        taskAnchor = taskAnchorFragment(),
+        // [T-daily-memory-window] The transient block (recent daily logs + TOC
+        // + budget note) is COMPUTED above (memoryBlocks.transient) but the
+        // call stopped passing it (#325 introduced the split; the parameter
+        // was never wired) — every prompt assembled since shipped without the
+        // daily memory window.
+        dailyMemoryFragment = dailyMemoryFragment,
+    )
+    // [T-prompt-sections] pi coding-agent src/core/system-prompt.ts:128-228: the assembly
+    // is expressed as named sections; join() is byte-identical to the previous buildString
+    // (pinned by PromptSectionsGoldenTest) and stablePrefixLength() derives the boundary
+    // published below from the SAME list that produced the prompt, so they cannot drift.
+    val promptSections = PromptSections.buildSections(
+        base = base,
+        skillFragment = skillFragment,
+        mcpFragment = mcpFragment,
+        globalMemoryFragment = globalMemoryFragment,
+        dynamicTail = dynamicTail,
+    )
+    val prompt = PromptSections.join(promptSections)
+    if (publishStablePrefix) {
+        systemPromptStablePrefixLen = PromptSections.stablePrefixLength(promptSections)
+        PromptSections.publishAndDiff(activeSessionId, promptSections)?.let {
+            AppLogger.info("PromptSections", it)
         }
-        if (mcpFragment != null) {
-            append("\n\n")
-            append(mcpFragment)
-        }
-        if (globalMemoryFragment != null) {
-            append("\n\n")
-            append(globalMemoryFragment)
-        }
-        // ---- stable / dynamic boundary: see the header comment ----
-        stablePrefixLen = length
-        append(
-            assembleDynamicTail(
-                worldBookFragment = worldBookFragment,
-                learnedPrefsFragment = learnedPrefsFragment,
-                recalledMemoryFragment = recalledMemoryFragment,
-                runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-                personalityReminder = if (
-                    identitySection.contains(
-                        com.openminis.app.agent.SoulStore.PERSONALITY_HEADER_MARKER,
-                    )
-                ) {
-                    PERSONALITY_REMINDER
-                } else {
-                    null
-                },
-                taskAnchor = taskAnchorFragment(),
-            ),
-        )
     }
-    systemPromptStablePrefixLen = stablePrefixLen
+    // [#25][T-context-breakdown-race] The per-block sections of THIS build are
+    // returned WITH the prompt instead of being published into a global
+    // registry. Same strings, same order as the appends above — a size mirror
+    // the model never sees; the sheet measures exactly what it asked to build,
+    // so a concurrent session's build can never bleed into its numbers.
+    val sections = listOfNotNull(
+        ContextBlockKey.SYSTEM_TOOLS to base,
+        listOfNotNull(skillFragment, mcpFragment)
+            .filter { it.isNotBlank() }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n")
+            ?.let { ContextBlockKey.SKILLS_MCPS to it },
+        globalMemoryFragment
+            ?.takeIf { it.isNotBlank() }
+            ?.let { ContextBlockKey.MEMORY to it },
+        dynamicTail
+            .takeIf { it.isNotBlank() }
+            ?.let { ContextBlockKey.RUNTIME_TAIL to it },
+    )
     // [T-context-assembly-preview] 每次组装落快照：构成明细+全文，
     // 调试"模型实际收到了什么"直接看 offloads/context-assembly/latest.md。
     com.openminis.app.agent.ContextAssemblySnapshot.capture(
@@ -430,14 +541,15 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         sessionId,
         context,
     )
-    return prompt
+    return prompt to sections
 }
 
 /**
  * The per-turn-varying tail of the system prompt, as a pure function so the
  * ordering contract is testable without a ViewModel: WorldBook first among the
- * dynamic fragments (it is lore the model should read as context), runtime
- * context last, absent fragments leaving no separator behind.
+ * dynamic fragments (it is lore the model should read as context), then the
+ * StandingContract re-assertion last (persona + standing rules recency —
+ * see [StandingContract]), absent fragments leaving no separator behind.
  *
  * [worldBookFragment] already carries its own leading blank line when
  * non-empty — that is WorldBook.injection's contract — so it is appended
@@ -499,82 +611,70 @@ internal object TaskAnchor {
     }
 }
 
-internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
-    anchorFromDb = _taskAnchorText.value,
-    firstUserInWindow = _messages.value
-        .firstOrNull { it.role == "user" && it.content.isNotBlank() }?.content,
-)
+/**
+ * [T-standing-contract-recency] Per-turn re-assertion of the standing
+ * contract (persona + standing-rules authority) in the dynamic tail.
+ * Measured on 2026-11-14 via the context-assembly snapshot of a 17k-record
+ * session: the persona sits at char 0 of an ~87k-char system prompt and the
+ * standing-rules block ~180 lines above the conversation start — after
+ * folding, the effective distance from both to the action point is the
+ * whole transcript. The head envelope already says STANDING; nothing at
+ * recency position re-asserted it, which is exactly the drift window.
+ * TaskAnchor proves tail re-assertion works for the task; this gives the
+ * persona and the standing rules the same treatment.
+ *
+ * [T-persona-stack-once] update: the once-only rule governs conversation
+ * TURNS (personaHistorySteering stays dead); the dynamic tail is the
+ * per-request system-prompt suffix — user content untouched, cache safe.
+ *
+ * Pure string logic, no Android imports — must stay testable on the pure
+ * JVM (same constraint as TaskAnchor).
+ */
+internal object StandingContract {
+    const val MAX_CHARS = 700
 
-internal fun assembleDynamicTail(
-    worldBookFragment: String,
-    learnedPrefsFragment: String?,
-    recalledMemoryFragment: String?,
-    runtimeContext: String,
-    personalityReminder: String?,
-    taskAnchor: String? = null,
-): String = buildString {
-    if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
-    if (learnedPrefsFragment != null) {
-        append("\n\n")
-        append(learnedPrefsFragment)
+    /**
+     * [T-standing-contract-rules-line] Lists ONLY the rule blocks actually
+     * present in this build (project AGENTS.md / session GLOBAL.md /
+     * app-global GLOBAL.md) — asserting binding-ness for blocks that were
+     * never injected is noise the model reads as pointing at nothing. Null
+     * when none exist: the caller then skips the rules line entirely.
+     */
+    fun rulesLine(hasSession: Boolean, hasGlobal: Boolean, hasProject: Boolean): String? {
+        val blocks = buildList {
+            if (hasSession) add("Session-scoped standing rules")
+            if (hasGlobal) add("Global standing rules (GLOBAL.md)")
+            if (hasProject) add("Project rules (AGENTS.md)")
+        }
+        if (blocks.isEmpty()) return null
+        val listed = blocks.joinToString(", the ", prefix = "the ", postfix = " blocks in this prompt")
+        return "Standing-rules reminder: $listed are BINDING instructions — " +
+            "re-read them before starting any multi-step or destructive action; " +
+            "the user's latest message still wins any conflict."
     }
-    if (recalledMemoryFragment != null && recalledMemoryFragment.isNotBlank()) {
-        append("\n\n")
-        append(recalledMemoryFragment)
+
+    fun personalityLine(soulName: String?): String {
+        val who = soulName?.trim()?.takeUnless { it.isEmpty() }
+        val subject = if (who != null) "the configured persona '$who'" else "the configured persona"
+        return "Persona reminder (SOUL.md): stay in $subject for every " +
+            "reply this session — its voice, greeting ritual, address style, and stance — " +
+            "even after long compactions, topic changes, or tool-heavy stretches. " +
+            "This reminder never expires mid-session."
     }
-    // [T-task-anchor] Ahead of the runtime context: the anchor is stable
-    // across turns (unlike the date line below it) and belongs with the
-    // other per-turn fragments, not in the stable prefix where one session's
-    // opening turn would invalidate the shared cache for every other turn.
-    if (taskAnchor != null && taskAnchor.isNotBlank()) {
-        append("\n\n")
-        append(taskAnchor)
-    }
-    append(runtimeContext)
-    if (personalityReminder != null) {
-        append("\n\n")
-        append(personalityReminder)
+
+    fun block(
+        soulName: String?,
+        hasSessionRules: Boolean = false,
+        hasGlobalRules: Boolean = false,
+        hasProjectRules: Boolean = false,
+        maxChars: Int = MAX_CHARS,
+    ): String {
+        val lines = buildList {
+            add(personalityLine(soulName))
+            rulesLine(hasSessionRules, hasGlobalRules, hasProjectRules)?.let { add(it) }
+        }
+        val block = lines.joinToString("\n\n")
+        if (block.length <= maxChars) return block
+        return block.take(maxChars).trimEnd() + "…"
     }
 }
-
-/**
- * The per-day suffix. Field order is part of the cache contract (date → tz →
- * lang → model count): reordering changes bytes after the stable prefix for no
-    * benefit.
- */
-internal fun renderRuntimeContext(
-    dateStr: String,
-    tzId: String,
-    lang: String,
-    modelUseCount: Int,
-): String =
-    "\n\nRuntime context:\n" +
-        "- Current date: $dateStr ($tzId)\n" +
-        "- Device language: $lang\n" +
-        "- minis-model-use models available: $modelUseCount"
-
-/**
- * [T-persona-anchor] Restated at the TAIL of the system prompt, not only at the
- * top.
- *
- * The persona block sits in the stable prefix. By the time a long session has
- * pushed tens of thousands of tokens of tool output through the window, that
- * block is far outside the model's attention; a reminder that only says "see
- * the block at the top" asks it to scroll — it does not restate anything, so
- * nothing pulls the voice back. Real symptom: after an accel/speed mode the
- * replies drift to a generic assistant voice and the per-sentence marker
- * disappears.
- *
- * So this tail copy carries the binding constraints itself. Keep it short: it
- * is re-sent every request and must stay cheaper than the drift it prevents.
- */
-internal const val PERSONALITY_REMINDER =
-    "Personality reminder (re-read before writing the reply):\n" +
-        "- The identity/persona block earlier in this prompt is BINDING for this turn. " +
-        "Earlier assistant replies in this transcript are history, not the current character: " +
-        "do not continue a generic assistant voice just because the transcript contains one.\n" +
-        "- Open every reply with the persona's required marker; a reply that drops it is malformed.\n" +
-        "- Stay in character for the whole turn, including tool use, status notes and error messages. " +
-        "A later, more specific user instruction changes the TASK, not the voice, " +
-        "unless the user explicitly asks you to leave character.\n" +
-        "- Do not restate the previous turn's conclusion: continue the work instead."

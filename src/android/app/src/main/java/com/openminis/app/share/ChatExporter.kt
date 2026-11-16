@@ -3,9 +3,11 @@ package com.openminis.app.share
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.openminis.app.R
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.fullBodyForCopy
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +23,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.OutputStreamWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -53,6 +58,13 @@ import java.util.zip.ZipOutputStream
 object ChatExporter {
 
     private const val BATCH_SIZE = 50
+
+/**
+ * [T-export-quiet-transcript] Cap for a body resolved from the offload store.
+ * Long sessions keep 50 KB+ bodies verbatim on disk; embedding all of them
+ * would produce a multi-MB export. The full text stays in the session.
+ */
+private const val MAX_EXPORT_BODY_CHARS = 2000
     private const val LOG_CATEGORY = "ChatExporter"
 
     sealed interface Progress {
@@ -68,7 +80,7 @@ object ChatExporter {
      * without re-reading the payload.
      */
     data class Summary(
-        val format: String,              // "json" | "text"
+        val format: String,              // "json" | "text" | "markdown"
         val messageCount: Int,
         val firstCreatedAt: Long?,       // ms, or null if empty
         val lastCreatedAt: Long?,
@@ -82,11 +94,11 @@ object ChatExporter {
     private val exportLock = Mutex()
 
     /**
-     * Stream-export [session] in [format] (`"json"` | `"text"`) and return
-     * a content [Uri] pointing at the zipped archive, suitable for
-     * [Intent.ACTION_SEND]. Throws on failure; caller's coroutine scope
-     * decides how to surface it. [Progress] is published to [progress] as
-     * batches are written.
+     * Stream-export [session] in [format] (`"json"` | `"text"` |
+     * `"markdown"`) and return a content [Uri] pointing at the zipped
+     * archive, suitable for [Intent.ACTION_SEND]. Throws on failure; the
+     * caller's coroutine scope decides how to surface it. [Progress] is
+     * published to [progress] as batches are written.
      */
     suspend fun exportToZip(
         context: Context,
@@ -97,8 +109,7 @@ object ChatExporter {
         com.openminis.app.data.body.ResourceLimits.SESSION_PREVIEW_BUDGET.toLong(),
     ) { withContext(Dispatchers.IO) {
         exportLock.withLock {
-            val isJson = format == "json"
-            val ext = if (isJson) "json" else "txt"
+            val ext = extensionFor(format)
             val stagingRoot = File(context.cacheDir, "export-staging")
             val workDir = File(stagingRoot, UUID.randomUUID().toString())
             if (!workDir.mkdirs() && !workDir.isDirectory) {
@@ -107,7 +118,7 @@ object ChatExporter {
 
             try {
                 val transcriptFile = File(workDir, "messages.$ext")
-                val summary = streamTranscript(repository, session, isJson, transcriptFile)
+                val summary = streamTranscript(context, repository, session, format, transcriptFile)
 
                 val metaFile = File(workDir, "session.json")
                 writeSessionMeta(metaFile, session, summary)
@@ -156,8 +167,7 @@ object ChatExporter {
             return@withContext exportToZip(context, sessions.first(), repository, format)
         }
         exportLock.withLock {
-            val isJson = format == "json"
-            val ext = if (isJson) "json" else "txt"
+            val ext = extensionFor(format)
             val stagingRoot = File(context.cacheDir, "export-staging")
             val workDir = File(stagingRoot, UUID.randomUUID().toString())
             if (!workDir.mkdirs() && !workDir.isDirectory) {
@@ -183,7 +193,7 @@ object ChatExporter {
                         val sessionDir = File(workDir, folder).apply { mkdirs() }
                         val transcriptFile = File(sessionDir, "messages.$ext")
                         val summary = streamTranscript(
-                            repository, session, isJson, transcriptFile,
+                            context, repository, session, format, transcriptFile,
                             reportProgress = false,
                         )
                         val metaFile = File(sessionDir, "session.json")
@@ -205,7 +215,7 @@ object ChatExporter {
                         )
                     }
                     val manifest = JSONObject()
-                        .put("format", if (isJson) "json" else "text")
+                        .put("format", format)
                         .put("session_count", sessions.size)
                         .put("message_count", totalMessages)
                         .put("sessions", manifestSessions)
@@ -215,7 +225,7 @@ object ChatExporter {
                 }
 
                 val summary = Summary(
-                    format = if (isJson) "json" else "text",
+                    format = format,
                     messageCount = totalMessages,
                     firstCreatedAt = first,
                     lastCreatedAt = last,
@@ -242,9 +252,10 @@ object ChatExporter {
     } }
 
     private suspend fun streamTranscript(
+        context: Context,
         repository: ChatRepository,
         session: ChatSessionEntity,
-        isJson: Boolean,
+        format: String,
         out: File,
         reportProgress: Boolean = true,
     ): Summary {
@@ -261,7 +272,7 @@ object ChatExporter {
         }
 
         BufferedWriter(OutputStreamWriter(FileOutputStream(out), Charsets.UTF_8)).use { writer ->
-            if (isJson) {
+            if (format == "json") {
                 writer.write("[")
                 var firstEntry = true
                 forEachBatch(repository, session.id, total) { batch ->
@@ -290,6 +301,114 @@ object ChatExporter {
                     }
                 }
                 writer.write("]")
+            } else if (format == "markdown") {
+                // [T-android-export-markdown] Document-style transcript: a
+                // `# title` header with model/export-time metadata, then one
+                // `## role` section per message. Text parts are embedded
+                // VERBATIM (chat bodies are already Markdown on disk, so
+                // code fences / tables render in any md viewer); tool calls
+                // collapse into a blockquote. Pagination / memory constraints
+                // mirror the plain-text branch exactly.
+                val roleUser = context.getString(R.string.export_role_user)
+                val roleAssistant = context.getString(R.string.export_role_assistant)
+                val toolLabel = context.getString(R.string.export_md_tool)
+                writer.write("# ")
+                writer.write(session.title ?: "Conversation")
+                writer.write("\n\n")
+                writer.write("- ")
+                writer.write(context.getString(R.string.export_md_model))
+                writer.write(": ")
+                writer.write(session.modelId.ifBlank { "-" })
+                writer.write("\n- ")
+                writer.write(context.getString(R.string.export_md_exported_at))
+                writer.write(": ")
+                writer.write(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
+                writer.write("\n\n")
+                // [T-export-quiet-transcript] Progress-first transcript, the
+                // quiet-transcript shape mature agents ship (codex
+                // final-answer-only mode, opencode click-to-expand):
+                //  - consecutive tool-ONLY assistant turns merge into ONE
+                //    `> **tool** name ×N` line instead of one section each
+                //    (a 1200-step session exported 1200 blockquotes);
+                //  - pure tool_result carriers (no text, no media) are skipped
+                //    instead of writing an empty `## user` section
+                //    (1023 empty sections in the reported session);
+                //  - a body resolved from the offload store is capped, so
+                //    fixing the placeholder leak cannot explode the file.
+                var toolRunNames = mutableListOf<String>()
+                val flushToolRun: () -> Unit = {
+                    if (toolRunNames.isNotEmpty()) {
+                        val counts = toolRunNames.groupingBy { it }.eachCount()
+                        writer.write("## ")
+                        writer.write(roleAssistant)
+                        writer.write("\n\n> **")
+                        writer.write(toolLabel)
+                        writer.write("** ")
+                        writer.write(
+                            counts.entries.joinToString(" · ") { (name, n) ->
+                                if (n > 1) "$name ×$n" else name
+                            },
+                        )
+                        writer.write("\n\n")
+                        bytes += toolRunNames.size * 8L
+                        toolRunNames = mutableListOf()
+                    }
+                }
+                forEachBatch(repository, session.id, total) { batch ->
+                    for (msg in batch) {
+                        val toolOnly = if (msg.role == "assistant") toolOnlyNames(msg.partsJson) else null
+                        if (toolOnly != null) {
+                            toolRunNames += toolOnly
+                            if (first == null) first = msg.createdAt
+                            last = msg.createdAt
+                            done += 1
+                            continue
+                        }
+                        val body = extractMarkdownBody(msg.partsJson, toolLabel)
+                        if (!hasReadableContent(msg.partsJson, body)) {
+                            // Pure tool_result carrier (or an empty row): nothing
+                            // a reader can use. Skip it WITHOUT flushing the tool
+                            // run — this carrier row sits between the tool call
+                            // and its result, so flushing here would break every
+                            // merge and export one blockquote per step.
+                            if (first == null) first = msg.createdAt
+                            last = msg.createdAt
+                            done += 1
+                            continue
+                        }
+                        flushToolRun()
+                        val exportedBody = if (msg.bodyRef.isNullOrBlank()) {
+                            body
+                        } else if (body.length > MAX_EXPORT_BODY_CHARS) {
+                            // [T-export-quiet-transcript] Resource, not a
+                            // literal: the source-CJK gate scans Kotlin
+                            // strings, and export_* labels are deliberately
+                            // translatable="false" (export-language only).
+                            body.take(MAX_EXPORT_BODY_CHARS) +
+                                "\n\n" + context.getString(R.string.export_body_truncated)
+                        } else {
+                            body
+                        }
+                        val role = if (msg.role == "user") roleUser else roleAssistant
+                        writer.write("## ")
+                        writer.write(role)
+                        writer.write("\n\n")
+                        writer.write(exportedBody)
+                        writer.write("\n\n")
+                        bytes += exportedBody.length.toLong() + role.length + 8
+                        if (first == null) first = msg.createdAt
+                        last = msg.createdAt
+                        val (img, vid) = countAttachments(msg.partsJson)
+                        images += img
+                        videos += vid
+                        done += 1
+                    }
+                    writer.flush()
+                    if (reportProgress) {
+                        _progress.value = Progress.Running(done, total)
+                    }
+                }
+                flushToolRun()
             } else {
                 writer.write(session.title ?: "Conversation")
                 writer.write("\n\n")
@@ -318,7 +437,7 @@ object ChatExporter {
         }
 
         return Summary(
-            format = if (isJson) "json" else "text",
+            format = format,
             messageCount = done,
             firstCreatedAt = first,
             lastCreatedAt = last,
@@ -337,7 +456,16 @@ object ChatExporter {
         if (total <= 0) return
         var offset = 0
         while (offset < total) {
-            val batch = repository.loadMessagePageRaw(sessionId, offset, BATCH_SIZE)
+            // [T-body-spill-export] Resolve offloaded bodies before rendering.
+            // loadMessagePageRaw reads the projection, whose parts_json is the
+            // `body stored (N bytes)` placeholder for every oversized body, so
+            // an export of a long session showed the placeholder instead of the
+            // real transcript. fullBodyForCopy resolves through the
+            // content-addressed blob (the stored row is untouched).
+            val batch = repository.loadMessagePageRaw(sessionId, offset, BATCH_SIZE).map { row ->
+                val full = runCatching { repository.fullBodyForCopy(row) }.getOrNull()
+                if (full.isNullOrBlank() || full == row.partsJson) row else row.copy(partsJson = full)
+            }
             if (batch.isEmpty()) break
             block(batch)
             offset += batch.size
@@ -359,6 +487,13 @@ object ChatExporter {
             put("format", summary.format)
         }
         file.writeText(meta.toString(2), Charsets.UTF_8)
+    }
+
+    /** Transcript file extension for [format] (`json` / `md` / `txt`). */
+    private fun extensionFor(format: String): String = when (format) {
+        "json" -> "json"
+        "markdown" -> "md"
+        else -> "txt"
     }
 
     private fun safeName(session: ChatSessionEntity): String {
@@ -407,17 +542,12 @@ object ChatExporter {
                 // <user-attached-files> XML inventory from the human-readable
                 // text export — it's model-facing metadata, not chat content.
                 // (The JSON export above keeps full-fidelity parts_json.)
-                var value = obj.optString("value")
-                val start = value.indexOf("<user-attached-files>")
-                if (start >= 0) {
-                    val endTag = "</user-attached-files>"
-                    val end = value.indexOf(endTag, start)
-                    value = if (end >= 0) {
-                        value.substring(0, start) + value.substring(end + endTag.length)
-                    } else {
-                        value.substring(0, start)
-                    }.trim()
-                }
+                // [T-export-quiet-transcript] Host reminders + the legacy #339
+                // no-reply head ride the SAME stripping authority as the
+                // markdown branch and the in-app display (PreviewText), so a
+                // .txt transcript is exactly as quiet as a .md one.
+                val value = com.openminis.app.data.repository.PreviewText
+                    .stripSystemReminders(stripAttachedFilesInventory(obj.optString("value")))
                 if (value.isNotEmpty()) {
                     if (sb.isNotEmpty()) sb.append('\n')
                     sb.append(value)
@@ -427,6 +557,130 @@ object ChatExporter {
         sb.toString()
     } catch (_: Throwable) {
         partsJson
+    }
+
+    /**
+     * Markdown body for one message — the [T-android-export-markdown]
+     * counterpart of [extractPlainText].
+     *
+     * `text` parts are kept VERBATIM (after the same
+     * `<user-attached-files>` inventory strip the plain-text export does),
+     * so persisted Markdown — code fences, tables, lists — embeds directly
+     * into the document. `toolUse` parts render as a blockquote
+     * (`> **工具** name`) so tool activity survives the export the way the
+     * plain-text branch's role lines do, without dumping raw args/results;
+     * `toolResult` / media parts stay summary-only, matching the
+     * plain-text branch's information volume. A parts_json blob that fails
+     * to parse falls back to the raw string, same as [extractPlainText].
+     */
+    private fun extractMarkdownBody(partsJson: String, toolLabel: String): String = try {
+        val arr = JSONArray(partsJson)
+        val sb = StringBuilder()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            when (obj.optString("type")) {
+                "text" -> {
+                    // [T-export-quiet-transcript] Host-injected control notices
+                    // (stream-drop continuation reminders, empty-turn nudges)
+                    // are machinery, not conversation: keep them in the DB for
+                    // resume, leave them out of the transcript.
+                    val value = stripSystemReminders(stripAttachedFilesInventory(obj.optString("value")))
+                    if (value.isNotEmpty()) {
+                        // Blank line between parts so consecutive text blocks
+                        // read as separate Markdown paragraphs, not one run-on.
+                        if (sb.isNotEmpty()) sb.append("\n\n")
+                        sb.append(value)
+                    }
+                }
+                "toolUse" -> {
+                    val name = obj.optJSONObject("value")
+                        ?.optString("name", "")
+                        ?.takeIf { it.isNotBlank() } ?: "tool"
+                    if (sb.isNotEmpty()) sb.append("\n\n")
+                    sb.append("> **").append(toolLabel).append("** ").append(name)
+                }
+            }
+        }
+        sb.toString()
+    } catch (_: Throwable) {
+        partsJson
+    }
+
+    /**
+     * [T-export-quiet-transcript] Tool names of a tool-ONLY assistant turn, or
+     * null when the turn carries anything a reader would want (text, media,
+     * tool results). Only those turns merge into the `> **tool** name ×N` run.
+     */
+    private fun toolOnlyNames(partsJson: String): List<String>? {
+        val arr = try {
+            JSONArray(partsJson)
+        } catch (_: Throwable) {
+            return null
+        }
+        if (arr.length() == 0) return null
+        val names = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: return null
+            when (obj.optString("type")) {
+                "text" -> if (stripAttachedFilesInventory(obj.optString("value")).isNotBlank()) return null
+                "toolUse" -> names += obj.optJSONObject("value")
+                    ?.optString("name")
+                    ?.takeIf { it.isNotBlank() } ?: "tool"
+                else -> return null
+            }
+        }
+        return names.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * [T-export-quiet-transcript] Whether a row carries anything readable: an
+     * extracted body, or media the plain-text branch also counts. A pure
+     * tool_result carrier has neither and must not become an empty section.
+     */
+    private fun hasReadableContent(partsJson: String, body: String): Boolean {
+        if (body.isNotBlank()) return true
+        val arr = try {
+            JSONArray(partsJson)
+        } catch (_: Throwable) {
+            return false
+        }
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            when (obj.optString("type")) {
+                "image", "imageData", "video", "videoData", "file", "attachment" -> return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Removes the persisted `<user-attached-files>` XML inventory from a
+     * text-part value — model-facing metadata, not chat content. Shared by
+     * the plain-text and Markdown exports ([T-android-retry-attachment-loss]).
+     */
+    /**
+     * [T-export-quiet-transcript] Removes host-injected `<system-reminder>`
+     * control notices (stream-drop continuation, empty-turn nudges) from an
+     * exported text part. The rows stay in the database — resume depends on
+     * them — they just do not belong in a human-readable transcript.
+     *
+     * Delegates to [PreviewText.stripSystemReminders] — the single stripping
+     * authority — so reminder blocks AND the legacy #339 no-reply head are
+     * stripped identically to the in-app display and the session list.
+     */
+    private fun stripSystemReminders(value: String): String =
+        com.openminis.app.data.repository.PreviewText.stripSystemReminders(value)
+
+    private fun stripAttachedFilesInventory(value: String): String {
+        val start = value.indexOf("<user-attached-files>")
+        if (start < 0) return value
+        val endTag = "</user-attached-files>"
+        val end = value.indexOf(endTag, start)
+        return if (end >= 0) {
+            value.substring(0, start) + value.substring(end + endTag.length)
+        } else {
+            value.substring(0, start)
+        }.trim()
     }
 
     /** Best-effort `(images, videos)` count by walking parts_json. */

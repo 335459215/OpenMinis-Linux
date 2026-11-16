@@ -99,12 +99,28 @@ val gitDirty: Boolean = gitOutput(listOf("status", "--porcelain")).isNotEmpty()
  * `minisBaseVersionName` is parsed by `.github/workflows/android-apk.yml`, so keep
  * the assignment on one line and spelled exactly like this.
  */
-val minisBaseVersionName = "2.0.91"
+val minisBaseVersionName = "2.0.97"
 val minisVersionName: String = System.getenv("MINIS_VERSION_SUFFIX")
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
     ?.let { "$minisBaseVersionName.$it" }
     ?: minisBaseVersionName
+
+/**
+ * [GH#423][GH#301] Optional build-time pin for the Claude CLI fingerprint
+ * version (the `claude-cli/<version>` User-Agent the Anthropic backend gates
+ * new models on). Empty means "use the runtime resolver" — the npm dist-tag
+ * cache or [com.openminis.app.auth.ClaudeCliVersion.FALLBACK]. Pin it with
+ * `./gradlew -Pminis.claudeCliVersion=2.1.280 …` or the
+ * `MINIS_CLAUDE_CLI_VERSION` environment variable.
+ */
+val claudeCliVersionOverride: String =
+    (providers.gradleProperty("minis.claudeCliVersion").orNull
+        ?: System.getenv("MINIS_CLAUDE_CLI_VERSION"))
+        .orEmpty()
+        .trim()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
 
 android {
     namespace = "com.openminis.app"
@@ -125,7 +141,7 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = 26
         targetSdk = 35
-        versionCode = 293
+        versionCode = 297
         // [T-rolling-version] Rolling builds (push to main) carry the merge PR
         // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
         // be traced back to the change that produced it. Tag/release builds keep
@@ -141,6 +157,8 @@ android {
         // runtime verification ambiguous).
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("boolean", "GIT_DIRTY", "$gitDirty")
+        // [GH#423][GH#301] Empty → runtime resolver; non-empty → pinned.
+        buildConfigField("String", "CLAUDE_CLI_VERSION", "\"$claudeCliVersionOverride\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

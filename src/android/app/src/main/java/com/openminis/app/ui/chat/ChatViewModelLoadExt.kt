@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.ThinkingDormancy
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
@@ -259,7 +260,10 @@ internal fun ChatViewModel.loadSession() {
         _sessionTitle.value = session.title ?: "New Chat"
         _sessionCategory.value = session.category
         _memoryEnabled.value = session.memoryEnabled != 0
-        _permissionMode.value = com.openminis.app.security.PermissionMode.sessionDefault(
+        // [#31] Four-tier compat read: legacy "ASK"→SAFE_AUTO (the behaviour the
+        // two-tier era delivered), "YOLO"/"YOYO"→YOLO,
+        // "SAFE_AUTO"/"OFF" literal, unknown → ASK (never widens the gate).
+        _permissionMode.value = com.openminis.app.security.SessionPermissionMode.fromStored(
             session.permissionMode,
         )
         applyGateMode(_permissionMode.value)
@@ -271,6 +275,12 @@ internal fun ChatViewModel.loadSession() {
         _thinkingLevel.value = session.thinkingOverride
             ?.let { runCatching { ThinkingLevel.valueOf(it) }.getOrNull() }
             ?: ThinkingLevel.OFF
+        // [T-thinking-dormant-restore] The loaded session row is the level
+        // authority now — and with the park persisted (P2 1-8) the row also
+        // carries THIS session's parked slot, which replaces whatever was
+        // parked for the previous session. Unknown/stale names decode to
+        // "no park" (never throws the session load).
+        dormantThinkingLevel = ThinkingDormancy.decode(session.dormantThinkingOverride)
 
         // Priority 1: restore from persisted model_binding (group or entry)
         var resolved = restoreFromBinding(session.modelBinding)
@@ -363,7 +373,7 @@ internal fun ChatViewModel.loadSession() {
                 "db.query.end",
                 "count=${rows.size} total=$totalMessages offset=$firstMessageOffset",
             )
-            val chatUi = rows.toChatMessages()
+            val chatUi = toChatMessages(rows)
             val tIoAfterTransform = System.currentTimeMillis()
             com.openminis.app.diagnostics.PerfLongCtx.step(
                 sessionId,
@@ -392,7 +402,7 @@ internal fun ChatViewModel.loadSession() {
             var totalPartsChars = 0L
             for (entity in windowRows) {
                 totalPartsChars += entity.partsJson.length
-                llm.add(entity.toLLMMessage())
+                llm.add(toLLMMessage(entity))
             }
             com.openminis.app.diagnostics.PerfLongCtx.step(
                 sessionId,
@@ -533,6 +543,7 @@ internal fun ChatViewModel.loadSession() {
         // keeps the write order below identical to the serial version.
         val marker = markerDeferred.await()
         _compactSummary.value = marker?.summary
+        if (marker != null) stateHydrationPending = true  // [T-state-hydration] compacted history
         _cachedLatestMarker = marker
         if (marker == null) {
             val oldest = loaded.llmOldestSortOrder

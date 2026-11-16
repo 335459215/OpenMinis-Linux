@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">ไม่พบรายการในบันทึกประจำวันล่าสุด</string>
     <string name="memory_revoke_result_io_error">เขียนไฟล์ไม่สำเร็จ: %1$s</string>
     <string name="memory_save_toast">บันทึกแล้ว</string>
+
+    <string name="memory_save_failed_toast">บันทึกไม่สำเร็จ — ตรวจสอบพื้นที่จัดเก็บแล้วลองใหม่</string>
     <string name="memory_global_footer">คำสั่งและการตั้งค่าถาวรที่ Agent มองเห็นในทุกเซสชัน Agent ไม่สามารถแก้ไขไฟล์นี้ได้</string>
     <string name="check_update_section_header">อัปเดตแอป</string>
     <string name="check_update_current_version">เวอร์ชันปัจจุบัน: %1$s</string>
@@ -181,8 +183,8 @@
     <string name="zen_deleted_models_title">กู้คืนโมเดลฟรีที่ลบไป (%1$d)</string>
     <string name="zen_deleted_models_subtitle">เลิกทำการลบที่บันทึกไว้กับผู้ให้บริการนี้</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">การเชื่อมต่อล้มเหลว</string>
+    <string name="provider_sync_mark_invalid">คำตอบไม่ถูกต้อง</string>
     <string name="add_provider_voice_templates_footer">ผู้ให้บริการแปลงเสียงเป็นข้อความและข้อความเป็นเสียง ประเภทผู้ให้บริการและ base URL ถูกกรอกไว้แล้ว เพียงเพิ่ม API key ของคุณ</string>
     <string name="add_provider_voice_capability_tts">การสังเคราะห์เสียง (TTS)</string>
     <string name="add_provider_voice_capability_asr">การรู้จำเสียง (ASR)</string>
@@ -209,9 +211,9 @@
     <string name="mcp_form_oauth_client_id_placeholder">OAuth client ID</string>
     <string name="mcp_form_oauth_client_secret">Client Secret</string>
     <string name="mcp_form_oauth_client_secret_placeholder">ไม่บังคับ; จัดเก็บแบบเข้ารหัส</string>
-    <string name="mcp_form_oauth_auth_endpoint">Authorization Endpoint</string>
+    <string name="mcp_form_oauth_auth_endpoint">ปลายทาง Authorization</string>
     <string name="mcp_form_oauth_auth_endpoint_placeholder">https://…/authorize</string>
-    <string name="mcp_form_oauth_token_endpoint">Token Endpoint</string>
+    <string name="mcp_form_oauth_token_endpoint">ปลายทาง Token</string>
     <string name="mcp_form_oauth_token_endpoint_placeholder">https://…/token</string>
     <string name="mcp_form_oauth_scopes">Scopes</string>
     <string name="mcp_form_oauth_scopes_placeholder">คั่นด้วยช่องว่าง เช่น openid email</string>
@@ -257,8 +259,8 @@
     <string name="soul_icon_choose_image">เลือกรูปภาพ</string>
     <string name="soul_icon_image_hint">ครอบตัดเป็นสี่เหลี่ยมจัตุรัสและลบมุม</string>
     <string name="soul_icon_use_default">ใช้ค่าเริ่มต้น</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">ใช้ไอคอนโมเดล</string>
+    <string name="soul_icon_use_model_hint">ตามไอคอนผู้ให้บริการของโมเดลที่กำลังรัน</string>
     <string name="soul_icon_emoji_title">ไอคอนตัวตน</string>
     <string name="soul_icon_emoji_field">หรือพิมพ์อีโมจิ</string>
     <string name="soul_icon_set">ตั้งค่า</string>
@@ -284,7 +286,7 @@
     <string name="about_title">เกี่ยวกับ</string>
     <string name="about_minis_tagline">Minis Ultra คือ Agent บนอุปกรณ์ของคุณที่ทำงานในเครื่องทั้งหมดและเป็นส่วนตัวอย่างสมบูรณ์</string>
     <string name="about_links">ลิงก์</string>
-    <string name="about_github_repository">GitHub Repository</string>
+    <string name="about_github_repository">รีโพซิทอรี GitHub</string>
     <string name="about_version_format">เวอร์ชัน %1$s (%2$s)</string>
     <string name="move_to_sheet_title">ย้ายไปยัง…</string>
     <string name="move_to_sheet_empty">ไม่มีเซสชันอื่นให้เลือก</string>
@@ -325,6 +327,8 @@
     <string name="token_usage_section_thinking">การคิด</string>
     <string name="token_usage_thinking_label">การคิด</string>
     <string name="token_usage_thinking_level">ระดับ</string>
+    <string name="token_usage_thinking_requested">ระดับที่ขอ</string>
+    <string name="token_usage_thinking_effective">ระดับที่ใช้จริง</string>
     <string name="token_usage_thinking_supported">รองรับ</string>
     <string name="token_usage_section_tokens">โทเค็น (รวมทั้งเซสชัน)</string>
     <string name="token_usage_input_with_cache">อินพุต (รวมแคช)</string>
@@ -334,6 +338,20 @@
     <string name="token_usage_cache_write">เขียนแคช</string>
     <string name="token_usage_section_agent_loop">ลูปของ Agent</string>
     <string name="token_usage_total_loops">จำนวนลูปทั้งหมด</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">พรอมป์ระบบและเครื่องมือ</string>
+    <string name="context_block_skills_mcps">สกิลและ MCP</string>
+    <string name="context_block_memory">การฉีดความจำ</string>
+    <string name="context_block_runtime">บริบทชั่วคราวของรอบนี้</string>
+    <string name="context_block_goal_plan">การฉีดเป้าหมายและแผน</string>
+    <string name="context_block_history">หน้าต่างประวัติ</string>
+    <string name="context_block_attachments">ไฟล์แนบและรูปภาพ</string>
+    <string name="context_usage_note_estimate">ค่าประมาณคร่าว ๆ (±10%); รีเฟรชเมื่อเปิดชีตนี้</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">การ์ดแบบโต้ตอบ</string>
+    <string name="gen_ui_view_source">ดูซอร์ส</string>
+    <string name="gen_ui_view_render">แสดงผล</string>
+    <string name="gen_ui_view_fullscreen">เต็มหน้าจอ</string>
     <string name="common_on">เปิด</string>
     <string name="common_off">ปิด</string>
     <string name="common_yes">ใช่</string>
@@ -441,6 +459,11 @@
     <string name="sessionlist_regenerate_title">สร้างชื่อใหม่</string>
     <string name="sessionlist_regenerating_title">กำลังสร้างชื่อใหม่…</string>
     <string name="sessionlist_duplicate">ทำสำเนา</string>
+    <string name="sessionlist_branch_tree">แผนผังกิ่งก้าน</string>
+    <string name="sessionlist_branch_from_here">แตกกิ่งจากข้อความล่าสุด</string>
+    <string name="sessionlist_branch_empty">เซสชันนี้ยังไม่มีกิ่งก้าน แตกกิ่งจากข้อความล่าสุดเพื่อไม่ให้การรันซ้ำกระทบบทสนทนาต้นฉบับ</string>
+    <string name="sessionlist_branch_source">ต้นทาง</string>
+    <string name="sessionlist_branch_children">กิ่งก้าน</string>
     <string name="sessionlist_search_action">ค้นหา</string>
     <string name="sessionlist_dismiss">ปิด</string>
     <string name="sessionlist_delete_one_title">ลบบทสนทนาหรือไม่</string>
@@ -461,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s กำลังคิด</string>
     <string name="read_aloud_unavailable">อ่านออกเสียงไม่สำเร็จ: ไม่มีเอนจินเสียงที่ใช้งานได้ ตรวจสอบการตั้งค่าเอาต์พุตเสียง หรือติดตั้งเอนจินเสียงของระบบ</string>
     <string name="chat_error_stream_dropped_partial">การเชื่อมต่อหลุด — คำตอบนี้อาจไม่สมบูรณ์ แตะ ลองอีกครั้ง เพื่อดำเนินการต่อ</string>
+    <string name="chat_composer_queued_hint">ข้อความจะเข้าคิวและส่งเมื่องานปัจจุบันเสร็จสิ้น</string>
     <string name="chat_input_placeholder">ส่งข้อความถึง %1$s (@ เพื่ออ้างไฟล์)</string>
     <string name="chat_input_placeholder_hint_1">ใช้ @ เพื่ออ้างไฟล์ให้ %1$s อ่าน</string>
     <string name="chat_input_placeholder_hint_2">พิมพ์ / เพื่อใช้ SKILL และคำสั่งลัด</string>
@@ -609,6 +633,14 @@
     <string name="env_var_privacy_header">ความเป็นส่วนตัว</string>
     <string name="env_var_privacy_toggle">โหมดความเป็นส่วนตัว</string>
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
+    <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
+    <string name="outbound_mask_footer">มาสกิงแบบเลือกเปิด: สตริงรูปแบบคีย์ (รวมในโค้ด) อีเมล และเลขคล้ายเบอร์โทรจะถูกแทนที่ คีย์ API embedding ด้านล่างเก็บเป็นข้อความล้วนใน prefs ส่วนตัวของแอป ประวัติในเครื่องไม่เปลี่ยน</string>
+    <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
+    <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
+    <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>
+    <string name="chat_menu_perm_off">ปิด · ปฏิเสธเครื่องมือทั้งหมด</string>
+    <string name="gate_approval_allow_all">อนุญาตเซสชันนี้ตลอด (เป้าหมายปัจจุบัน)</string>
+    <string name="approval_action_allow_all_session">อนุญาตเสมอในเซสชันนี้</string>
     <string name="env_var_section_header">ตัวแปร</string>
     <string name="env_var_section_footer">ตัวแปรสภาพแวดล้อมจะถูกใส่เข้าไปใน shell ของแซนด์บ็อกซ์เมื่อเริ่มเซสชัน ชื่อจะถูกแปลงเป็นตัวพิมพ์ใหญ่ และต้องเป็นไปตามกฎของตัวแปร shell แบบ POSIX</string>
     <string name="env_var_empty_title">ไม่มีตัวแปรสภาพแวดล้อม</string>
@@ -973,6 +1005,12 @@
     <string name="modeldetail_section_capabilities">ความสามารถ</string>
     <string name="modeldetail_context_window">ขนาดบริบท</string>
     <string name="modeldetail_thinking">การคิด</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">เพดานระดับการคิด</string>
+    <string name="modeldetail_thinking_level_auto">อัตโนมัติ</string>
+    <string name="modeldetail_thinking_level_effective_auto">ที่ใช้อยู่: %1$s (ค่าเริ่มต้นจากแคตตาล็อก)</string>
+    <string name="modeldetail_thinking_level_effective_override">ที่ใช้อยู่: %1$s (กำหนดเอง)</string>
+    <string name="modeldetail_thinking_level_footer">จำกัดระดับการคิดที่ตัวเลือกแชทเสนอให้โมเดลนี้ อัตโนมัติจะตามการประกาศของแคตตาล็อก Ultra จะถูกส่งตรงตามตัวอักษรเมื่อผู้ให้บริการประกาศ หรือเมื่อคุณตั้งค่าขีดจำกัดนี้เป็น Ultra ด้วยตนเอง มิฉะนั้นจะแปลงเป็น max</string>
     <string name="modeldetail_capabilities_footer">ขนาดบริบทและโทเค็นเอาต์พุตสูงสุด (หน่วยเป็นโทเค็น) เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของผู้ให้บริการ เปิดใช้การคิดสำหรับโมเดลที่รองรับการให้เหตุผลเชิงลึก</string>
     <string name="modeldetail_provider_default">ค่าเริ่มต้นของผู้ให้บริการ</string>
     <string name="modeldetail_max_tokens_exceeds_warning">เกินขีดจำกัดที่ผู้ให้บริการรายงาน (%1$d) ระบบจะบันทึกค่าไว้ แต่อาจทำให้เกิดข้อผิดพลาด</string>
@@ -1114,7 +1152,7 @@
     <string name="settings_bg_overlay">การซ้อนทับของงานเบื้องหลัง</string>
     <string name="settings_bg_overlay_footer">แสดงแคปซูลลอยขนาดเล็กพร้อมเครื่องมือที่กำลังทำงานขณะที่ Minis Ultra อยู่เบื้องหลัง ต้องมีสิทธิ์แสดงทับแอปอื่น แตะแคปซูลเพื่อเรียก Minis Ultra ขึ้นมา และลากเพื่อย้ายตำแหน่ง</string>
     <string name="settings_bg_overlay_permission_needed">อนุญาตให้แสดงทับแอปอื่นเพื่อเปิดใช้งาน</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (อัปเดตสด)</string>
     <string name="settings_dynamic_island_footer">แสดงสถานะของ Agent แบบสดบนชิปสถานะของ Android 16 เมื่อเปิดใช้ ระบบจะใช้แทนแคปซูลลอย เพื่อไม่ให้เห็นตัวบอกสถานะสองอันพร้อมกัน</string>
     <string name="settings_dynamic_island_unsupported">ระบบเวอร์ชันปัจจุบันของคุณยังไม่รองรับ Live Updates (ต้องใช้ Android 16 ขึ้นไปและเปิดฟีเจอร์นี้ไว้)</string>
     <string name="agent_loop_section_title">โมเดลที่ Minis Ultra เรียกใช้ได้ขณะทำงาน</string>
@@ -1762,7 +1800,7 @@
     <string name="dev_suite_installing">กำลังติดตั้ง…</string>
     <string name="dev_suite_failed">ล้มเหลว</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">รายละเอียดการติดตั้งที่ล้มเหลว</string>
     <string name="dev_suite_ready">พร้อม</string>
     <string name="dev_suite_not_installed">ยังไม่ติดตั้ง</string>
     <string name="dev_suite_required">จำเป็น</string>
@@ -1839,6 +1877,8 @@
     <string name="ma_add_role_sub">ชื่อ/คำอธิบาย/พรอมป์/รายการเครื่องมือแบบกำหนดเอง บทบาทในตัวที่ชื่อเดียวกันจะถูกแทนที่</string>
     <string name="ma_team_lead_suffix"> · หัวหน้าทีม</string>
     <string name="ma_thinking_depth">ความลึกของการคิดสำหรับการรันนี้</string>
+
+    <string name="ma_thinking_follows_main">ตาม main session</string>
     <string name="ma_role_dialog_title_builtin">บทบาทในตัว (บันทึกเป็นสำเนาแบบกำหนดเอง)</string>
     <string name="ma_role_dialog_title_new">บทบาทการทำงานร่วมกันใหม่</string>
     <string name="ma_role_dialog_title_edit">แก้ไขบทบาท</string>
@@ -1856,6 +1896,7 @@
     <string name="usage_label_output_short">เอาต์พุต</string>
     <string name="plan_board_all_done">ทำทุกขั้นตอนเสร็จสมบูรณ์</string>
     <string name="cd_plan_board_toggle">ขยายหรือยุบกระดานแผน</string>
+    <string name="cd_plan_step_retry">ลองทำขั้นตอนที่ล้มเหลวนี้อีกครั้ง</string>
     <string name="cd_goal_header">เปิดรายละเอียดเป้าหมาย</string>
     <string name="cd_goal_status_active">เป้าหมายกำลังดำเนินการ</string>
     <string name="cd_goal_status_paused">เป้าหมายถูกพักไว้</string>
@@ -2028,6 +2069,9 @@
     <string name="mcp_approval_restart_notice">การรีสตาร์ทล้างคำอนุมัติที่รอดำเนินการ %1$d รายการ</string>
     <string name="context_saver_title">ประหยัดบริบท</string>
     <string name="context_saver_footer">พับเอาต์พุตเครื่องมือเก่าที่อยู่เกินผลลัพธ์ล่าสุดให้เป็นตัวยึดบรรทัดเดียวเมื่อคำขอใหญ่ขึ้น ไม่มีการลบใด ๆ ผลลัพธ์ที่พับแล้วยังคงพาธไฟล์หรือบอกให้เรียกเครื่องมือใหม่</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">การอุ่นแคชพรอมป์</string>
+    <string name="cache_warming_footer">เมื่อเปิดใช้ หลังจากไม่มีการใช้งาน แอปอาจเล่นซ้ำคำขอที่สำเร็จล่าสุดด้วยขีดจำกัดเอาต์พุตหนึ่งโทเค็น เพื่อรีเฟรชแคชพรอมป์ของผู้ให้บริการก่อนหมดอายุ ส่งคำขอที่คิดค่าบริการเพิ่มเติม ปิดอยู่โดยค่าเริ่มต้น</string>
     <string name="context_saver_off">ปิด</string>
     <string name="context_saver_balanced">สมดุล</string>
     <string name="context_saver_aggressive">เชิงรุก</string>
@@ -2035,6 +2079,12 @@
     <string name="token_usage_saver_folded">ผลลัพธ์ที่พับแล้ว</string>
     <string name="token_usage_saver_saved">ประหยัดในเทิร์นนี้</string>
     <string name="memory_center_overview">ภาพรวม</string>
+    <string name="memory_embedding_header">การเรียกคืนแบบความหมาย</string>
+    <string name="memory_embedding_toggle">การเรียกคืนความจำแบบความหมายด้วย embedding</string>
+    <string name="memory_embedding_base_url">Base URL ของ embeddings</string>
+    <string name="memory_embedding_api_key">API key ของ embeddings</string>
+    <string name="memory_embedding_model">โมเดล embedding</string>
+    <string name="memory_embedding_footer">ปิดอยู่ตามค่าเริ่มต้น เมื่อเปิดใช้ การเรียกคืนความจำจะเพิ่มการค้นหาด้วยความคล้ายคลึงของเวกเตอร์ผ่าน embeddings endpoint ที่รองรับ OpenAI นอกเหนือจากการค้นหาด้วยคำสำคัญ การเปลี่ยนแปลงจะมีผลหลังจากรีสตาร์ทโปรเซสของแอปเท่านั้น</string>
     <string name="memory_center_stat_memory">ไฟล์ความจำ</string>
     <string name="memory_center_stat_recalls">รายการที่ถูกเรียกคืน</string>
     <string name="memory_center_stat_failures">การทำซ้ำที่ถูกบล็อก</string>
@@ -2110,4 +2160,179 @@
     <string name="pool_mode_random">สุ่ม</string>
     <string name="pool_mode_round_robin">วนตามลำดับ</string>
     <string name="pool_mode_title">โหมดการใช้คีย์</string>
+
+    <string name="git_panel_branch_search">ค้นหา branch</string>
+
+
+    <string name="git_panel_branches_section">branch</string>
+
+    <string name="git_panel_uncommitted_count">การเปลี่ยนแปลงที่ยังไม่คอมมิต: %1$d ไฟล์</string>
+
+    <string name="git_panel_detached_head">HEAD แยกออก</string>
+
+    <string name="git_panel_create_branch">สร้างและเช็คเอาต์ branch ใหม่…</string>
+
+    <string name="git_panel_branch_name_hint">ชื่อ branch</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">แสดงทั้งหมด</string>
+    <string name="check_update_notes_collapse">ย่อ</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">เก็บถาวร</string>
+    <string name="sessionlist_unarchive">เลิกเก็บถาวร</string>
+    <string name="sessionlist_section_archived">เก็บถาวรแล้ว (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">พรีเซ็ตผู้ให้บริการ</string>
+    <string name="add_provider_vendor_presets_pick_hint">แตะผู้ให้บริการเพื่อกรอก endpoint และชื่อให้อัตโนมัติ</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">สร้าง API key ได้ที่ platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">รับ API key จากคอนโซลของ Zhipu open platform ที่ open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">สร้าง API key ได้ที่ platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">สร้าง API key ในคอนโซล Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">สร้าง API key ในคอนโซล Volcano Ark ชื่อโมเดลคือ endpoint ID หรือ model ID</string>
+    <string name="add_provider_vendor_hint_minimax">รับ API key จากแพลตฟอร์มเปิดของ MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">สร้าง API key ได้ที่ cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">สร้าง API key ได้ที่ console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">รับ API key จากคอนโซล Together ที่ api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">สร้าง API key ได้ที่ console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">เซิร์ฟเวอร์ภายในเครื่อง — ไม่ต้องใช้ API key</string>
+    <string name="add_provider_vendor_hint_lmstudio">เซิร์ฟเวอร์ภายในเครื่อง — ไม่ต้องใช้ API key เริ่ม Developer server ใน LM Studio ก่อน</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">แก้ไขข้อความที่อยู่ในคิว</string>
+    <string name="git_panel_diff_truncated">Diff ถูกตัดที่ 200,000 อักขระ — ข้อความฉบับเต็มอยู่ในไฟล์ของรีโปซิทอรีนั้นเอง</string>
+    <string name="voice_service_no_audio_models">ไม่มีโมเดลเสียงในรายการของผู้ให้บริการนี้ รายการโมเดลของบางผู้ให้บริการ (Bailian, SiliconFlow) ไม่ประกาศรองรับเสียง — เพิ่มโมเดล ASR/TTS เป็นโมเดลแบบกำหนดเองพร้อมม็อดัลิตี้เสียง หรือเลือกบริการเสียงอื่น</string>
+    <string name="voice_error_network">จดจำเสียงล้มเหลว: ข้อผิดพลาดเครือข่าย ตรวจการเชื่อมต่อ หรือสลับไปเอนจินบนเครื่องหรือผู้ให้บริการอื่น</string>
+    <string name="voice_error_transcription">การจดจำเสียงไม่คืนข้อความ พูดใหม่อีกครั้ง หรือตรวจโมเดลและ API key ของผู้ให้บริการถอดเสียง</string>
+    <string name="voice_error_busy">ตัวจดจำเสียงกำลังยุ่ง รอสักครู่แล้วลองใหม่</string>
+    <string name="voice_error_audio">บันทึกเสียงล้มเหลว ตรวจสิทธิ์ไมโครโฟนและว่าไม่มีแอปอื่นใช้ไมค์อยู่</string>
+    <string name="voice_error_language">ภาษาที่เลือกไม่รองรับโดยเอนจินนี้ เลือกภาษาอื่น</string>
+    <string name="voice_error_unknown">จดจำเสียงล้มเหลว: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">กฎแบบกำหนดเองยังไม่ทำงาน (%1$s) คำขอปัจจุบันใช้ค่าเริ่มต้นในตัว ข้อความถัดไปหลังแคชโหลดเสร็จจะใช้กฎของคุณ</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">บังคับการคิดแบบขยาย</string>
+    <string name="provider_detail_force_thinking_footer">สำหรับ relay ที่เข้ากันได้กับ Anthropic เท่านั้น ส่ง thinking:{type:"enabled",budget_tokens:N} แม้แคตตาล็อกบอกว่าโมเดลไม่สามารถให้เหตุผล ใช้เมื่อโมเดลรองรับการคิดแต่รายการในแคตตาล็อกขาดหายหรือผิด</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">ส่งออกผู้ให้บริการ</string>
+    <string name="provider_transfer_export_title">ส่งออกผู้ให้บริการ</string>
+    <string name="provider_transfer_export_body">จะส่งออกผู้ให้บริการ %1$d รายการไปยังไฟล์ JSON</string>
+    <string name="provider_transfer_include_keys">รวมคีย์ API</string>
+    <string name="provider_transfer_include_keys_risk">คีย์ API จะถูกเขียนลงไฟล์เป็นข้อความล้วน ผู้ที่ได้ไฟล์นี้สามารถใช้คีย์ของคุณได้ — โปรดเก็บไฟล์ให้ปลอดภัยและลบหลังนำเข้า</string>
+    <string name="provider_transfer_export">ส่งออก</string>
+    <string name="provider_transfer_export_success">ส่งออกผู้ให้บริการแล้ว %1$d รายการ</string>
+    <string name="provider_transfer_export_failed">ส่งออกล้มเหลว</string>
+    <string name="provider_transfer_import_ok">นำเข้าผู้ให้บริการแล้ว %1$d รายการ</string>
+    <string name="provider_transfer_import_partial">นำเข้าแล้ว %1$d รายการ ล้มเหลว %2$d รายการ</string>
+    <string name="provider_transfer_import_partial_detail">นำเข้า %1$d ผู้ให้บริการแล้ว %2$d รายการล้มเหลว: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_binding_title">พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_bound_to">เชื่อมกับ %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">ทำงานในแซนด์บ็อกซ์ภายในเครื่อง</string>
+    <string name="ssh_workspace_option_local">แซนด์บ็อกซ์ภายในเครื่อง</string>
+    <string name="ssh_workspace_option_local_subtitle">เชลล์ทำงานในแซนด์บ็อกซ์ Linux ของอุปกรณ์นี้</string>
+    <string name="ssh_workspace_no_hosts">ยังไม่มีโฮสต์ SSH — เพิ่มได้ที่ การตั้งค่า → พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_shell_only_note">พื้นที่ทำงาน SSH รองรับเฉพาะคำสั่งเชลล์ เครื่องมือไฟล์จะถูกปฏิเสธขณะผูกกับโฮสต์อยู่</string>
+    <string name="ssh_workspace_shell_only">พื้นที่ทำงาน SSH รองรับเฉพาะคำสั่งเชลล์ — ปฏิเสธ \'%1$s\' แล้ว</string>
+    <string name="ssh_workspace_shell_only_hint">รันคำสั่งระยะไกลด้วย shell_execute หรือยกเลิกการผูกเซสชันนี้ที่เมนูแชท → พื้นที่ทำงาน SSH เพื่อกลับไปใช้เครื่องมือไฟล์ภายในเครื่อง</string>
+    <string name="ssh_hosts_title">โฮสต์ SSH</string>
+    <string name="ssh_hosts_subtitle">โฮสต์ระยะไกลที่เอเจนต์เข้าถึงได้ผ่าน SSH ข้อมูลรับรองถูกเก็บแบบเข้ารหัสและไม่แสดงผล</string>
+    <string name="ssh_hosts_row_subtitle">เพิ่มโฮสต์ ทดสอบการเชื่อมต่อ จัดการคีย์โฮสต์</string>
+    <string name="ssh_hosts_empty">ยังไม่มีโฮสต์</string>
+    <string name="ssh_hosts_add">เพิ่มโฮสต์</string>
+    <string name="ssh_hosts_add_cancel">ยกเลิก</string>
+    <string name="ssh_hosts_test">ทดสอบการเชื่อมต่อ</string>
+    <string name="ssh_hosts_testing">กำลังทดสอบ…</string>
+    <string name="ssh_hosts_test_ok">เชื่อมต่อสำเร็จ</string>
+    <string name="ssh_hosts_test_failed">เชื่อมต่อไม่สำเร็จ</string>
+    <string name="ssh_hosts_forget_key">ลืมคีย์โฮสต์</string>
+    <string name="ssh_hosts_remove">ลบ</string>
+    <string name="ssh_hosts_pinned">ตรึงคีย์โฮสต์แล้ว: %1$s…</string>
+    <string name="ssh_field_name">ชื่อ (ตัวอักษร/ตัวเลข/._-)</string>
+    <string name="ssh_field_hostname">ชื่อโฮสต์หรือ IP</string>
+    <string name="ssh_field_port">พอร์ต</string>
+    <string name="ssh_field_username">ชื่อผู้ใช้</string>
+    <string name="ssh_auth_password">รหัสผ่าน</string>
+    <string name="ssh_auth_key">คีย์ส่วนตัว</string>
+    <string name="ssh_field_password">รหัสผ่าน</string>
+    <string name="ssh_field_private_key">คีย์ส่วนตัว PEM</string>
+    <string name="ssh_field_passphrase">วลีรหัสผ่านของคีย์ (ไม่บังคับ)</string>
+    <string name="ssh_save">บันทึก</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">ปลอดมือ</string>
+    <string name="handsfree_state_starting">กำลังเริ่ม…</string>
+    <string name="handsfree_state_listening">กำลังฟัง…</string>
+    <string name="handsfree_state_thinking">กำลังคิด…</string>
+    <string name="handsfree_state_speaking">กำลังพูด…</string>
+    <string name="handsfree_exit_recognition">หยุดโหมดปลอดมือแล้ว: การจดจำเสียงพูดล้มเหลวซ้ำๆ แตะปลอดมือเพื่อลองอีกครั้ง</string>
+    <string name="handsfree_exit_tts">หยุดโหมดปลอดมือแล้ว: อ่านคำตอบออกเสียงไม่สำเร็จ แตะปลอดมือเพื่อลองอีกครั้ง</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">หนึ่งชื่อแพ็กเกจ Android ต่อบรรทัด เช่น com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">ใช้รายการเป็นบล็อกลิสต์</string>
+    <string name="a11y_app_policy_blocklist_sub">ปิด = อนุญาตเฉพาะแอปในรายการ เปิด = บล็อกแอปในรายการ</string>
+    <string name="a11y_app_policy_enabled">จำกัดตามแอป</string>
+    <string name="a11y_app_policy_enabled_sub">ตรวจแพ็กเกจของแอปเบื้องหน้าก่อนทุกครั้งที่อ่านหน้าจอหรือแตะ</string>
+    <string name="a11y_app_policy_footer">เมื่อเปิดใช้ ui_read และ ui_action จะถูกตรวจกับแอปเบื้องหน้าปัจจุบันก่อนรัน แอปนอกรายการ (โหมดอนุญาต) หรือในรายการ (โหมดบล็อก) จะถูกปฏิเสธพร้อมข้อความที่มองเห็นได้ ตัวแอป Minis เองได้รับอนุญาตเสมอ</string>
+    <string name="a11y_app_policy_section">ขอบเขตแอปสำหรับการเข้าถึง</string>
+    <string name="boot_hook_enable">รัน /var/minis/boot.sh ตอนสตาร์ตอัป</string>
+    <string name="boot_hook_enable_sub">รันในแซนด์บ็อกซ์หลัง Linux rootfs บูตเสร็จ</string>
+    <string name="boot_hook_footer">ปิดโดยค่าเริ่มต้น พาธนี้อยู่ในแซนด์บ็อกซ์ที่เขียนได้ เอเจนต์ที่รัน shell ได้ทุกตัวสามารถแทนที่สคริปต์นี้ — เมื่อเปิดไว้ ไฟล์แบบนี้จะรันแบบเงียบทุกครั้งที่เปิดแอป สวิตช์จะถูกตรวจซ้ำก่อนรันทันที และเวลาที่พบสคริปต์ครั้งแรกพร้อมการเปลี่ยนขนาด/mtime จะถูกเขียนลง log ของแอป มีผลตั้งแต่การเปิดครั้งถัดไป</string>
+    <string name="boot_hook_last_status">รันล่าสุด</string>
+    <string name="boot_hook_section">ฮุกบูต</string>
+    <string name="lifecycle_hooks_command_hint">หนึ่งบรรทัดคำสั่ง โดยทั่วไปใส่พาธสคริปต์ดีที่สุด เช่น bash /var/minis/hooks/on-response.sh เว้นว่างไว้เพื่อลบฮุก</string>
+    <string name="lifecycle_hooks_enable">เปิดใช้ฮุกวงจรชีวิต</string>
+    <string name="lifecycle_hooks_enable_sub">รันสคริปต์ด้านล่างเมื่อเกิดเหตุการณ์ของมัน</string>
+    <string name="lifecycle_hooks_events_footer">สคริปต์รันในแซนด์บ็อกซ์แบบเรียงคิวในเลนของตัวเอง หมดเวลา 20 วินาที ความล้มเหลวถูกบันทึกเป็น log เท่านั้น ไม่บล็อกแชท</string>
+    <string name="lifecycle_hooks_help_body">สคริปต์แต่ละตัวได้รับ MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID และ MINIS_HOOK_DETAIL สคริปต์เป็นโปรเซส PRoot แบบใช้ครั้งเดียว: มองเห็น /proc ของคำสั่งอื่นข้ามการเรียกไม่ได้ และ flock ไม่น่าเชื่อถือ ให้ใช้ไฟล์เก็บสถานะข้ามการรัน OnResponse ทำงานหนึ่งครั้งต่อการตอบที่เสร็จของเอเจนต์; OnSessionEnd ทำงานเมื่อแชทถูกลบ</string>
+    <string name="lifecycle_hooks_help_header">สภาพแวดล้อมและข้อควรระวัง</string>
+    <string name="lifecycle_hooks_master_footer">ปิดโดยค่าเริ่มต้น ขณะปิดอยู่ สคริปต์ที่ตั้งไว้จะถูกเก็บไว้แต่ไม่ถูกรัน</string>
+    <string name="lifecycle_hooks_not_set">ยังไม่ตั้ง</string>
+    <string name="lifecycle_hooks_section_events">เหตุการณ์</string>
+    <string name="lifecycle_hooks_section_master">สวิตช์หลัก</string>
+    <string name="lifecycle_hooks_title">ฮุกวงจรชีวิต</string>
+    <string name="network_trusted_ca_count">นำเข้าแล้ว %1$d ใบรับรอง</string>
+    <string name="network_trusted_ca_duplicate">ใบรับรองนี้ถูกนำเข้าไปแล้ว</string>
+    <string name="network_trusted_ca_failed">อ่านไฟล์นั้นเป็นใบรับรอง PEM/X.509 ไม่ได้</string>
+    <string name="network_trusted_ca_footer">สำหรับผู้ให้บริการที่ endpoint HTTPS ใช้ CA แบบ self-signed หรือส่วนตัว ใบรับรองจะถูกเก็บไว้ใน Minis เท่านั้น และถูกเพิ่มเข้าไปใน trust anchor ของ Android สำหรับแอปนี้ การตรวจสอบใบรับรองและชื่อโฮสต์ตามปกติยังคงเปิดอยู่ มีผลตั้งแต่คำขอถัดไปไปยังผู้ให้บริการ ไม่ต้องรีสตาร์ต</string>
+    <string name="network_trusted_ca_import">นำเข้าใบรับรอง PEM</string>
+    <string name="network_trusted_ca_imported">นำเข้าแล้ว %1$d ใบรับรอง ลองส่งคำขออีกครั้ง</string>
+    <string name="network_trusted_ca_none">ยังไม่มีใบรับรองที่นำเข้า</string>
+    <string name="network_trusted_ca_remove_all">ลบทั้งหมด</string>
+    <string name="network_trusted_ca_removed">ลบใบรับรองที่นำเข้าแล้ว</string>
+    <string name="network_trusted_ca_title">ใบรับรองที่เชื่อถือ</string>
+    <string name="provider_detail_custom_headers">เฮดเดอร์คำขอแบบกำหนดเอง</string>
+    <string name="provider_detail_custom_headers_footer">บรรทัดละหนึ่ง «ชื่อ: ค่า» ใช้กับคำขอ chat, /models และ Responses ของผู้ให้บริการนี้เท่านั้น Host, Content-Length และ Connection ถูกจัดการโดย HTTP client แทนที่ไม่ได้</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">ปิดโดยค่าเริ่มต้น เมื่อเปิด คำขอแชททุกรายการไปยัง endpoint แบบกำหนดเองนี้จะพา ID คงที่ระดับบทสนทนา (x-opencode-session) เพื่อให้ relay ที่เข้ากันได้กับ OpenCode ใช้ routing และแคชได้ เปิดเฉพาะกับเกตเวย์ที่คุณไว้ใจ: ID นี้ระบุบทสนทนาเดียวกันข้ามรอบ</string>
+    <string name="provider_detail_opencode_session_header">เฮดเดอร์เซสชัน OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">ส่ง x-opencode-session</string>
+    <string name="provider_detail_save_headers">บันทึกเฮดเดอร์</string>
+    <string name="scheduled_task_prompt_template_hint">วันที่/เวลาปัจจุบันและการรันล่าสุดจะถูกแนบมาอัตโนมัติ คุณยังใช้ {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} และ {{task_label}} ได้</string>
+    <string name="settings_lifecycle_hooks">ฮุกวงจรชีวิต</string>
+    <string name="settings_lifecycle_hooks_subtitle">รันสคริปต์แซนด์บ็อกซ์เมื่อเริ่มเซสชัน / จบการตอบ / สิ้นสุดเซสชัน</string>
+    <string name="web_search_tool_enabled">เปิดใช้ web_search</string>
+    <string name="web_search_tool_enabled_sub">อนุญาตให้เอเจนต์ค้นเว็บจากในแชท ปิด → ไม่เสนอเครื่องมือนี้เลย</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">การปิดเครื่องมือไม่ได้ลบการตั้งค่าเอนจินด้านล่าง เปิดใหม่เพื่อกลับมาทำงานเหมือนเดิม</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">ไม่มีแอปเปิดไฟล์แนบนี้ได้</string>
+    <string name="chat_move_to_capsule">ย้ายไป…</string>
+<string name="git_panel_history_read_failed">อ่านประวัติคอมมิตไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
+
+    <string name="git_panel_status_read_failed">อ่านสถานะ working tree ไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
 </resources>

@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Запись не найдена в недавних ежедневных журналах.</string>
     <string name="memory_revoke_result_io_error">Ошибка записи файла: %1$s</string>
     <string name="memory_save_toast">Сохранено</string>
+
+    <string name="memory_save_failed_toast">Не удалось сохранить — проверьте хранилище и повторите</string>
     <string name="memory_global_footer">Постоянные инструкции и предпочтения, видимые Minis Ultra Agent в каждой сессии. Agent не может изменять этот файл.</string>
     <string name="check_update_section_header">Обновление приложения</string>
     <string name="check_update_current_version">Текущая версия: %1$s</string>
@@ -183,8 +185,8 @@
     <string name="zen_deleted_models_title">Восстановить удалённые бесплатные модели (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Отменить удаления, записанные для этого провайдера</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Сбой соединения</string>
+    <string name="provider_sync_mark_invalid">Неверный ответ</string>
     <string name="add_provider_voice_templates_footer">Сервисы распознавания и синтеза речи. Тип провайдера и базовый URL уже заполнены — остаётся добавить ваш ключ API.</string>
     <string name="add_provider_voice_capability_tts">Синтез речи (TTS)</string>
     <string name="add_provider_voice_capability_asr">Распознавание речи (ASR)</string>
@@ -259,8 +261,8 @@
     <string name="soul_icon_choose_image">Выбрать изображение</string>
     <string name="soul_icon_image_hint">Обрезается до квадрата и скругляется</string>
     <string name="soul_icon_use_default">Использовать по умолчанию</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Значок модели</string>
+    <string name="soul_icon_use_model_hint">Следует значку провайдера активной модели</string>
     <string name="soul_icon_emoji_title">Значок личности</string>
     <string name="soul_icon_emoji_field">Или введите эмодзи</string>
     <string name="soul_icon_set">Задать</string>
@@ -327,6 +329,8 @@
     <string name="token_usage_section_thinking">Размышление</string>
     <string name="token_usage_thinking_label">Размышление</string>
     <string name="token_usage_thinking_level">Уровень</string>
+    <string name="token_usage_thinking_requested">Запрошенный</string>
+    <string name="token_usage_thinking_effective">Фактический</string>
     <string name="token_usage_thinking_supported">Поддерживается</string>
     <string name="token_usage_section_tokens">Токены (всего за Сессию)</string>
     <string name="token_usage_input_with_cache">Ввод (вкл. кэш)</string>
@@ -336,6 +340,20 @@
     <string name="token_usage_cache_write">Запись кэша</string>
     <string name="token_usage_section_agent_loop">Цикл Агента</string>
     <string name="token_usage_total_loops">Всего циклов</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">Системный промпт и инструменты</string>
+    <string name="context_block_skills_mcps">Навыки и MCP</string>
+    <string name="context_block_memory">Внедрение памяти</string>
+    <string name="context_block_runtime">Временный контекст этого хода</string>
+    <string name="context_block_goal_plan">Внедрение цели и плана</string>
+    <string name="context_block_history">Окно истории</string>
+    <string name="context_block_attachments">Вложения и изображения</string>
+    <string name="context_usage_note_estimate">Грубые оценки (±10%); обновляются при открытии этой панели</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Интерактивная карточка</string>
+    <string name="gen_ui_view_source">Показать исходник</string>
+    <string name="gen_ui_view_render">Показать рендер</string>
+    <string name="gen_ui_view_fullscreen">Полный экран</string>
     <string name="common_on">Вкл.</string>
     <string name="common_off">Выкл.</string>
     <string name="common_yes">Да</string>
@@ -443,6 +461,11 @@
     <string name="sessionlist_regenerate_title">Создать название заново</string>
     <string name="sessionlist_regenerating_title">Создание названия…</string>
     <string name="sessionlist_duplicate">Дублировать</string>
+    <string name="sessionlist_branch_tree">Дерево ветвей</string>
+    <string name="sessionlist_branch_from_here">Ответвить от последнего сообщения</string>
+    <string name="sessionlist_branch_empty">В этой сессии ещё нет ветвей. Ответвитесь от последнего сообщения, чтобы повторные запуски не затрагивали исходный диалог.</string>
+    <string name="sessionlist_branch_source">Источник</string>
+    <string name="sessionlist_branch_children">Ветви</string>
     <string name="sessionlist_search_action">Поиск</string>
     <string name="sessionlist_dismiss">Закрыть</string>
     <string name="sessionlist_delete_one_title">Удалить разговор?</string>
@@ -463,6 +486,7 @@
     <string name="chat_typing_indicator">%1$s думает</string>
     <string name="read_aloud_unavailable">Не удалось озвучить: нет доступного голосового движка. Проверьте настройки голосового вывода или установите системный синтезатор речи.</string>
     <string name="chat_error_stream_dropped_partial">Соединение прервано — этот ответ может быть неполным. Нажмите «Повторить», чтобы продолжить.</string>
+    <string name="chat_composer_queued_hint">Ввод будет в очереди и отправится после завершения текущей задачи</string>
     <string name="chat_input_placeholder">Сообщение для %1$s (@ для упоминания файлов)</string>
     <string name="chat_input_placeholder_hint_1">Используйте @, чтобы упомянуть файлы для чтения %1$s</string>
     <string name="chat_input_placeholder_hint_2">Введите /, чтобы открыть SKILL и быстрые команды</string>
@@ -611,6 +635,14 @@
     <string name="env_var_privacy_header">Конфиденциальность</string>
     <string name="env_var_privacy_toggle">Режим конфиденциальности</string>
     <string name="env_var_privacy_footer">Когда включено, любое значение переменной окружения, появляющееся в выводе выполнения команд оболочки, заменяется маскированной формой (например, `sk-1********ajhks`) перед передачей модели. Значения короче 8 символов заменяются полностью на `*`. Вывод, видимый пользователю в чате, остаётся неизменным.</string>
+    <string name="outbound_mask_toggle">Маскирование исходящих данных</string>
+    <string name="outbound_mask_footer">Опт-ин маскировка по форме: строки в форме ключей (в т.ч. в коде), эл. почта и телефоноподобные числа заменяются. Ключ embedding API ниже хранится открытым текстом в приватных prefs. История устройства не меняется.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · полностью автоматически</string>
+    <string name="chat_menu_perm_safe_auto">Безопасное авто · инструменты чтения выполняются свободно</string>
+    <string name="chat_menu_perm_ask">Спрашивать · подтверждать каждый вызов</string>
+    <string name="chat_menu_perm_off">Выкл · отклонять все инструменты</string>
+    <string name="gate_approval_allow_all">Всегда разрешать в этой сессии (текущая цель)</string>
+    <string name="approval_action_allow_all_session">Всегда разрешать в этой сессии</string>
     <string name="env_var_section_header">Переменные</string>
     <string name="env_var_section_footer">Переменные окружения внедряются в оболочку песочницы при запуске сессии. Имена приводятся к верхнему регистру и должны соответствовать правилам имён переменных оболочки POSIX.</string>
     <string name="env_var_empty_title">Нет переменных окружения</string>
@@ -975,6 +1007,12 @@
     <string name="modeldetail_section_capabilities">Возможности</string>
     <string name="modeldetail_context_window">Контекстное окно</string>
     <string name="modeldetail_thinking">Размышление</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Предел уровня размышления</string>
+    <string name="modeldetail_thinking_level_auto">Авто</string>
+    <string name="modeldetail_thinking_level_effective_auto">Действует: %1$s (по умолчанию каталога)</string>
+    <string name="modeldetail_thinking_level_effective_override">Действует: %1$s (вручную)</string>
+    <string name="modeldetail_thinking_level_footer">Ограничивает уровни размышления, которые предлагает выбор в чате для этой модели. «Авто» следует объявлению каталога. Ultra отправляется буквально, если провайдер его объявил или вы вручную задали этот потолок как Ultra; иначе он превращается в max.</string>
     <string name="modeldetail_capabilities_footer">Контекстное окно и макс. токенов вывода (в токенах). Оставьте пустым, чтобы использовать значения по умолчанию провайдера. Включите «Размышление» для моделей с поддержкой расширенного рассуждения.</string>
     <string name="modeldetail_provider_default">По умолчанию у провайдера</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Превышает заявленный провайдером лимит (%1$d). Значение сохранено, но может вызвать ошибки.</string>
@@ -1770,7 +1808,7 @@
     <string name="dev_suite_installing">Установка…</string>
     <string name="dev_suite_failed">сбой</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Подробности сбоя установки</string>
     <string name="dev_suite_ready">Готово</string>
     <string name="dev_suite_not_installed">Не установлено</string>
     <string name="dev_suite_required">обязательно</string>
@@ -1847,6 +1885,8 @@
     <string name="ma_add_role_sub">Своё имя/описание/промпт/список инструментов; встроенная роль с тем же именем будет переопределена</string>
     <string name="ma_team_lead_suffix"> · лидер команды</string>
     <string name="ma_thinking_depth">Глубина размышления для этого запуска</string>
+
+    <string name="ma_thinking_follows_main">Как в основной сессии</string>
     <string name="ma_role_dialog_title_builtin">Встроенная роль (сохраняется как своя копия)</string>
     <string name="ma_role_dialog_title_new">Новая роль совместной работы</string>
     <string name="ma_role_dialog_title_edit">Изменить роль</string>
@@ -1864,6 +1904,7 @@
     <string name="usage_label_output_short">Вывод</string>
     <string name="plan_board_all_done">Все шаги выполнены</string>
     <string name="cd_plan_board_toggle">Развернуть или свернуть панель плана</string>
+    <string name="cd_plan_step_retry">Повторить этот неудавшийся шаг</string>
     <string name="cd_goal_header">Открыть сведения о цели</string>
     <string name="cd_goal_status_active">Цель в работе</string>
     <string name="cd_goal_status_paused">Цель приостановлена</string>
@@ -2036,6 +2077,9 @@
     <string name="mcp_approval_restart_notice">Перезапуск отменил %1$d ожидающих подтверждений</string>
     <string name="context_saver_title">Экономия контекста</string>
     <string name="context_saver_footer">Сворачивает старый вывод инструментов, кроме последних результатов, в однострочные заглушки, когда запрос разрастается. Ничего не удаляется: свёрнутый результат сохраняет путь к файлу или предлагает повторный запуск инструмента.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Прогрев кэша промптов</string>
+    <string name="cache_warming_footer">Если включено, после простоя приложение может повторить последний успешный запрос с лимитом вывода в один токен, чтобы обновить кэш промптов провайдера до истечения срока. Отправляет дополнительные платные запросы; по умолчанию выключено.</string>
     <string name="context_saver_off">Выкл.</string>
     <string name="context_saver_balanced">Сбалансированно</string>
     <string name="context_saver_aggressive">Агрессивно</string>
@@ -2043,6 +2087,12 @@
     <string name="token_usage_saver_folded">Свёрнутые результаты</string>
     <string name="token_usage_saver_saved">Сэкономлено за ход</string>
     <string name="memory_center_overview">Кратко</string>
+    <string name="memory_embedding_header">Семантический поиск</string>
+    <string name="memory_embedding_toggle">Семантический поиск памяти по эмбеддингам</string>
+    <string name="memory_embedding_base_url">Базовый URL эмбеддингов</string>
+    <string name="memory_embedding_api_key">API-ключ эмбеддингов</string>
+    <string name="memory_embedding_model">Модель эмбеддингов</string>
+    <string name="memory_embedding_footer">По умолчанию выключено. При включении к поиску по ключевым словам добавляется поиск по векторному сходству через совместимый с OpenAI эндпоинт эмбеддингов. Изменения вступают в силу только после перезапуска процесса приложения.</string>
     <string name="memory_center_stat_memory">Файлы памяти</string>
     <string name="memory_center_stat_recalls">Вызванные записи</string>
     <string name="memory_center_stat_failures">Заблокированные повторы</string>
@@ -2118,4 +2168,179 @@
     <string name="pool_mode_random">Случайно</string>
     <string name="pool_mode_round_robin">По кругу</string>
     <string name="pool_mode_title">Режим использования ключей</string>
+
+    <string name="git_panel_branch_search">Поиск веток</string>
+
+
+    <string name="git_panel_branches_section">Ветки</string>
+
+    <string name="git_panel_uncommitted_count">Незакоммиченные изменения: %1$d файлов</string>
+
+    <string name="git_panel_detached_head">отсоединённый HEAD</string>
+
+    <string name="git_panel_create_branch">Создать и переключиться на новую ветку…</string>
+
+    <string name="git_panel_branch_name_hint">Имя ветки</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Показать полностью</string>
+    <string name="check_update_notes_collapse">Свернуть</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Архивировать</string>
+    <string name="sessionlist_unarchive">Разархивировать</string>
+    <string name="sessionlist_section_archived">В архиве (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Пресеты провайдеров</string>
+    <string name="add_provider_vendor_presets_pick_hint">Нажмите на провайдера, чтобы автоматически заполнить endpoint и название.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Создайте API-ключ на platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Получите API-ключ в консоли открытой платформы Zhipu на open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Создайте API-ключ на platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Создайте API-ключ в консоли Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Создайте API-ключ в консоли Volcano Ark; имя модели — это ID эндпоинта или ID модели</string>
+    <string name="add_provider_vendor_hint_minimax">Получите API-ключ на открытой платформе MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Создайте API-ключ на cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Создайте API-ключ на console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Получите API-ключ в консоли Together на api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Создайте API-ключ на console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Локальный сервер — API-ключ не нужен</string>
+    <string name="add_provider_vendor_hint_lmstudio">Локальный сервер — API-ключ не нужен. Сначала запустите сервер Developer в LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Изменить сообщение в очереди</string>
+    <string name="git_panel_diff_truncated">Diff обрезан на 200 000 символах — полный текст находится в самом файле репозитория.</string>
+    <string name="voice_service_no_audio_models">У этого провайдера нет аудиомоделей. Списки моделей некоторых провайдеров (Bailian, SiliconFlow) не объявляют поддержку аудио — добавьте ASR/TTS-модель как пользовательскую модель с аудио-модальностью или выберите другой голосовой сервис.</string>
+    <string name="voice_error_network">Ошибка распознавания речи: сетевая ошибка. Проверьте соединение или перейдите на движок на устройстве / другого провайдера.</string>
+    <string name="voice_error_transcription">Распознавание речи не вернуло текст. Произнесите снова или проверьте модель и API-ключ провайдера транскрибации.</string>
+    <string name="voice_error_busy">Распознавание речи занято. Подождите немного и повторите.</string>
+    <string name="voice_error_audio">Не удалось записать звук. Проверьте разрешение на микрофон и что его не занимает другое приложение.</string>
+    <string name="voice_error_language">Выбранный язык не поддерживается этим движком. Выберите другой язык.</string>
+    <string name="voice_error_unknown">Ошибка распознавания речи: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Пользовательские правила ещё не активны (%1$s). Запросы пока используют встроенные значения по умолчанию; следующее сообщение после загрузки кеша применит ваши правила.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Принудительное расширенное мышление</string>
+    <string name="provider_detail_force_thinking_footer">Только для Anthropic-совместимых релеев. Отправляет thinking:{type:"enabled",budget_tokens:N}, даже если каталог говорит, что модель не умеет рассуждать. Используйте, когда модель поддерживает мышление, но запись в каталоге отсутствует или неверна.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Экспорт провайдеров</string>
+    <string name="provider_transfer_export_title">Экспорт провайдеров</string>
+    <string name="provider_transfer_export_body">%1$d провайдеров будут экспортированы в JSON-файл.</string>
+    <string name="provider_transfer_include_keys">Включить API-ключи</string>
+    <string name="provider_transfer_include_keys_risk">API-ключи записываются в файл открытым текстом. Любой, кто получит этот файл, сможет использовать ваши ключи — храните файл в безопасности и удалите его после импорта.</string>
+    <string name="provider_transfer_export">Экспорт</string>
+    <string name="provider_transfer_export_success">Экспортировано провайдеров: %1$d</string>
+    <string name="provider_transfer_export_failed">Не удалось выполнить экспорт</string>
+    <string name="provider_transfer_import_ok">Импортировано провайдеров: %1$d</string>
+    <string name="provider_transfer_import_partial">Импортировано провайдеров: %1$d, ошибок: %2$d</string>
+    <string name="provider_transfer_import_partial_detail">Импортировано %1$d, с ошибками %2$d: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH-рабочая область</string>
+    <string name="ssh_workspace_binding_title">SSH-рабочая область</string>
+    <string name="ssh_workspace_bound_to">Привязано к %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Работа в локальной песочнице</string>
+    <string name="ssh_workspace_option_local">Локальная песочница</string>
+    <string name="ssh_workspace_option_local_subtitle">Оболочка работает в Linux-песочнице этого устройства</string>
+    <string name="ssh_workspace_no_hosts">SSH-хостов пока нет — добавьте один в Настройки → SSH-рабочая область.</string>
+    <string name="ssh_workspace_shell_only_note">SSH-рабочие области поддерживают только команды оболочки; файловые инструменты отклоняются, пока привязан хост.</string>
+    <string name="ssh_workspace_shell_only">SSH-рабочая область поддерживает только команды оболочки — «%1$s» отклонено.</string>
+    <string name="ssh_workspace_shell_only_hint">Выполняйте удалённые команды через shell_execute или отвяжите эту сессию в меню чата → SSH-рабочая область, чтобы вернуть локальные файловые инструменты.</string>
+    <string name="ssh_hosts_title">SSH-хосты</string>
+    <string name="ssh_hosts_subtitle">Удалённые хосты, доступные агенту по SSH. Учётные данные хранятся в зашифрованном виде и никогда не показываются.</string>
+    <string name="ssh_hosts_row_subtitle">Добавление хостов, проверка соединения, управление ключами хостов</string>
+    <string name="ssh_hosts_empty">Хостов пока нет.</string>
+    <string name="ssh_hosts_add">Добавить хост</string>
+    <string name="ssh_hosts_add_cancel">Отмена</string>
+    <string name="ssh_hosts_test">Проверить соединение</string>
+    <string name="ssh_hosts_testing">Проверка…</string>
+    <string name="ssh_hosts_test_ok">Соединение успешно</string>
+    <string name="ssh_hosts_test_failed">Не удалось подключиться</string>
+    <string name="ssh_hosts_forget_key">Забыть ключ хоста</string>
+    <string name="ssh_hosts_remove">Удалить</string>
+    <string name="ssh_hosts_pinned">Ключ хоста закреплён: %1$s…</string>
+    <string name="ssh_field_name">Имя (буквы/цифры/._-)</string>
+    <string name="ssh_field_hostname">Хост или IP</string>
+    <string name="ssh_field_port">Порт</string>
+    <string name="ssh_field_username">Имя пользователя</string>
+    <string name="ssh_auth_password">Пароль</string>
+    <string name="ssh_auth_key">Приватный ключ</string>
+    <string name="ssh_field_password">Пароль</string>
+    <string name="ssh_field_private_key">Приватный ключ PEM</string>
+    <string name="ssh_field_passphrase">Парольная фраза ключа (необязательно)</string>
+    <string name="ssh_save">Сохранить</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Режим без рук</string>
+    <string name="handsfree_state_starting">Запуск…</string>
+    <string name="handsfree_state_listening">Слушаю…</string>
+    <string name="handsfree_state_thinking">Думаю…</string>
+    <string name="handsfree_state_speaking">Говорю…</string>
+    <string name="handsfree_exit_recognition">Режим без рук остановлен: распознавание речи сбоило неоднократно. Нажмите «Режим без рук», чтобы повторить попытку.</string>
+    <string name="handsfree_exit_tts">Режим без рук остановлен: ответы не удалось озвучить. Нажмите «Режим без рук», чтобы повторить попытку.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Одно имя пакета Android на строку, напр. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Использовать список как блокирующий</string>
+    <string name="a11y_app_policy_blocklist_sub">Выкл = разрешены только приложения из списка. Вкл = приложения из списка блокируются.</string>
+    <string name="a11y_app_policy_enabled">Ограничивать по приложениям</string>
+    <string name="a11y_app_policy_enabled_sub">Проверять пакет приложения на переднем плане перед каждым чтением экрана или нажатием</string>
+    <string name="a11y_app_policy_footer">Когда включено, ui_read и ui_action сверяются с текущим приложением на переднем плане перед выполнением. Приложения вне списка (режим разрешения) или в списке (режим блокировки) отклоняются с видимым сообщением. Само приложение Minis разрешено всегда.</string>
+    <string name="a11y_app_policy_section">Область доступа приложений спецвозможностей</string>
+    <string name="boot_hook_enable">Запускать /var/minis/boot.sh при старте</string>
+    <string name="boot_hook_enable_sub">Выполняется в песочнице после загрузки Linux rootfs</string>
+    <string name="boot_hook_footer">По умолчанию выключено. Этот путь находится внутри доступной на запись песочницы, поэтому любой агент с доступом к shell может подменить скрипт — при включении такой файл будет молча выполняться при каждом запуске. Переключатель проверяется повторно непосредственно перед выполнением, а время первого обнаружения скрипта и изменения размера/mtime пишутся в журнал приложения. Вступает в силу при следующем запуске.</string>
+    <string name="boot_hook_last_status">Последний запуск</string>
+    <string name="boot_hook_section">Хук загрузки</string>
+    <string name="lifecycle_hooks_command_hint">Одна командная строка. Обычно лучше всего путь к скрипту, напр. bash /var/minis/hooks/on-response.sh. Оставьте пустым, чтобы удалить хук.</string>
+    <string name="lifecycle_hooks_enable">Включить хуки жизненного цикла</string>
+    <string name="lifecycle_hooks_enable_sub">Выполнять скрипты ниже по их событиям</string>
+    <string name="lifecycle_hooks_events_footer">Скрипты выполняются в песочнице, последовательно в собственном потоке, с таймаутом 20 секунд. Сбои только логируются и никогда не блокируют чат.</string>
+    <string name="lifecycle_hooks_help_body">Каждый скрипт получает MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID и MINIS_HOOK_DETAIL. Скрипты — одноразовые процессы PRoot: /proc других команд не виден между вызовами, flock ненадёжен — храните состояние между запусками в файлах. OnResponse срабатывает один раз на каждый завершённый ответ агента; OnSessionEnd — при удалении чата.</string>
+    <string name="lifecycle_hooks_help_header">Окружение и особенности</string>
+    <string name="lifecycle_hooks_master_footer">По умолчанию выключено. Пока выключено, настроенные скрипты сохраняются, но не выполняются.</string>
+    <string name="lifecycle_hooks_not_set">Не задано</string>
+    <string name="lifecycle_hooks_section_events">События</string>
+    <string name="lifecycle_hooks_section_master">Главный выключатель</string>
+    <string name="lifecycle_hooks_title">Хуки жизненного цикла</string>
+    <string name="network_trusted_ca_count">Импортировано сертификатов: %1$d</string>
+    <string name="network_trusted_ca_duplicate">Этот сертификат уже импортирован.</string>
+    <string name="network_trusted_ca_failed">Не удалось прочитать файл как сертификат PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Для провайдера, чей HTTPS-эндпоинт использует самоподписанный или приватный ЦС. Сертификат хранится только внутри Minis и добавляется в якоря доверия Android для этого приложения; обычные проверки сертификата и имени хоста остаются включёнными. Действует со следующего запроса к провайдеру — перезапуск не нужен.</string>
+    <string name="network_trusted_ca_import">Импортировать сертификат PEM</string>
+    <string name="network_trusted_ca_imported">Импортировано сертификатов: %1$d. Повторите запрос.</string>
+    <string name="network_trusted_ca_none">Сертификаты не импортированы</string>
+    <string name="network_trusted_ca_remove_all">Удалить все</string>
+    <string name="network_trusted_ca_removed">Импортированные сертификаты удалены.</string>
+    <string name="network_trusted_ca_title">Доверенные сертификаты</string>
+    <string name="provider_detail_custom_headers">Свои заголовки запросов</string>
+    <string name="provider_detail_custom_headers_footer">По одной строке «Имя: значение» на строку. Применяется только к запросам chat, /models и Responses этого провайдера. Host, Content-Length и Connection управляются HTTP-клиентом и не могут быть переопределены.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">По умолчанию выключено. При включении каждый чат-запрос к этому пользовательскому эндпоинту несёт стабильный идентификатор беседы (x-opencode-session), чтобы OpenCode-совместимые релеи могли его маршрутизировать и кешировать. Включайте только для доверенного шлюза: этот ID идентифицирует беседу между ходами.</string>
+    <string name="provider_detail_opencode_session_header">Заголовок сессии OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Отправлять x-opencode-session</string>
+    <string name="provider_detail_save_headers">Сохранить заголовки</string>
+    <string name="scheduled_task_prompt_template_hint">Текущие дата/время и последний запуск добавляются автоматически. Можно также использовать {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} и {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Хуки жизненного цикла</string>
+    <string name="settings_lifecycle_hooks_subtitle">Запускает скрипты песочницы при старте сессии / после ответов / при завершении сессии</string>
+    <string name="web_search_tool_enabled">Включить web_search</string>
+    <string name="web_search_tool_enabled_sub">Разрешить агенту искать в интернете из чата. Выкл → инструмент вообще не предлагается.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Выключение инструмента не удаляет конфигурацию поискового движка ниже; включите снова, чтобы вернуть прежнее поведение.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Нет приложения для открытия этого вложения.</string>
+    <string name="chat_move_to_capsule">Переместить в…</string>
+<string name="git_panel_history_read_failed">Не удалось прочитать историю коммитов — подробности в журнале (тег GitPanel)</string>
+
+    <string name="git_panel_status_read_failed">Не удалось прочитать состояние рабочего дерева — подробности в журнале (тег GitPanel)</string>
 </resources>

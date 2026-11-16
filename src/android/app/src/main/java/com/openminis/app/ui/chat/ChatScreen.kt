@@ -2006,7 +2006,7 @@ fun ChatScreen(
                 approvals = pendingApprovals,
                 intercepts = interceptEvents,
                 onApprove = { viewModel.approvePendingTool(it) },
-                onApproveAll = { viewModel.approveAllForSession(it) },
+                onApproveAlways = { viewModel.approveToolAlwaysForSession(it) },
                 onDeny = { viewModel.denyPendingTool(it) },
                 onDismissIntercept = { InterceptFeedback.dismiss(it) },
             )
@@ -4239,8 +4239,13 @@ fun ChatScreen(
                     // InlineVoiceInputView). The legacy in-composer waveform
                     // branch below only serves captures started OUTSIDE the
                     // panel (none today, kept as a safety net).
+                    // [T-handsfree-loop] (#40) The panel is wrapped by the
+                    // hands-free controller (toggle + status banner drive the
+                    // continuous loop); params forward verbatim, and the
+                    // ceiling-pinned ChatScreen's only touch point is here.
                     if (com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
-                        com.openminis.app.ui.chat.voice.InlineVoiceInputPanel(
+                        com.openminis.app.ui.chat.voice.HandsFreeVoicePanel(
+                            viewModel = viewModel,
                             providerRepository = providerRepository,
                             inputText = inputText,
                             onInputTextChange = { text ->
@@ -4248,11 +4253,6 @@ fun ChatScreen(
                                 viewModel.updateSlashMenuState(text)
                             },
                             ensureMicPermission = { ensureMicPermissionFlow() },
-                            // [T-android-correction-context-wiring] Feed AI
-                            // correction the live conversation context. Reads the
-                            // FULL message list (not the windowed uiMessages) so
-                            // older turns still contribute rare-term grounding;
-                            // evaluated lazily at correction time.
                             conversationContextProvider = {
                                 com.openminis.app.speech.correction.VoiceCorrection
                                     .buildConversationContext(context, viewModel.messages.value)
@@ -4685,7 +4685,16 @@ fun ChatScreen(
                                 },
                             textStyle = mergedTextStyle,
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                            maxLines = 6,
+                            // [T-android-composer-expand GH#193] Grow with the
+                            // content instead of stopping at a fixed line count.
+                            // The visual ceiling is the `.heightIn(max = …)` right
+                            // above (120dp with the IME up, 220dp when it is down),
+                            // so a taller window/long paste uses the space that
+                            // exists instead of clipping a hardcoded 6 lines.
+                            // maxLines = Int.MAX_VALUE is the documented way to
+                            // ask BasicTextField for "unbounded, height decides";
+                            // past the max height the field scrolls internally.
+                            maxLines = Int.MAX_VALUE,
                             // [T-android-enter-to-send-broken] When the
                             // user has Return-Key=Send turned on, ask the
                             // IME for the Send action so it (a) shows the
@@ -4749,7 +4758,7 @@ fun ChatScreen(
                                             label = "composerPlaceholder",
                                         ) { idx ->
                                             Text(
-                                                composerPlaceholderText(idx, soulName.name),
+                                                composerPlaceholderText(idx, soulName.name, queued = isStreaming),
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
                                                 fontSize = 16.5.sp * chatInputFontScale,
                                                 maxLines = 1,
@@ -4998,9 +5007,9 @@ fun ChatScreen(
                                 voiceUsedSinceClear = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.enteredFromText = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive = true
+                                seedReadRepliesOnVoiceEntry(context) // [OpenMinis#267]
                             }
                         }
-
                         // App-icon quick action: when the user launched via
                         // `minis://action/voice_chat`, auto-fire the mic on
                         // first compose. Consumed exactly once so re-entering
@@ -5292,9 +5301,13 @@ fun ChatScreen(
                                     if (!streamingNow && live == null) replyTts.flush()
                                 }
                             }
-                            // [T-android-read-replies-pill-metrics] Balancing spacer:
-                            // a weight(1f) before the pill and only 8dp after pushed
-                            // it right of centre (+59px on 1080px). Match both sides.
+                            // [T-android-read-replies-pill-metrics] Balancing
+                            // spacer. A weight(1f) spacer sits BEFORE the pill but
+                            // the trailing side only had a fixed 8dp, so all the
+                            // row's slack collected left and pushed the pill right
+                            // of centre (+59px measured on a 1080px screen). Matching
+                            // weights on both sides centre it between the leading
+                            // (+, /) and trailing (keyboard, mic/send) groups.
                             Spacer(modifier = Modifier.weight(1f))
                         }
 
@@ -5336,11 +5349,12 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         // Right: 3-state Send / Enqueue / Stop button (mirrors iOS sendButton).
-                        //   • streaming + hasText  → SEND (routes through viewModel.sendMessage,
-                        //     which dispatches to enqueuePrompt since _isStreaming is true).
-                        //     Visual feedback for the queued prompt comes from the dashed
-                        //     bubble that ChatViewModel.enqueuePrompt appends to the message
-                        //     list — no extra button badge needed (matches iOS).
+                        //   • streaming + hasText  → SEND (routes through viewModel.sendMessage:
+                        //     steering-first — the text is offered to steerPrompt while
+                        //     _isStreaming; enqueuePrompt is only the attachments path and
+                        //     the end-of-stream race fallback. Feedback: steering surfaces
+                        //     the ephemeral system-info row, enqueue the dashed bubble —
+                        //     no extra button badge needed for either).
                         //   • streaming + !hasText → STOP (cancel current run).
                         //   • !streaming           → SEND (full color when hasText, dimmed
                         //     when empty; same as before).
@@ -5435,12 +5449,12 @@ fun ChatScreen(
                     location = sendSwipeLocation,
                     hoverAbovePx = swipeHapticOffsetPx,
                     arrowHalfPx = swipeArrowHalfPx,
-                    // While streaming, sendMessage() routes the prompt
-                    // through enqueuePrompt() instead — surface that in
-                    // the hint so the user knows the gesture still works
-                    // mid-stream (mirrors the send-button's send/enqueue
-                    // toggle, since on Android there's no separate visual
-                    // state for the queued case).
+                    // While streaming, sendMessage() offers the text to the
+                    // pi steering queue FIRST (steerPrompt: delivered at the
+                    // agent's next turn boundary without cutting the reply);
+                    // enqueuePrompt is only the attachment fallback — surface
+                    // that in the hint so the user knows the gesture still
+                    // works mid-stream (mirrors the send-button toggle).
                     isEnqueue = isStreaming,
                 )
             } // end swipe-to-send Box wrapping the composer Column

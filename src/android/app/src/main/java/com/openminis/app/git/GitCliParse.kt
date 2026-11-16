@@ -67,6 +67,68 @@ object GitCliParse {
         return fallback
     }
 
+    private const val DIFF_MAX_CHARS = 200_000
+
+    fun parseLog(output: String): List<GitCli.GitCommit> = output.lines().mapNotNull { raw ->
+        val line = raw.trimEnd('\r')
+        if (line.isBlank()) return@mapNotNull null
+        val f = line.split('\u001f')
+        if (f.size < 5) return@mapNotNull null
+        GitCli.GitCommit(
+            hash = f[0],
+            shortHash = f[1],
+            author = f[2],
+            epochSeconds = f[3].toLongOrNull() ?: 0L,
+            subject = f.drop(4).joinToString("\u001f"),
+        )
+    }
+
+    /** Same records as [GitCli.parseLog] with `%P` parents inserted as field 2. */
+    fun parseGraphLog(output: String): List<GitCli.GitCommit> = output.lines().mapNotNull { raw ->
+        val line = raw.trimEnd('\r')
+        if (line.isBlank()) return@mapNotNull null
+        val f = line.split('\u001f')
+        if (f.size < 6) return@mapNotNull null
+        GitCli.GitCommit(
+            hash = f[0],
+            shortHash = f[2],
+            author = f[3],
+            epochSeconds = f[4].toLongOrNull() ?: 0L,
+            subject = f.drop(5).joinToString("\u001f"),
+            parents = f[1].split(' ').filter { it.isNotBlank() },
+        )
+    }
+
+    /**
+     * Graph record WITH the `%D` decoration column (ZCode contract): the
+     * refs column is field 6 (the format pins one record per line, so the
+     * subject cannot bleed into it). `HEAD -> main` expands to the HEAD and
+     * main badges; `tag: v1` strips the prefix; blank → no badges.
+     */
+    fun parseGraphLogWithRefs(output: String): List<GitCli.GitCommit> = output.lines().mapNotNull { raw ->
+        val line = raw.trimEnd('\r')
+        if (line.isBlank()) return@mapNotNull null
+        val f = line.split('\u001f')
+        if (f.size < 7) return@mapNotNull null
+        val refs = f[6].split(',').flatMap { token ->
+            val t = token.trim()
+            when {
+                t.isBlank() -> emptyList()
+                t.startsWith("HEAD ->") -> listOf("HEAD", t.substringAfter("->").trim())
+                else -> listOf(t.removePrefix("tag: "))
+            }
+        }.distinct()
+        GitCli.GitCommit(
+            hash = f[0],
+            shortHash = f[2],
+            author = f[3],
+            epochSeconds = f[4].toLongOrNull() ?: 0L,
+            subject = f[5],
+            parents = f[1].split(' ').filter { it.isNotBlank() },
+            refs = refs,
+        )
+    }
+
     /**
      * Record line = 9 `\x1f` fields ending with subject+body; the body's own
      * newlines spill into trailing lines and are reassembled verbatim.
@@ -139,4 +201,8 @@ object GitCliParse {
         }
         return out
     }
+
+    internal fun truncateDiff(s: String): String =
+        if (s.length <= DIFF_MAX_CHARS) s
+        else s.take(DIFF_MAX_CHARS) + "\n… [diff truncated at ${DIFF_MAX_CHARS / 1000}K chars]"
 }

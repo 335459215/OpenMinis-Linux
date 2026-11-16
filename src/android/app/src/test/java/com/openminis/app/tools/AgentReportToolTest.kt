@@ -28,12 +28,6 @@ class AgentReportToolTest {
     }
 
     @Test
-    fun noReportMeansWorkingWithNoPrompt() {
-        assertEquals(AgentReportStore.Stage.WORKING, AgentReportStore.stageOf(null))
-        assertNull(AgentReportStore.stagePrompt(sid, null))
-    }
-
-    @Test
     fun statusMapsToStage() {
         fun stageFor(status: String) = AgentReportStore.stageOf(
             AgentReportStore.Report(status = status, summary = "s"),
@@ -105,20 +99,6 @@ class AgentReportToolTest {
     }
 
     @Test
-    fun thePromptCarriesStageSummaryAndQuestion() {
-        AgentReportStore.record(
-            sid, null, "blocked", "cannot reach the API",
-            blocker = "the token expired", question = "Rotate the token now?",
-        )
-        val prompt = AgentReportStore.stagePrompt(sid, null)!!
-        assertTrue(prompt.contains("stage: needs-answer"))
-        assertTrue(prompt.contains("cannot reach the API"))
-        assertTrue(prompt.contains("the token expired"))
-        assertTrue(prompt.contains("Rotate the token now?"))
-        assertTrue(prompt.contains("agent_report"))
-    }
-
-    @Test
     fun renderTellsTheModelWhatToDoNext() {
         val review = AgentReportStore.render(AgentReportStore.Report(status = "ready", summary = "s"))
         assertTrue(review.contains("needs-review"))
@@ -159,10 +139,29 @@ class AgentReportToolTest {
         assertFalse(invalid.success)
     }
 
+    // [T-report-recovery] The report no longer rides every request, so the
+    // model re-reads it instead of re-reporting after its context is compacted.
     @Test
-    fun clearingRemovesThePrompt() {
-        AgentReportStore.record(sid, null, "ready", "done")
-        AgentReportTool.execute("""{"tool_title":"t","op":"clear"}""", sid, null)
-        assertNull(AgentReportStore.stagePrompt(sid, null))
+    fun opGetReadsTheCurrentReportBack() {
+        val empty = AgentReportTool.execute("""{"tool_title":"t","op":"get"}""", sid, null)
+        assertTrue(empty.output, empty.success)
+        assertTrue(empty.output.contains("no report yet"))
+
+        AgentReportStore.record(
+            sid, null, "blocked", "waiting on a person",
+            blocker = "no token", question = "Rotate now?",
+        )
+        val read = AgentReportTool.execute("""{"tool_title":"t","op":"get"}""", sid, null)
+        assertTrue(read.output, read.success)
+        assertTrue(read.output.contains("waiting on a person"))
+        assertTrue(read.output.contains("Rotate now?"))
+        assertEquals("get must not write", 1, AgentReportStore.history(sid, null).size)
+    }
+
+    @Test
+    fun recordingStillRequiresStatusAndSummary() {
+        val missing = AgentReportTool.execute("""{"tool_title":"t"}""", sid, null)
+        assertFalse(missing.success)
+        assertTrue(missing.output.contains("required"))
     }
 }

@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Entri tidak ditemui dalam log harian terkini.</string>
     <string name="memory_revoke_result_io_error">Gagal menulis fail: %1$s</string>
     <string name="memory_save_toast">Disimpan</string>
+
+    <string name="memory_save_failed_toast">Simpan gagal — semak storan dan cuba lagi</string>
     <string name="memory_global_footer">Arahan dan keutamaan kekal yang boleh dilihat oleh Ejen dalam setiap sesi. Ejen tidak boleh mengubah fail ini.</string>
     <string name="check_update_section_header">Kemas Kini Aplikasi</string>
     <string name="check_update_current_version">Versi semasa: %1$s</string>
@@ -118,13 +120,13 @@
     <string name="settings_mcp">Integrasi MCP</string>
     <string name="settings_mcp_subtitle">Sambungkan pelayan Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Tindanan penuh Android &amp; mudah alih</string>
     <string name="dev_suite_android_summary">JDK17 · Toolchain aarch64 SDK · NDK r29 · Flutter/RE/Rust pilihan</string>
     <string name="dev_suite_code_search_name">Carian kod dan kecekapan terminal</string>
     <string name="dev_suite_code_search_summary">kuartet rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suite pembangun Python &amp; AI</string>
     <string name="dev_suite_python_summary">Runtime Python 3 · pip/venv · Kebergantungan binaan pengkomputeran saintifik AI</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Tindanan penuh Node.js &amp; web</string>
     <string name="dev_suite_nodejs_summary">Runtime Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suite Pembangunan Go</string>
     <string name="dev_suite_go_summary">Toolchain golang-go (suite eksklusif OpenMinis)</string>
@@ -181,8 +183,8 @@
     <string name="zen_deleted_models_title">Pulihkan model percuma yang dipadam (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Batalkan pemadaman yang direkodkan pada penyedia ini</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Sambungan gagal</string>
+    <string name="provider_sync_mark_invalid">Respons tidak sah</string>
     <string name="add_provider_voice_templates_footer">Vendor pertuturan ke teks dan teks ke pertuturan. Jenis pembekal dan URL asas telah diisi — anda hanya perlu menambah kunci API.</string>
     <string name="add_provider_voice_capability_tts">Sintesis suara (TTS)</string>
     <string name="add_provider_voice_capability_asr">Pengecaman suara (ASR)</string>
@@ -257,8 +259,8 @@
     <string name="soul_icon_choose_image">Pilih Imej</string>
     <string name="soul_icon_image_hint">Dipangkas menjadi segi empat sama dan dibulatkan</string>
     <string name="soul_icon_use_default">Guna Lalai</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Guna ikon model</string>
+    <string name="soul_icon_use_model_hint">Mengikut ikon vendor model yang berjalan</string>
     <string name="soul_icon_emoji_title">Ikon identiti</string>
     <string name="soul_icon_emoji_field">Atau taip emoji</string>
     <string name="soul_icon_set">Tetapkan</string>
@@ -325,6 +327,8 @@
     <string name="token_usage_section_thinking">Penaakulan</string>
     <string name="token_usage_thinking_label">Penaakulan</string>
     <string name="token_usage_thinking_level">Tahap</string>
+    <string name="token_usage_thinking_requested">Diminta</string>
+    <string name="token_usage_thinking_effective">Berkesan</string>
     <string name="token_usage_thinking_supported">Disokong</string>
     <string name="token_usage_section_tokens">Token (Jumlah Sesi)</string>
     <string name="token_usage_input_with_cache">Input (termasuk cache)</string>
@@ -334,6 +338,20 @@
     <string name="token_usage_cache_write">Tulisan Cache</string>
     <string name="token_usage_section_agent_loop">Gelung Ejen</string>
     <string name="token_usage_total_loops">Jumlah Gelung</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">Prompt sistem &amp; alat</string>
+    <string name="context_block_skills_mcps">Kemahiran &amp; MCP</string>
+    <string name="context_block_memory">Suntikan memori</string>
+    <string name="context_block_runtime">Konteks sementara giliran ini</string>
+    <string name="context_block_goal_plan">Suntikan matlamat &amp; pelan</string>
+    <string name="context_block_history">Tetingkap sejarah</string>
+    <string name="context_block_attachments">Lampiran &amp; imej</string>
+    <string name="context_usage_note_estimate">Anggaran kasar (±10%); disegarkan semasa lembaran ini dibuka</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Kad interaktif</string>
+    <string name="gen_ui_view_source">Lihat sumber</string>
+    <string name="gen_ui_view_render">Tunjuk render</string>
+    <string name="gen_ui_view_fullscreen">Skrin penuh</string>
     <string name="common_on">Hidup</string>
     <string name="common_off">Mati</string>
     <string name="common_yes">Ya</string>
@@ -441,6 +459,11 @@
     <string name="sessionlist_regenerate_title">Jana Semula Tajuk</string>
     <string name="sessionlist_regenerating_title">Menjana semula tajuk…</string>
     <string name="sessionlist_duplicate">Duplikat</string>
+    <string name="sessionlist_branch_tree">Pokok cabang</string>
+    <string name="sessionlist_branch_from_here">Cabangkan daripada mesej terkini</string>
+    <string name="sessionlist_branch_empty">Sesi ini belum mempunyai cabang. Cabangkan daripada mesej terkini supaya percubaan semula tidak mengubah perbualan asal.</string>
+    <string name="sessionlist_branch_source">Sumber</string>
+    <string name="sessionlist_branch_children">Cabang</string>
     <string name="sessionlist_search_action">Cari</string>
     <string name="sessionlist_dismiss">Tutup</string>
     <string name="sessionlist_delete_one_title">Padam perbualan?</string>
@@ -461,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s sedang berfikir</string>
     <string name="read_aloud_unavailable">Gagal membacakan: tiada enjin suara yang boleh digunakan. Semak tetapan Output Suara atau pasang enjin pertuturan sistem.</string>
     <string name="chat_error_stream_dropped_partial">Sambungan terputus — balasan ini mungkin tidak lengkap. Ketik Cuba Lagi untuk meneruskan.</string>
+    <string name="chat_composer_queued_hint">Input akan beraturan dan dihantar apabila tugasan semasa selesai</string>
     <string name="chat_input_placeholder">Mesej untuk %1$s (@ sebut fail)</string>
     <string name="chat_input_placeholder_hint_1">Cuba @ untuk sebut fail bagi %1$s</string>
     <string name="chat_input_placeholder_hint_2">Taip / untuk SKILL dan perintah pantas</string>
@@ -609,6 +633,14 @@
     <string name="env_var_privacy_header">Privasi</string>
     <string name="env_var_privacy_toggle">Mod Privasi</string>
     <string name="env_var_privacy_footer">Apabila didayakan, sebarang nilai pemboleh ubah persekitaran yang muncul dalam output shell-execute akan digantikan dengan bentuk bertopeng (cth. `sk-1********ajhks`) sebelum sampai kepada model. Nilai yang lebih pendek daripada 8 aksara menjadi `*` sepenuhnya. Output yang dilihat pengguna dalam sembang kekal tidak berubah.</string>
+    <string name="outbound_mask_toggle">Topeng privasi data keluar</string>
+    <string name="outbound_mask_footer">Penyamaran bentuk opt-in: rentetan berbentuk kunci (termasuk kod), e-mel dan nombor telefon menjadi pemegang tempat. Kunci API embedding di bawah disimpan teks jelas dalam prefs peribadi. Sejarah peranti tidak berubah.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · automatik penuh</string>
+    <string name="chat_menu_perm_safe_auto">Auto selamat · alat baca sahaja dibenarkan</string>
+    <string name="chat_menu_perm_ask">Tanya · sahkan setiap panggilan</string>
+    <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
+    <string name="gate_approval_allow_all">Sentiasa benarkan sesi ini (sasaran semasa)</string>
+    <string name="approval_action_allow_all_session">Sentiasa benarkan dalam sesi ini</string>
     <string name="env_var_section_header">Pemboleh Ubah</string>
     <string name="env_var_section_footer">Pemboleh ubah persekitaran disuntik ke dalam shell sandbox pada permulaan sesi. Nama ditukar kepada huruf besar dan mesti mematuhi peraturan pemboleh ubah shell POSIX.</string>
     <string name="env_var_empty_title">Tiada Pemboleh Ubah Persekitaran</string>
@@ -973,6 +1005,12 @@
     <string name="modeldetail_section_capabilities">Keupayaan</string>
     <string name="modeldetail_context_window">Tetingkap Konteks</string>
     <string name="modeldetail_thinking">Penaakulan</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Had tahap penaakulan</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Berkuat kuasa: %1$s (lalai katalog)</string>
+    <string name="modeldetail_thinking_level_effective_override">Berkuat kuasa: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Mengehadkan tahap penaakulan yang ditawarkan oleh pemilih sembang untuk model ini. Auto mengikut pengisytiharan katalog. Ultra dihantar secara literal jika penyedia mengisytiharkannya atau apabila anda menetapkan had ini ke Ultra secara manual; jika tidak, ia dipetakan ke max.</string>
     <string name="modeldetail_capabilities_footer">Tetingkap konteks dan token output maksimum (dalam token). Biarkan kosong untuk menggunakan nilai lalai pembekal. Dayakan Penaakulan bagi model yang menyokong penaakulan lanjutan.</string>
     <string name="modeldetail_provider_default">Lalai pembekal</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Melebihi had yang dilaporkan pembekal (%1$d). Nilai tetap disimpan, tetapi mungkin menyebabkan ralat.</string>
@@ -1114,7 +1152,7 @@
     <string name="settings_bg_overlay">Tindanan Tugasan Latar Belakang</string>
     <string name="settings_bg_overlay_footer">Paparkan kapsul terapung kecil berisi alat semasa ketika Minis Ultra berada di latar belakang. Memerlukan kebenaran untuk dipaparkan di atas aplikasi lain. Ketik kapsul untuk membawa Minis Ultra ke hadapan; seret untuk mengalihkannya.</string>
     <string name="settings_bg_overlay_permission_needed">Benarkan paparan di atas aplikasi lain untuk mendayakannya</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (kemas kini langsung)</string>
     <string name="settings_dynamic_island_footer">Paparkan status Ejen secara langsung pada cip status Android 16. Apabila dihidupkan, ini menggantikan tindanan terapung supaya anda tidak melihat dua penunjuk status serentak.</string>
     <string name="settings_dynamic_island_unsupported">Versi sistem anda buat masa ini belum menyokong Live Updates (memerlukan Android 16+ dengan ciri tersebut didayakan).</string>
     <string name="agent_loop_section_title">Model yang Boleh Dipanggil Minis Ultra Semasa Berjalan</string>
@@ -1762,7 +1800,7 @@
     <string name="dev_suite_installing">Memasang…</string>
     <string name="dev_suite_failed">gagal</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Butiran kegagalan pemasangan</string>
     <string name="dev_suite_ready">Sedia</string>
     <string name="dev_suite_not_installed">Tidak dipasang</string>
     <string name="dev_suite_required">wajib</string>
@@ -1839,6 +1877,8 @@
     <string name="ma_add_role_sub">Nama/penerangan/prom/senarai benar alat tersuai; peranan terbina dalam dengan nama yang sama akan ditimpa</string>
     <string name="ma_team_lead_suffix"> · ketua pasukan</string>
     <string name="ma_thinking_depth">Kedalaman pemikiran untuk jalanan ini</string>
+
+    <string name="ma_thinking_follows_main">Ikut sesi utama</string>
     <string name="ma_role_dialog_title_builtin">Peranan terbina dalam (disimpan sebagai salinan tersuai)</string>
     <string name="ma_role_dialog_title_new">Peranan kolaborasi baharu</string>
     <string name="ma_role_dialog_title_edit">Edit peranan</string>
@@ -1856,6 +1896,7 @@
     <string name="usage_label_output_short">Output</string>
     <string name="plan_board_all_done">Semua langkah selesai</string>
     <string name="cd_plan_board_toggle">Buka atau tutup papan pelan</string>
+    <string name="cd_plan_step_retry">Cuba semula langkah yang gagal ini</string>
     <string name="cd_goal_header">Buka butiran matlamat</string>
     <string name="cd_goal_status_active">Matlamat sedang berjalan</string>
     <string name="cd_goal_status_paused">Matlamat dijeda</string>
@@ -2028,6 +2069,9 @@
     <string name="mcp_approval_restart_notice">Mula semula membatalkan %1$d kelulusan belum selesai</string>
     <string name="context_saver_title">Jimat konteks</string>
     <string name="context_saver_footer">Melipat output alat lama di luar beberapa hasil terakhir menjadi pemegang tempat satu baris apabila permintaan membesar. Tiada apa dipadam - hasil terlipat mengekalkan laluan fail atau memberitahu untuk menjalankan semula alat.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Pemanasan cache prompt</string>
+    <string name="cache_warming_footer">Apabila didayakan, selepas jeda melahu apl mungkin memainkan semula permintaan berjaya terakhir dengan had output satu token untuk menyegarkan cache prompt penyedia sebelum tamat tempoh. Menghantar permintaan tambahan yang dibilkan; lalai dimatikan.</string>
     <string name="context_saver_off">Mati</string>
     <string name="context_saver_balanced">Seimbang</string>
     <string name="context_saver_aggressive">Agresif</string>
@@ -2035,6 +2079,12 @@
     <string name="token_usage_saver_folded">Hasil alat terlipat</string>
     <string name="token_usage_saver_saved">Dijimat giliran ini</string>
     <string name="memory_center_overview">Sepintas lalu</string>
+    <string name="memory_embedding_header">Peringatan semantik</string>
+    <string name="memory_embedding_toggle">Peringatan memori semantik dengan embedding</string>
+    <string name="memory_embedding_base_url">URL asas embeddings</string>
+    <string name="memory_embedding_api_key">Kunci API embeddings</string>
+    <string name="memory_embedding_model">Model embedding</string>
+    <string name="memory_embedding_footer">Dimatikan secara lalai. Apabila diaktifkan, peringatan memori menambah carian keserupaan vektor melalui titik akhir embeddings yang serasi dengan OpenAI, selain carian kata kunci. Perubahan hanya berkuat kuasa selepas proses aplikasi dimulakan semula.</string>
     <string name="memory_center_stat_memory">Fail memori</string>
     <string name="memory_center_stat_recalls">Entri dipanggil</string>
     <string name="memory_center_stat_failures">Ulangan disekat</string>
@@ -2110,4 +2160,179 @@
     <string name="pool_mode_random">Rawak</string>
     <string name="pool_mode_round_robin">Bergilir</string>
     <string name="pool_mode_title">Mod penggunaan kunci</string>
+
+    <string name="git_panel_branch_search">Cari cawangan</string>
+
+
+    <string name="git_panel_branches_section">Cawangan</string>
+
+    <string name="git_panel_uncommitted_count">Perubahan belum dikomit: %1$d fail</string>
+
+    <string name="git_panel_detached_head">HEAD tertanggal</string>
+
+    <string name="git_panel_create_branch">Cipta dan checkout cawangan baharu…</string>
+
+    <string name="git_panel_branch_name_hint">Nama cawangan</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Tunjukkan semua</string>
+    <string name="check_update_notes_collapse">Tunjukkan kurang</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arkib</string>
+    <string name="sessionlist_unarchive">Nyaharkib</string>
+    <string name="sessionlist_section_archived">Diarkibkan (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Preset vendor</string>
+    <string name="add_provider_vendor_presets_pick_hint">Ketik vendor untuk mengisi automatik endpoint dan namanya.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Cipta kunci API di platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Dapatkan kunci API dari konsol platform terbuka Zhipu di open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Cipta kunci API di platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Cipta kunci API di konsol Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Cipta kunci API di konsol Volcano Ark; nama model ialah ID endpoint atau ID model</string>
+    <string name="add_provider_vendor_hint_minimax">Dapatkan kunci API dari platform terbuka MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Cipta kunci API di cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Cipta kunci API di console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Dapatkan kunci API dari konsol Together di api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Cipta kunci API di console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Pelayan setempat — tiada kunci API diperlukan</string>
+    <string name="add_provider_vendor_hint_lmstudio">Pelayan setempat — tiada kunci API diperlukan. Mulakan dahulu pelayan Developer dalam LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Edit mesej dalam baris gilir</string>
+    <string name="git_panel_diff_truncated">Diff dipotong pada 200,000 aksara — teks penuh terdapat dalam fail repo itu sendiri.</string>
+    <string name="voice_service_no_audio_models">Tiada model audio tersenarai untuk penyedia ini. Senarai model sesetengah penyedia (Bailian, SiliconFlow) tidak mengisytiharkan sokongan audio — tambahkan model ASR/TTS sebagai model tersuai dengan modaliti audio, atau pilih perkhidmatan suara lain.</string>
+    <string name="voice_error_network">Pengecaman suara gagal: ralat rangkaian. Semak sambungan anda, atau tukar ke enjin pada peranti atau penyedia lain.</string>
+    <string name="voice_error_transcription">Pengecaman suara tidak mengembalikan teks. Bercakap lagi, atau semak model dan kunci API penyedia transkripsi.</string>
+    <string name="voice_error_busy">Pengecam suara sedang sibuk. Tunggu sekejap dan cuba lagi.</string>
+    <string name="voice_error_audio">Pengambilan audio gagal. Semak kebenaran mikrofon dan pastikan tiada aplikasi lain menggunakan mic.</string>
+    <string name="voice_error_language">Bahasa yang dipilih tidak disokong oleh enjin ini. Pilih bahasa lain.</string>
+    <string name="voice_error_unknown">Pengecaman suara gagal: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Peraturan tersuai belum aktif (%1$s). Permintaan buat masa ini menggunakan lalai terbina dalam; mesej seterusnya selepas cache dimuat akan menerapkan peraturan anda.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Paksa pemikiran lanjutan</string>
+    <string name="provider_detail_force_thinking_footer">Hanya untuk relay serasi Anthropic. Menghantar thinking:{type:"enabled",budget_tokens:N} walaupun katalog model mengatakan model tidak boleh menaakul. Gunakan apabila model menyokong pemikiran tetapi entri katalog tiada atau salah.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Eksport pembekal</string>
+    <string name="provider_transfer_export_title">Eksport pembekal</string>
+    <string name="provider_transfer_export_body">%1$d pembekal akan dieksport ke fail JSON.</string>
+    <string name="provider_transfer_include_keys">Sertakan kunci API</string>
+    <string name="provider_transfer_include_keys_risk">Kunci API ditulis ke fail sebagai teks biasa. Sesiapa yang mendapatkan fail ini boleh menggunakan kunci anda — simpan fail dengan selamat dan padam selepas import.</string>
+    <string name="provider_transfer_export">Eksport</string>
+    <string name="provider_transfer_export_success">%1$d pembekal dieksport</string>
+    <string name="provider_transfer_export_failed">Eksport gagal</string>
+    <string name="provider_transfer_import_ok">%1$d pembekal diimport</string>
+    <string name="provider_transfer_import_partial">%1$d pembekal diimport, %2$d gagal</string>
+    <string name="provider_transfer_import_partial_detail">%1$d pembekal diimport, %2$d gagal: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Ruang Kerja SSH</string>
+    <string name="ssh_workspace_binding_title">Ruang Kerja SSH</string>
+    <string name="ssh_workspace_bound_to">Terikat ke %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Bekerja dalam sandbox setempat</string>
+    <string name="ssh_workspace_option_local">Sandbox setempat</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell berjalan dalam sandbox Linux peranti ini</string>
+    <string name="ssh_workspace_no_hosts">Tiada hos SSH lagi — tambahkan satu dalam Tetapan → Ruang Kerja SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Ruang kerja SSH hanya menyokong arahan shell; alat fail ditolak selagi hos terikat.</string>
+    <string name="ssh_workspace_shell_only">Ruang kerja SSH hanya menyokong arahan shell — \'%1$s\' ditolak.</string>
+    <string name="ssh_workspace_shell_only_hint">Jalankan arahan jauh dengan shell_execute, atau nyahikat sesi ini melalui menu sembang → Ruang Kerja SSH untuk memulihkan alat fail setempat.</string>
+    <string name="ssh_hosts_title">Hos SSH</string>
+    <string name="ssh_hosts_subtitle">Hos jauh yang boleh dijangkau ejen melalui SSH. Kredensial disimpan sulit dan tidak pernah dipaparkan.</string>
+    <string name="ssh_hosts_row_subtitle">Tambah hos, uji sambungan, urus kunci hos</string>
+    <string name="ssh_hosts_empty">Tiada hos lagi.</string>
+    <string name="ssh_hosts_add">Tambah hos</string>
+    <string name="ssh_hosts_add_cancel">Batal</string>
+    <string name="ssh_hosts_test">Uji sambungan</string>
+    <string name="ssh_hosts_testing">Menguji…</string>
+    <string name="ssh_hosts_test_ok">Sambungan berjaya</string>
+    <string name="ssh_hosts_test_failed">Sambungan gagal</string>
+    <string name="ssh_hosts_forget_key">Lupakan kunci hos</string>
+    <string name="ssh_hosts_remove">Buang</string>
+    <string name="ssh_hosts_pinned">Kunci hos disemat: %1$s…</string>
+    <string name="ssh_field_name">Nama (huruf/digit/._-)</string>
+    <string name="ssh_field_hostname">Nama hos atau IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nama pengguna</string>
+    <string name="ssh_auth_password">Kata laluan</string>
+    <string name="ssh_auth_key">Kunci peribadi</string>
+    <string name="ssh_field_password">Kata laluan</string>
+    <string name="ssh_field_private_key">Kunci peribadi PEM</string>
+    <string name="ssh_field_passphrase">Frasa laluan kunci (pilihan)</string>
+    <string name="ssh_save">Simpan</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Bebas tangan</string>
+    <string name="handsfree_state_starting">Memulakan…</string>
+    <string name="handsfree_state_listening">Mendengar…</string>
+    <string name="handsfree_state_thinking">Berfikir…</string>
+    <string name="handsfree_state_speaking">Bersuara…</string>
+    <string name="handsfree_exit_recognition">Bebas tangan berhenti: pengecaman suara gagal berulang kali. Ketik Bebas tangan untuk mencuba lagi.</string>
+    <string name="handsfree_exit_tts">Bebas tangan berhenti: balasan tidak dapat dibacakan. Ketik Bebas tangan untuk mencuba lagi.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Satu nama pakej Android setiap baris, cth. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Guna senarai sebagai senarai sekatan</string>
+    <string name="a11y_app_policy_blocklist_sub">Tutup = hanya aplikasi tersenarai dibenarkan. Buka = aplikasi tersenarai disekat.</string>
+    <string name="a11y_app_policy_enabled">Hadkan mengikut aplikasi</string>
+    <string name="a11y_app_policy_enabled_sub">Semak pakej aplikasi latar depan sebelum setiap bacaan skrin atau ketukan</string>
+    <string name="a11y_app_policy_footer">Bila aktif, ui_read dan ui_action disemak terhadap aplikasi latar depan semasa sebelum dilaksanakan. Aplikasi di luar senarai (mod benar) atau dalam senarai (mod sekatan) ditolak dengan mesej yang jelas. Aplikasi Minis sendiri sentiasa dibenarkan.</string>
+    <string name="a11y_app_policy_section">Skop aplikasi kebolehcapaian</string>
+    <string name="boot_hook_enable">Jalankan /var/minis/boot.sh semasa permulaan</string>
+    <string name="boot_hook_enable_sub">Dilaksanakan dalam sandbox selepas rootfs Linux but</string>
+    <string name="boot_hook_footer">Lalai tidak aktif. Laluan ini berada dalam sandbox yang boleh ditulis, jadi mana-mana ejen yang mampu menjalankan shell boleh menggantikan skrip — bila aktif, fail sebegini berjalan senyap pada setiap pelancaran. Suis disemak semula sejurus sebelum pelaksanaan, dan masa pertama skrip dikesan serta perubahan saiz/mtime ditulis ke log aplikasi. Berkesan pada pelancaran seterusnya.</string>
+    <string name="boot_hook_last_status">Pelaksanaan terakhir</string>
+    <string name="boot_hook_section">Hook but</string>
+    <string name="lifecycle_hooks_command_hint">Satu baris arahan. Biasanya laluan skrip paling sesuai, cth. bash /var/minis/hooks/on-response.sh. Kosongkan untuk membuang hook.</string>
+    <string name="lifecycle_hooks_enable">Aktifkan hook kitaran hayat</string>
+    <string name="lifecycle_hooks_enable_sub">Laksanakan skrip di bawah pada peristiwa masing-masing</string>
+    <string name="lifecycle_hooks_events_footer">Skrip berjalan dalam sandbox, bersiri pada lorongnya sendiri, dengan had masa 20 saat. Kegagalan hanya dilog dan tidak pernah menyekat sembang.</string>
+    <string name="lifecycle_hooks_help_body">Setiap skrip menerima MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID dan MINIS_HOOK_DETAIL. Skrip ialah proses PRoot sekali guna: /proc arahan lain tidak kelihatan merentas invokasi dan flock tidak boleh dipercayai — gunakan fail untuk keadaan merentas pelaksanaan. OnResponse dicetuskan sekali bagi setiap jawapan ejen yang selesai; OnSessionEnd dicetuskan apabila sembang dipadam.</string>
+    <string name="lifecycle_hooks_help_header">Persekitaran &amp; penafian</string>
+    <string name="lifecycle_hooks_master_footer">Lalai tidak aktif. Selama tidak aktif, skrip yang dikonfigurasi disimpan tetapi tidak pernah dilaksanakan.</string>
+    <string name="lifecycle_hooks_not_set">Tidak ditetapkan</string>
+    <string name="lifecycle_hooks_section_events">Peristiwa</string>
+    <string name="lifecycle_hooks_section_master">Suis utama</string>
+    <string name="lifecycle_hooks_title">Hook kitaran hayat</string>
+    <string name="network_trusted_ca_count">%1$d sijil diimport</string>
+    <string name="network_trusted_ca_duplicate">Sijil itu telah diimport.</string>
+    <string name="network_trusted_ca_failed">Fail itu tidak dapat dibaca sebagai sijil PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Untuk penyedia yang endpoint HTTPS-nya menggunakan CA swasar atau swasta. Sijil disimpan hanya di dalam Minis dan ditambah ke sauh kepercayaan Android untuk aplikasi ini; semakan sijil dan nama hos biasa kekal aktif. Berkesan pada permintaan penyedia seterusnya — tanpa perlu mula semula.</string>
+    <string name="network_trusted_ca_import">Import Sijil PEM</string>
+    <string name="network_trusted_ca_imported">%1$d sijil diimport. Cuba semula permintaan.</string>
+    <string name="network_trusted_ca_none">Tiada sijil diimport</string>
+    <string name="network_trusted_ca_remove_all">Buang Semua</string>
+    <string name="network_trusted_ca_removed">Sijil yang diimport telah dibuang.</string>
+    <string name="network_trusted_ca_title">Sijil Dipercayai</string>
+    <string name="provider_detail_custom_headers">Pengepala permintaan tersuai</string>
+    <string name="provider_detail_custom_headers_footer">Satu «Nama: nilai» setiap baris. Hanya digunakan pada permintaan chat, /models dan Responses untuk penyedia ini. Host, Content-Length dan Connection diuruskan oleh klien HTTP dan tidak boleh ditulis ganti.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Lalai tidak aktif. Bila aktif, setiap permintaan sembang ke endpoint tersuai ini membawa ID stabil per perbualan (x-opencode-session) supaya relay serasi OpenCode boleh menghalakan dan menyimpannya dalam cache. Aktifkan hanya untuk gerbang yang anda percayai: ID ini mengenal pasti perbualan merentas giliran.</string>
+    <string name="provider_detail_opencode_session_header">Pengepala sesi OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Hantar x-opencode-session</string>
+    <string name="provider_detail_save_headers">Simpan pengepala</string>
+    <string name="scheduled_task_prompt_template_hint">Tarikh/masa semasa dan pelaksanaan terakhir ditambah secara automatik. Anda juga boleh menggunakan {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} dan {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Hook kitaran hayat</string>
+    <string name="settings_lifecycle_hooks_subtitle">Menjalankan skrip sandbox semasa sesi bermula / jawapan selesai / sesi berakhir</string>
+    <string name="web_search_tool_enabled">Aktifkan web_search</string>
+    <string name="web_search_tool_enabled_sub">Benarkan ejen mencari web daripada sembang. Tutup → alat ini tidak ditawarkan langsung.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Menutup alat ini tidak memadam konfigurasi enjin di bawah; aktifkan semula untuk memulihkan tingkah laku yang sama.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Tiada aplikasi untuk membuka lampiran ini.</string>
+    <string name="chat_move_to_capsule">Pindahkan ke…</string>
+<string name="git_panel_history_read_failed">Gagal membaca sejarah komit — butiran dalam log (tag GitPanel)</string>
+
+    <string name="git_panel_status_read_failed">Gagal membaca status pokok kerja — butiran dalam log (tag GitPanel)</string>
 </resources>

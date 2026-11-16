@@ -242,7 +242,7 @@ internal fun PlanGoalCard(
         exit = fadeOut(tween(EXIT_ANIM_MS)) + shrinkVertically(tween(EXIT_ANIM_MS)),
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainer,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -280,7 +280,24 @@ internal fun PlanGoalCard(
                             total = total,
                             allDone = allDone,
                             expanded = expanded,
+                            // [T-plan-step-retry] Failed rows grow a retry
+                            // affordance routed through the VM: the store flip
+                            // is synchronous (the row shows the active spinner
+                            // next frame) and the one-shot steering rides the
+                            // next request — kicked immediately when idle.
+                            onRetryStep = { planId -> viewModel.retryPlanStep(planId) },
                             goalObjective = goalDisplay?.objective,
+                            // [T-goal-panel-reachability] The goal row that
+                            // normally opens the sheet is hidden whenever a
+                            // board owns the card; keep the panel reachable by
+                            // keying the flag on the DB row, not on the
+                            // (possibly suppressed) display snapshot.
+                            onOpenGoal = goal?.let {
+                                {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    GoalSheetSignal.open()
+                                }
+                            },
                             onLocate = { plan -> onLocate?.invoke(plan.title) },
                             onToggle = {
                                 expanded = !expanded
@@ -294,13 +311,17 @@ internal fun PlanGoalCard(
     }
 }
 
-/** The goal segment: status glyph + objective + token badge, opens the sheet. */
+/** The goal segment: status glyph + objective, opens the sheet. */
 @Composable
 private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            // [T-plan-card-dense] 36dp, matching the board summary row: this
+            // card sits directly above the composer and must not take a
+            // second full-height line. The token badge moved into the goal
+            // sheet — the objective is the only thing worth a permanent row.
+            .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable(
                 role = Role.Button,
@@ -355,19 +376,9 @@ private fun GoalHeaderRow(goal: SessionGoalEntity, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(8.dp))
-        val badge = goal.tokenBudget?.let { "${formatGoalTokens(goal.tokensUsed)}/${formatGoalTokens(it)}" }
-            ?: formatGoalTokens(goal.tokensUsed)
-        Text(
-            text = badge,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = when (goal.status) {
-                GoalStatus.COMPLETE -> ToolCheckColor
-                GoalStatus.BLOCKED, GoalStatus.BUDGET_LIMITED -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.primary
-            },
-        )
+        // [T-plan-card-dense] The token badge is gone from this row: it is a
+        // number nobody reads at a glance, and it was costing width that the
+        // objective needs. The sheet still shows it (GoalSheet balance line).
     }
 }
 

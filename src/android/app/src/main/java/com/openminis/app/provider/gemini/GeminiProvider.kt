@@ -23,6 +23,8 @@ import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.safeOptString
 import com.openminis.app.provider.ssePayloads
+import com.openminis.app.provider.cancelOnCancellation
+import com.openminis.app.provider.StreamTailDrain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -40,13 +42,39 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
+import com.openminis.app.network.applyAppTrustStore
 
 class GeminiProvider(
     private val apiKey: String,
     override var model: LLMModel = LLMModel.gemini25Flash,
     private val basePath: String = "https://generativelanguage.googleapis.com/v1beta",
+    /**
+     * [T-android-gemini-oauth] Non-null switches auth from the `?key=`
+     * query parameter to an `Authorization: Bearer <token>` header fetched
+     * per call (Google Code Assist / OAuth subscriptions reject the key
+     * param). Null = classic API-key mode, byte-identical requests.
+     */
+    private val oauthTokenProvider: (suspend () -> String?)? = null,
+    /**
+     * [GH#221] 用户为该 provider 实例配置的自定义请求头。在 [applyAuth] 里
+     * 最后应用（两条请求路径共用），因此同名头以用户配置为准；Host /
+     * Content-Length 等在存储层已被拒绝。空 map = 行为不变。
+     */
+    private val extraHeaders: Map<String, String> = emptyMap(),
 ) : LLMProvider {
     override val name = "Google"
+
+    /** `?key=` in API-key mode; bare URL in OAuth mode (token goes in the header). */
+    private fun authUrl(path: String): String =
+        if (oauthTokenProvider == null) "$path?key=$apiKey" else path
+
+    private suspend fun applyAuth(request: okhttp3.Request.Builder): okhttp3.Request {
+        val token = oauthTokenProvider?.invoke()
+        if (token != null) request.header("Authorization", "Bearer $token")
+        // [GH#221] 用户请求头最后应用；?key= 查询参数认证与 Bearer 均不受影响。
+        for ((key, value) in extraHeaders) request.header(key, value)
+        return request.build()
+    }
     override val callGateKey: String
         get() = ProviderKeyGate.key(basePath, apiKey, model.id)
 
@@ -60,19 +88,21 @@ class GeminiProvider(
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        // [GH#258][GH#287] Custom-base endpoints may present a private CA.
+        .applyAppTrustStore()
+        // [GH#188] See AnthropicProvider: upload-aware TTFB clock + targeted
+        // connection eviction on timeout.
+        .eventListener(com.openminis.app.provider.UploadAwareTtfbListener())
         .build()
 
     override suspend fun sendMessageClamped(
-        messages: List<LLMMessage>,
-        systemPrompt: String?,
-        maxTokens: Int,
-        temperature: Double?,
-        imageParts: List<LLMMessage.ImagePart>,
-        tools: List<AgentToolDefinition>,
-        thinkingLevel: ThinkingLevel,
+        messages: List<LLMMessage>, systemPrompt: String?, maxTokens: Int,
+        temperature: Double?, imageParts: List<LLMMessage.ImagePart>,
+        tools: List<AgentToolDefinition>, thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse = withContext(Dispatchers.IO) {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel)
-        val url = "$basePath/models/${model.id}:generateContent?key=$apiKey"
+        val url = authUrl("$basePath/models/${model.id}:generateContent")
         val request = Request.Builder()
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -80,10 +110,10 @@ class GeminiProvider(
             // can trace the request back to the Minis build. Gemini has no
             // SDK-specific UA requirement, so the helper's default kicks in.
             .applyUserAgentOverride(null)
-            .build()
+        val authedRequest = applyAuth(request)
 
         // [T-android-stop-cancels-socket] Non-stream execute is blocking IO.
-        val response = client.newCall(request).executeCancellable()
+        val response = client.newCall(authedRequest).executeCancellable()
         val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
@@ -102,14 +132,12 @@ class GeminiProvider(
     }
 
     override fun streamMessageClamped(
-        messages: List<LLMMessage>,
-        systemPrompt: String?,
-        maxTokens: Int,
-        temperature: Double?,
-        imageParts: List<LLMMessage.ImagePart>,
-        tools: List<AgentToolDefinition>,
-        thinkingLevel: ThinkingLevel,
+        messages: List<LLMMessage>, systemPrompt: String?, maxTokens: Int,
+        temperature: Double?, imageParts: List<LLMMessage.ImagePart>,
+        tools: List<AgentToolDefinition>, thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int,
+        // Interface parity; unused on Gemini (see AnthropicProvider note).
+        extraHeaders: Map<String, String>,
     ): Flow<LLMStreamChunk> = rawStreamMessage(
         messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel,
     ).failOnSilentEmptyCompletion(name)
@@ -124,19 +152,28 @@ class GeminiProvider(
         thinkingLevel: ThinkingLevel,
     ): Flow<LLMStreamChunk> = callbackFlow {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel)
-        val url = "$basePath/models/${model.id}:streamGenerateContent?alt=sse&key=$apiKey"
+        val url = authUrl("$basePath/models/${model.id}:streamGenerateContent?alt=sse")
         val request = Request.Builder()
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             // [T-android-default-ua] same intent as the non-streaming
             // branch above — brand outbound requests with Minis/<version>.
             .applyUserAgentOverride(null)
-            .build()
+        val authedRequest = applyAuth(request)
 
-        val call = client.newCall(request)
-        val cancelOnExit = kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job]
-            ?.invokeOnCompletion { call.cancel() }
-        val response = com.openminis.app.provider.StreamTtfb.execute(call, "Gemini")
+        val watch = com.openminis.app.provider.TtfbWatchState()
+        val call = client.newCall(
+            authedRequest.newBuilder()
+                .tag(com.openminis.app.provider.TtfbWatchState::class.java, watch)
+                .build(),
+        )
+        val cancelOnExit = call.cancelOnCancellation(
+            kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
+        )
+        try {
+        val response = com.openminis.app.provider.StreamTtfb.execute(
+            call, "Gemini", watch = watch,
+        )
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             response.close()
@@ -144,12 +181,14 @@ class GeminiProvider(
         }
 
         val reader = BufferedReader(InputStreamReader(response.body!!.byteStream()))
+        val drain = StreamTailDrain(this, { call.cancel() })
         try {
             var started = false
             var lastFinishReason: String? = null
             // Shared SSE assembler: joins multi-line `data:` and tolerates
             // `data:{...}` with no space (Gemini-compatible relays).
-            for (payload in ssePayloads(reader)) {
+            for (payload in ssePayloads(reader, drain)) {
+                if (payload == "[DONE]") break
                 val json = try { JSONObject(payload) } catch (_: Exception) { continue }
 
                 // [T-gemini-block-reason] A safety/region-blocked request has NO
@@ -194,6 +233,7 @@ class GeminiProvider(
 
                 extractFinishReason(json)?.let { reason ->
                     lastFinishReason = reason
+                    drain.terminal()
                 }
             }
             send(LLMStreamChunk.Finished(lastFinishReason ?: "end_turn"))
@@ -202,14 +242,18 @@ class GeminiProvider(
             if (e is kotlinx.coroutines.CancellationException) throw e
             cancel("Stream error", mapError(e))
         } finally {
-            reader.close()
-            response.close()
+            drain.close()
+            runCatching { reader.close() }
+            runCatching { response.close() }
         }
         channel.close()
         awaitClose {
-            cancelOnExit?.dispose()
             call.cancel()
             runCatching { response.close() }
+        }
+        } finally {
+            cancelOnExit?.dispose()
+            call.cancel()
         }
     }
 
@@ -428,6 +472,11 @@ class GeminiProvider(
             model.id,
             level,
             budgetTokensMax = model.budgetTokensMax,
+            // [OpenMinis#226] Audio-output (TTS) models reject thinkingConfig
+            // with a 400 regardless of how their id is spelled. The modality is
+            // the property actually responsible, so pass it instead of relying
+            // on the "-tts" suffix heuristic alone.
+            hasAudioOutput = "audio" in model.outputModalities.orEmpty(),
             // [T-gemini-budget-min-dead] budgetTokensMin intentionally NOT
             // passed: the Gemini wire API has no minimum-thinking field
             // (thinkingBudget is a single value, 3.x uses thinkingLevel), so

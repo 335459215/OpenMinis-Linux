@@ -30,6 +30,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -119,6 +123,13 @@ internal fun PlanBoardBody(
     expanded: Boolean,
     onToggle: () -> Unit,
     /**
+     * [T-plan-step-retry] Retry affordance for FAILED steps, null when the
+     * host has no VM to route to. Only failed rows grow the trailing retry
+     * glyph and become tappable — retry is a deliberate second attempt at
+     * something that errored, never a way to re-open landed or pending work.
+     */
+    onRetryStep: ((String) -> Unit)? = null,
+    /**
      * [T-plan-goal-one-row] The session Goal's objective, when one exists.
      *
      * The goal used to own a separate 44dp header row above this one, so a chat
@@ -127,6 +138,18 @@ internal fun PlanBoardBody(
      * The objective takes over the summary line's title slot instead.
      */
     goalObjective: String? = null,
+    /**
+     * [T-goal-panel-reachability] Opens the session Goal sheet.
+     *
+     * Before this, the goal row in [PlanGoalCard] was the ONLY tap target that
+     * opened the sheet, and it is rendered only when there is NO board
+     * (`headerVisible && !boardVisible`). Any session with a task board — i.e.
+     * every long task — therefore had no way to reach the goal panel at all:
+     * the objective was visible as this row's title but nothing could be
+     * tapped to pause, retune, or clear it. A trailing flag on the summary row
+     * restores that entry without adding a second row.
+     */
+    onOpenGoal: (() -> Unit)? = null,
     /** 点击某条任务时回调，用于跳回创建它的那段对话。 */
     onLocate: ((AgentPlanStore.Plan) -> Unit)? = null,
 ) {
@@ -166,21 +189,24 @@ internal fun PlanBoardBody(
             Column {
                 Column(
                     Modifier
-                        // Shorter than the old 360dp: the list now pushes the
-                        // card up into the transcript, so it is capped lower to
-                        // keep the last messages in view.
-                        .heightIn(max = 300.dp)
+                        // [T-plan-card-dense] 200dp cap (was 300): the card sits
+                        // above the composer, and a long board used to push the
+                        // transcript — the thing the user is reading — off the
+                        // top of the screen. The list still scrolls inside.
+                        .heightIn(max = 200.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
                     board.forEach { plan ->
+                        val retry: (() -> Unit)? = onRetryStep?.let { cb -> { cb(plan.id) } }
                         PlanBoardRow(
                             plan = plan,
+                            onRetry = retry,
                             onClick = onLocate?.let { cb -> { cb(plan) } },
                         )
                     }
                 }
                 HorizontalDivider(
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                    modifier = Modifier.padding(top = 2.dp),
                     thickness = 1.dp,
                     color = planCardHairline,
                 )
@@ -255,6 +281,27 @@ internal fun PlanBoardBody(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
+            // [T-goal-panel-reachability] Goal-sheet entry; only present while
+            // a Goal exists, so a plain board keeps exactly its old shape.
+            // 36dp stays inside the summary row's 44dp minimum while keeping
+            // the target finger-sized (a 28dp hit area undershot it).
+            if (onOpenGoal != null) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button) { onOpenGoal() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Flag,
+                        contentDescription = stringResource(R.string.cd_goal_header),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+            }
             Icon(
                 imageVector = PlanBoardGlyphs.ChevronDown,
                 contentDescription = null,
@@ -291,7 +338,9 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = 26.dp, end = 26.dp, bottom = 6.dp)
+            // [T-plan-card-dense] 2dp of breathing room under the bar (was 6):
+            // the bar already reads as the row's underline.
+            .padding(start = 26.dp, end = 26.dp, bottom = 2.dp)
             .height(2.dp)
             .clip(RoundedCornerShape(1.dp))
             .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
@@ -305,23 +354,37 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
     }
 }
 
-/** One board item: status glyph + title (strikethrough when done). */
+/**
+ * One board item: status glyph + title (strikethrough when done).
+ *
+ * [T-plan-step-retry] A FAILED row with [onRetry] also carries a trailing
+ * refresh glyph and is tappable end-to-end (44dp-equivalent within the 28dp
+ * rhythm via the row's full width) — the only row-level action the board
+ * offers, so a failed step never dead-ends: one tap re-arms it and kicks the
+ * run through [ChatViewModel.retryPlanStep].
+ */
 @Composable
 private fun PlanBoardRow(
     plan: AgentPlanStore.Plan,
+    onRetry: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val done = plan.status == "done"
     val active = plan.status == "active"
+    val failed = plan.status == "failed"
+    val retryable = failed && onRetry != null
+    val retryLabel = stringResource(R.string.cd_plan_step_retry)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 28.dp)
             .then(
-                if (onClick != null) {
-                    Modifier.clickable(role = Role.Button, onClick = onClick)
-                } else {
-                    Modifier
+                when {
+                    retryable -> Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button, onClickLabel = retryLabel) { onRetry() }
+                    onClick != null -> Modifier.clickable(role = Role.Button, onClick = onClick)
+                    else -> Modifier
                 },
             ),
         verticalAlignment = Alignment.CenterVertically,
@@ -363,7 +426,7 @@ private fun PlanBoardRow(
             style = MaterialTheme.typography.bodySmall,
             fontWeight = when {
                 active -> FontWeight.SemiBold
-                plan.status == "failed" -> FontWeight.Medium
+                failed -> FontWeight.Medium
                 else -> FontWeight.Normal
             },
             textDecoration = if (done) TextDecoration.LineThrough else null,
@@ -374,6 +437,18 @@ private fun PlanBoardRow(
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        if (retryable) {
+            // The affordance rides the END like the summary row's chevron; the
+            // title took a weight(1f) so the glyph stays pinned to the edge.
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = retryLabel,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }

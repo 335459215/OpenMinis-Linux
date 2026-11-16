@@ -44,6 +44,17 @@ data class ChatSessionEntity(
     // choice that survives cold-start.
     @ColumnInfo(name = "thinking_override") val thinkingOverride: String? = null,
     /**
+     * [T-thinking-dormant-restore] (P2 1-8) The level PARKED by ceiling-sync
+     * while this session's active model ceiling was too low. Demotion used to
+     * rewrite `thinking_override` to the clamped value and lose the original
+     * forever; the parked choice survives here and is restored (once) when
+     * the ceiling widens past it. Null = no park. Same discipline as
+     * [thinkingOverride]: a ThinkingLevel enum NAME written only through
+     * ThinkingDormancy.encode (which never parks OFF); unknown names decode
+     * to "no park" rather than throwing.
+     */
+    @ColumnInfo(name = "dormant_thinking_override") val dormantThinkingOverride: String? = null,
+    /**
      * [T-android-session-grouping] Group membership. NULL = ungrouped.
      *
      * Deliberately NOT a declared @ForeignKey. A folder_id pointing at a group
@@ -65,4 +76,20 @@ data class ChatSessionEntity(
      * Other enum names are accepted on read but the UI only writes these two.
      */
     @ColumnInfo(name = "permission_mode") val permissionMode: String? = "ASK",
+    /**
+     * [T-android-session-branch-tree] Source session when this chat is a
+     * BRANCH (a rerun/edit-point fork), not a plain duplicate. NULL = a
+     * root session. The branch tree panel groups by this id; deleting the
+     * source is allowed and orphans the branch (same rule as folderId).
+     */
+    @ColumnInfo(name = "branch_of") val branchOf: String? = null,
+    /** Message id of the fork point in the SOURCE session (last kept message). */
+    @ColumnInfo(name = "branch_point") val branchPoint: String? = null,
+    /**
+     * [#35] Session archive stamp (ms), null = not archived. Pure list
+     * metadata: the session-list filters on it and the footer section reads
+     * it — chat open/re-send paths never branch on it. Participates in
+     * equality like folderId (archiving changes nothing else).
+     */
+    @ColumnInfo(name = "archived_at") val archivedAt: Long? = null,
 )

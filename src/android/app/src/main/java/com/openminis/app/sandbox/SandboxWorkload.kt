@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
+import com.openminis.app.sandbox.jobs.JobRegistry
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
@@ -117,23 +118,85 @@ internal object SandboxWorkload {
         lastStopReason = reason
         val sticky = roots[pid]?.sticky ?: StickyTree(pid)
         var victims = emptySet<Int>()
+        var links: List<ProcLink> = emptyList()
         repeat(KILL_PASSES) {
-            val now = discover(pid)
-            victims = sticky.observe(now, now)
+            // [T-job-tree-spare] Background jobs the model started on purpose
+            // are subtracted from every victim pass: a cap / pressure /
+            // deadline sweep must not take them down with the shell's tree.
+            val snapshot = snapshotProc()
+            links = snapshot.links
+            val now = snapshot.collect(pid)
+            victims = ProcessTree.exceptTrees(
+                sticky.observe(now, now), JobRegistry.activeJobPids(), links,
+            )
             for (victim in victims) {
                 if (victim == pid) continue
                 signal(victim)
             }
         }
         Log.w(TAG, "kill reason=$reason root=$pid victims=${victims.joinToString(",")}")
+        // The group signal never reaches a job (setsid put it in its own
+        // process group); it kills the root process itself.
         runCatching { Os.kill(-pid, OsConstants.SIGKILL) }
-        for (victim in sticky.snapshot()) signal(victim)
+        for (victim in ProcessTree.exceptTrees(
+            sticky.snapshot(), JobRegistry.activeJobPids(), links,
+        )) signal(victim)
     }
 
     private fun signal(pid: Int) {
         if (pid <= 0) return
         runCatching { Os.kill(pid, OsConstants.SIGKILL) }
         runCatching { AndroidProcess.killProcess(pid) }
+    }
+
+    /**
+     * [stop=kill] Kill the RUNNING foreground command tree of a persistent
+     * shell while the shell itself stays alive.
+     *
+     * [killOwned] cannot serve this: its trailing `Os.kill(-pid, SIGKILL)`
+     * is a process-GROUP signal, and the shell is that group's leader
+     * ([adopt] setpgid'd it at spawn), so the group kill would take the
+     * shell down with the command — exactly what a user Stop must not do
+     * (the shell carries cwd, env and installed packages; rebuilding it is
+     * the expensive fallback, not the design).
+     *
+     * This walks the same /proc tables and SIGKILLs every descendant of the
+     * shell's host process EXCEPT the guest shell bash itself
+     * ([ProcessTree.isGuestShellBash] — the `exec /bin/bash --noprofile
+     * --norc` incarnation). The command watchdog subshell is a descendant
+     * too and dies with the rest, so it cannot later fire its own
+     * `kill -TERM -$$` at the group and take the shell down after the fact.
+     * [KILL_PASSES] absorbs processes that were still forking during an
+     * earlier pass.
+     *
+     * Returns the pids that were signalled.
+     */
+    fun killCommandTree(process: java.lang.Process?, reason: String): Set<Int> {
+        val rootPid = process?.let { pidOf(it) } ?: return emptySet()
+        if (rootPid <= 0) return emptySet()
+        val killed = LinkedHashSet<Int>()
+        repeat(KILL_PASSES) {
+            // [T-job-tree-spare] The walk starts at the shell's HOST process
+            // (proot), so without this subtraction a user Stop or a watchdog
+            // timeout would also sweep every setsid'd background job that has
+            // ever belonged to this shell. Registered job trees are spared.
+            val snapshot = snapshotProc()
+            val spared = ProcessTree.exceptTrees(
+                snapshot.collect(rootPid), JobRegistry.activeJobPids(), snapshot.links,
+            )
+            for (pid in spared) {
+                if (pid == rootPid) continue
+                if (ProcessTree.isGuestShellBash(
+                        runCatching { File("/proc/$pid/cmdline").readText() }.getOrNull()
+                    )
+                ) continue
+                if (killed.add(pid)) {
+                    Log.w(TAG, "interrupt pid=$pid reason=$reason")
+                    signal(pid)
+                }
+            }
+        }
+        return killed
     }
 
     private fun adopt(pid: Int) {
@@ -232,6 +295,15 @@ internal object SandboxWorkload {
         // collect+sameGroup set union) are identical to the old per-root
         // discover() calls.
         val snapshot = snapshotProc()
+        // [T-job-tree-spare] The process cap counts accidental leakage, not
+        // the model's own background jobs: owned excludes every registered
+        // job tree, so a legitimate background workload cannot trip the cap
+        // and nuke the shell with it. confine still applies to jobs — they
+        // should also yield CPU to the app.
+        val jobTree = LinkedHashSet<Int>()
+        for (jobRoot in JobRegistry.activeJobPids()) {
+            if (jobRoot > 0) jobTree.addAll(ProcessTree.collect(jobRoot, snapshot.links))
+        }
         for (root in live) {
             if (!File("/proc/${root.pid}").exists()) {
                 roots.remove(root.pid)
@@ -240,7 +312,7 @@ internal object SandboxWorkload {
             val current = snapshot.collect(root.pid)
             val alive = current.filter { File("/proc/$it").exists() }.toSet()
             val set = root.sticky.observe(current, alive)
-            owned += set.size
+            owned += (set - jobTree).size
             for (pid in set) confine(pid)
             if (root.deadlineAt > 0L && now >= root.deadlineAt) {
                 Log.w(TAG, "deadline pid=${root.pid} label=${root.label}")

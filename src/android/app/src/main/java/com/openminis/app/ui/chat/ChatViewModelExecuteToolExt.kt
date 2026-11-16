@@ -93,6 +93,20 @@ internal suspend fun ChatViewModel.executeTool(
     // — they always fall through to shell_execute or the offload
     // bridge, which is now where checkPermission runs.
     val canonical = com.openminis.app.security.ToolAliases.canonical(name)
+    // [pi-port] MODEL_ONLY callability enforcement (ToolExposureGate): the
+    // lookup is a pure in-memory name read, so it runs FIRST — before the
+    // failure-memory ledger and SecurityGate reads, which a tool that can
+    // never execute has no business spending — and refuses in the unified
+    // early-refusal shape. direct / deferred names fall through unchanged
+    // (a deferred tool called straight after find_tools enablement is the
+    // normal path, not a refusal).
+    if (com.openminis.app.tools.ToolExposureGate.levelForName(canonical) ==
+        com.openminis.app.tools.ToolExposureGate.MODEL_ONLY
+    ) {
+        return com.openminis.app.tools.ToolExposureGate.modelOnlyRefusal(
+            canonical, resolveToolTitle(canonical, argsJson),
+        )
+    }
     // [T-known-failure] A call that already failed twice with these exact
     // arguments is refused by code, not by the model remembering. Any argument
     // change produces a different fingerprint and runs normally.
@@ -102,9 +116,12 @@ internal suspend fun ChatViewModel.executeTool(
         context, canonical, argsJson, activeSessionId,
     )
     if (gated != null) return gated
-    // [P1-17] Routed through the shared extractToolTitle: complete-JSON first,
-    // streaming partial fallback, canonical name when absent/blank.
-    val toolTitle = extractToolTitle(argsJson, fallback = canonical) ?: canonical
+    // [T-tool-title-single-source GH#344] NEVER fall back to the bare
+    // canonical name: an untitled file_read / read_image used to persist as
+    // snake_case (executeTool's result.toolTitle was non-empty, so
+    // finalizePlannedCall's ifEmpty fallback never restored the friendly
+    // label). The resolver derives "Reading /path" from args instead.
+    val toolTitle = resolveToolTitle(canonical, argsJson)
 
     // [T-android-action-guard] Loop/refusal guard for screen-side tools
     // (ui_read / ui_action / virtual screen): the Repeat ladder can refuse
@@ -158,7 +175,13 @@ internal suspend fun ChatViewModel.executeTool(
         return findAndEnableTools(query, limit)
     }
 
-    var result = capabilityResult ?: when (canonical) {
+    // [T-ssh-workspace] (#32) Sessions bound to an SSH workspace resolve
+    // here first: shell-class tools are executed on the remote host via
+    // SshBackend, file-surface tools get the honest "shell only" refusal,
+    // and every other tool (or an unbound session) proceeds unchanged.
+    var result = com.openminis.app.ssh.SshWorkspaceOps.intercept(
+        canonical, argsJson, activeSessionId, context,
+    ) ?: capabilityResult ?: when (canonical) {
         FileReadTool.NAME -> {
             val result = FileReadTool.execute(argsJson, activeSessionId, context)
             // Record skill usage when SKILL.md under /var/minis/skills/<id>/ is read.
@@ -186,28 +209,63 @@ internal suspend fun ChatViewModel.executeTool(
         // [T-ui-read] GUI Agent 的眼睛：a11y 读屏快照，配合 shell_execute 里
         // 的 android-a11y-cli 点击/输入形成"看屏→决策→执行→再看"闭环。
         com.openminis.app.tools.UiReadTool.NAME -> {
-            // Session-scoped: ui_read also injects the first-entry app guide
-            // (per session, per pack) when the foreground app changed.
-            com.openminis.app.tools.UiReadTool.execute(argsJson, activeSessionId)
+            // [GH#114] Per-app allow/block list is checked BEFORE the screen is
+            // read. Checked here (dispatch layer) so every caller of the tool —
+            // not just one UI path — goes through the same gate.
+            when (val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(verdict, com.openminis.app.tools.UiReadTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
+                    // Session-scoped: ui_read also injects the first-entry app guide
+                    // (per session, per pack) when the foreground app changed.
+                    com.openminis.app.tools.UiReadTool.execute(argsJson, activeSessionId)
+            }
         }
         // [T-ui-action] GUI Agent 的手：tap/type/swipe/scroll/back/open_app/open_url。
         com.openminis.app.tools.UiActionTool.NAME -> {
-            val action = com.openminis.app.tools.UiActionTool.execute(argsJson)
-            // [T-android-app-knowledge] Feed the tap-route tracker: package from
-            // the accessibility foreground probe, target from the action text.
-            runCatching {
-                val pkg = com.openminis.app.accessibility.MinisAccessibilityService
-                    .getInstance()?.foregroundPackage()?.first
-                if (pkg != null) {
-                    val args = JSONObject(argsJson)
-                    val target = listOf("text", "selector", "package_name", "url")
-                        .firstNotNullOfOrNull { args.optString(it).takeIf { v -> v.isNotBlank() } }
-                        ?: args.optString("action")
-                    com.openminis.app.knowledge.RouteTrackers
-                        .global.record(activeSessionId ?: "", pkg, target)
+            // [GH#114] Same per-app gate as ui_read. `open_app` / `open_url`
+            // start a NEW app rather than acting on the current one, so they
+            // are exempt: blocking them on the CURRENT foreground app would
+            // make the allowlist a chicken-and-egg lock.
+            val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()
+            val actionName = runCatching { JSONObject(argsJson).optString("action") }.getOrDefault("")
+            val action = if (actionName == "open_app" || actionName == "open_url") {
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed
+            } else {
+                verdict
+            }
+            when (action) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(action, com.openminis.app.tools.UiActionTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed -> {
+                    val result = com.openminis.app.tools.UiActionTool.execute(argsJson)
+                    // [T-android-app-knowledge] Feed the tap-route tracker: package from
+                    // the accessibility foreground probe, target from the action text.
+                    runCatching {
+                        val pkg = com.openminis.app.accessibility.MinisAccessibilityService
+                            .getInstance()?.foregroundPackage()?.first
+                        if (pkg != null) {
+                            val args = JSONObject(argsJson)
+                            val target = listOf("text", "selector", "package_name", "url")
+                                .firstNotNullOfOrNull { args.optString(it).takeIf { v -> v.isNotBlank() } }
+                                ?: args.optString("action")
+                            com.openminis.app.knowledge.RouteTrackers
+                                .global.record(activeSessionId ?: "", pkg, target)
+                        }
+                    }
+                    result
                 }
             }
-            action
         }
         // [T-android-vscreen] Agent-owned virtual displays: the target app is
         // started on a VirtualDisplay so reads/taps/typing never steal the
@@ -223,11 +281,30 @@ internal suspend fun ChatViewModel.executeTool(
         // was dead code in production. forContext() is a process-wide
         // singleton (see A11ySkillStore), so concurrent ui_skill calls and
         // any future settings-page wiring share one lock-guarded instance.
-        com.openminis.app.tools.UiSkillTool.NAME ->
-            com.openminis.app.tools.UiSkillTool.execute(
-                argsJson,
-                com.openminis.app.accessibility.A11ySkillStore.forContext(context),
-            )
+        com.openminis.app.tools.UiSkillTool.NAME -> {
+            // [GH#114] `replay` drives real taps/typing, so it goes through the
+            // same per-app gate as ui_action; list/match/record only observe.
+            val skillAction = runCatching { JSONObject(argsJson).optString("action") }.getOrDefault("")
+            val skillVerdict = if (skillAction == "replay") {
+                com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()
+            } else {
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed
+            }
+            when (skillVerdict) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(skillVerdict, com.openminis.app.tools.UiSkillTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
+                    com.openminis.app.tools.UiSkillTool.execute(
+                        argsJson,
+                        com.openminis.app.accessibility.A11ySkillStore.forContext(context),
+                    )
+            }
+        }
         // T178: pass sessionId + context so read_image routes through
         // resolveSessionHostPath like file_read/write/edit do — without
         // these, the tool consults the global last-writer-wins
@@ -237,8 +314,15 @@ internal suspend fun ChatViewModel.executeTool(
         // [P1-19] The when dispatches on the ToolAliases.canonical() name, so
         // the historical alias labels "shell_exec" (→ shell_execute) can never
         // match here; env_exec is its own registered tool and stays.
+        // [pi-port §2.6] Session ExecutionEnvironment: no override (the default)
+        // = the legacy PRoot pipeline below, byte-for-byte; an override runs there.
         "shell_execute", "env_exec" -> {
-            executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            val envOverride = com.openminis.app.sandbox.ExecutionEnvironments.overrideFor(activeSessionId)
+            if (envOverride == null) {
+                executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            } else {
+                com.openminis.app.sandbox.ExecutionEnvironments.executeShell(envOverride, argsJson)
+            }
         }
         "su_exec" -> {
             // [T-android-sueexec-tool-home] Command rewriting (android-su -c
@@ -306,6 +390,10 @@ internal suspend fun ChatViewModel.executeTool(
             argsJson,
             activeSessionId,
             com.openminis.app.goal.GoalManager(chatRepository),
+            // [T-goal-completion-verifier] The completion verifier reads the
+            // plan board for this session; no Context (JVM tests) means an
+            // empty board and the verifier passes on the model's call.
+            context,
         )
         // [T-mcp-native] In-process MCP servers/tools/call — replaces the
         // shell_execute → minis-mcp-cli → daemon round trip for main chats.
@@ -328,9 +416,20 @@ internal suspend fun ChatViewModel.executeTool(
         com.openminis.app.tools.AskReasoningTool.NAME ->
             com.openminis.app.tools.AskReasoningTool.execute(argsJson) { sys, user -> oneShotAsk(sys, user) }
         com.openminis.app.tools.ExecuteCodeTool.NAME ->
+            // [GH#61/#83/#146] This nested dispatch is NOT a model tool-call
+            // stream: ExecuteCodeTool invokes it from inside the executed code
+            // with a programmatically built JSON string, so there is no raw
+            // argument tail to repair. Malformed JSON still fails closed inside
+            // executeTool's own parse sites — it can never silently become `{}`.
             com.openminis.app.tools.ExecuteCodeTool.execute(argsJson) { n, a ->
                 executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
             }
+        // [pi-port §2.7] Nested calls take the SAME executeTool path (SecurityGate
+        // + guards); only the script's return value becomes this toolResult.
+        com.openminis.app.tools.CodemodeTool.NAME ->
+            com.openminis.app.tools.CodemodeTool.execute(argsJson, invoke = { n, a ->
+                executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
+            })
         com.openminis.app.tools.ProductMediaTools.DESCRIBE_IMAGE -> executeReadImageTool(argsJson)
         com.openminis.app.tools.ProductMediaTools.GENERATE_IMAGE ->
             executeGenerateImageTool(argsJson, currentProvider, activeSessionId)
@@ -463,9 +562,28 @@ internal suspend fun ChatViewModel.executeTool(
             activeSessionId, canonical, argsJson, result.output,
         )
     }
-    // [T-tool-output-policy] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
+    // [T-tool-output-policy][GH#343] 统一出口：环境变量脱敏 + 超长输出降级为可检索文件。
+    // [GH#343] Pass context + session to the FULL apply() overload: the 2-arg
+    // form capped the body at ~10k WITHOUT a session, so the downstream spill in
+    // finalizePlannedCall always saw < LIMIT and the chat path never wrote a
+    // spill file. The decision now runs on the original output and the file is
+    // written into THIS session's workspace for every execution entry (main
+    // loop, sub-agent, group chat/supervisor).
+    // 中文：执行入口直接用会话感知的 apply；否则先被压到 10k，最终 spill 永远不触发。
     if (result.imageData == null) {
-        return result.copy(output = ToolOutputPolicy.apply(result.output, toolId))
+        return result.copy(
+            output = ToolOutputPolicy.apply(
+                output = result.output,
+                toolId = toolId,
+                context = context,
+                sessionId = activeSessionId,
+                toolName = canonical,
+                // [GH#343] A read-back of an existing spill file (file_read or
+                // shell cat/head/tail) answers from that file instead of
+                // re-spilling it.
+                sourcePath = com.openminis.app.tools.ToolOutputSpill.sourcePathForTool(canonical, argsJson),
+            ),
+        )
     }
     return result
 }

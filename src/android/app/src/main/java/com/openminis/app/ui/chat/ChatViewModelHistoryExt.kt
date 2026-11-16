@@ -58,26 +58,32 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
     }
 
     // An assistant tail may legitimately be awaiting execution. Only those
-    // exact final-message occurrences are exempt; earlier unanswered uses are
-    // repaired with an error result after their assistant message.
+    // exact final-message occurrences are exempt.
+    //
+    // [T-orphan-use-pairing] ZCode's contract: every visible tool call owns
+    // exactly one result. A mid-history use whose result is gone (history
+    // trimmed, stream aborted) is paired with a NEUTRAL interrupted result —
+    // not deleted, and not an error: deleting it hid the call from the
+    // transcript, and an error told the model the call failed so it re-issued
+    // the same call every turn.
     val tailUses = if (history.lastOrNull()?.role == LLMMessage.Role.ASSISTANT) {
         history.last().contentParts.mapIndexedNotNull { partIndex, part ->
             (part as? AgentContentPart.ToolUse)?.let { it.id to it.name to partIndex }
         }.toSet()
     } else emptySet()
-    val repairUses = unmatchedUses.filterNot { use ->
+    val repairedUses = unmatchedUses.filterNot { use ->
         use.messageIndex == history.lastIndex &&
             (use.id to use.name to use.partIndex) in tailUses
     }
-    if (droppedResults.isEmpty() && repairUses.isEmpty()) return history
+    if (droppedResults.isEmpty() && repairedUses.isEmpty()) return history
 
     AppLogger.warning(
         ChatViewModel.TAG,
         "[CompactDiag] ordered tool pairing repair: droppedResults=${droppedResults.size} " +
-            "unansweredUses=${repairUses.size} historyCount=${history.size}",
+            "interruptedUses=${repairedUses.size} historyCount=${history.size}",
     )
-    val repairByMessage = repairUses.groupBy { it.messageIndex }
-    val cleaned = ArrayList<LLMMessage>(history.size + repairUses.size)
+    val repairedByMessage = repairedUses.groupBy { it.messageIndex }
+    val cleaned = ArrayList<LLMMessage>(history.size + repairedUses.size)
     history.forEachIndexed { index, message ->
         val kept = message.contentParts.mapIndexedNotNull { partIndex, part ->
             if (part is AgentContentPart.ToolResult && (index to partIndex) in droppedResults) null else part
@@ -85,7 +91,7 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
         if (kept.isNotEmpty() || message.contentParts.isEmpty()) {
             cleaned += if (kept.size == message.contentParts.size) message else message.copy(contentParts = kept)
         }
-        val repairs = repairByMessage[index].orEmpty()
+        val repairs = repairedByMessage[index].orEmpty()
         if (repairs.isNotEmpty()) {
             cleaned += LLMMessage(
                 role = LLMMessage.Role.USER,
@@ -94,8 +100,8 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
                     AgentContentPart.ToolResult(
                         id = it.id,
                         name = it.name,
-                        content = "Tool execution was interrupted by an unexpected error.",
-                        isError = true,
+                        content = "[Tool execution was interrupted before resume]",
+                        isError = false,
                     )
                 },
             )

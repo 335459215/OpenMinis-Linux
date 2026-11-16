@@ -80,6 +80,33 @@ class GitHostRepoTest {
         assertFalse(GitHostRepo.probe(tmp.newFolder("plain")).isRepo)
     }
 
+    // ── shallow guard ──────────────────────────────────────────────────────
+
+    /**
+     * A shallow clone carries `.git/shallow`: its graft commit references a
+     * parent that is physically absent. git CLI graft-skips it, but JGit's
+     * RevWalk throws MissingObjectException walking past the boundary — so
+     * the host source must detect and flag it (and the graph must refuse
+     * to walk it) instead of blanking the History tab with an exception.
+     */
+    @Test
+    fun `probe flags a shallow clone`() {
+        val (dir, git) = initRepo()
+        git.close()
+        assertFalse(GitHostRepo.probe(dir).shallow)
+        File(File(dir, ".git"), "shallow").writeText("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
+        assertTrue(GitHostRepo.probe(dir).shallow)
+    }
+
+    @Test
+    fun `logPage refuses to walk a shallow clone`() {
+        val (dir, git) = initRepo()
+        git.close()
+        assertEquals(1, GitHostRepoGraph.logPage(dir, 0, 50).size)
+        File(File(dir, ".git"), "shallow").writeText("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
+        assertEquals(emptyList<GitCli.GitCommit>(), GitHostRepoGraph.logPage(dir, 0, 50))
+    }
+
     @Test
     fun `status shows the clean tree then an unstaged edit`() {
         val (dir, git) = initRepo()
@@ -127,7 +154,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val stats = GitHostRepo.numstatStaged(dir)
+        val stats = GitHostRepoDiff.numstatStaged(dir)
         val stat = stats["a.txt"]
         assertNotNull("staged edit must appear in numstat", stat)
         assertEquals(2, stat!!.added)
@@ -140,7 +167,7 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
-        val stats = GitHostRepo.numstatUnstaged(dir)
+        val stats = GitHostRepoDiff.numstatUnstaged(dir)
         val stat = stats["a.txt"]
         assertNotNull("worktree edit must appear in numstat", stat)
         assertEquals(2, stat!!.added)
@@ -153,7 +180,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 changed\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val diff = GitHostRepo.stagedDiff(dir)
+        val diff = GitHostRepoDiff.stagedDiff(dir)
         assertTrue(diff.contains("a.txt"))
         assertTrue(diff.contains("+line2 changed"))
     }
@@ -233,7 +260,7 @@ class GitHostRepoTest {
         git.close()
         fun looseCount() = File(dir, ".git/objects").walkBottomUp().count { it.isFile }
         val before = looseCount()
-        GitHostRepo.numstatStaged(dir)
+        GitHostRepoDiff.numstatStaged(dir)
         assertEquals(before, looseCount())
     }
 
@@ -243,7 +270,7 @@ class GitHostRepoTest {
         git.close()
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
         File(dir, "u.txt").writeText("untracked\n")
-        val stats = GitHostRepo.numstatUnstaged(dir)
+        val stats = GitHostRepoDiff.numstatUnstaged(dir)
         assertNotNull(stats["a.txt"])
         assertNull("untracked files must not appear in the unstaged numstat", stats["u.txt"])
     }
@@ -255,7 +282,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val diff = GitHostRepo.stagedDiff(dir)
+        val diff = GitHostRepoDiff.stagedDiff(dir)
         assertTrue(diff.contains("a.txt"))
         assertTrue(diff.contains("+line1"))
     }
@@ -271,7 +298,7 @@ class GitHostRepoTest {
         git2.commit().setMessage("two files").setAuthor("T", "t@x").call()
         git2.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val diff = GitHostRepo.commitFileDiff(dir, hash, "a.txt")
+        val diff = GitHostRepoDiff.commitFileDiff(dir, hash, "a.txt")
         assertTrue(diff.contains("+line3"))
         assertFalse("b.txt must not leak into a.txt's section", diff.contains("b.txt"))
     }
@@ -283,7 +310,7 @@ class GitHostRepoTest {
             "--- a/a b/c.txt\n" +
             "+++ b/a b/c.txt\n" +
             "Binary files differ\n"
-        val stats = GitHostRepo.parseNumstatText(text)
+        val stats = GitHostRepoDiff.parseNumstatText(text)
         val stat = stats["a b/c.txt"]
         assertNotNull(stat)
         assertTrue(stat!!.binary)
@@ -297,19 +324,58 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 staged\n")
         GitHostRepo.setStaged(dir, "a.txt", staged = true)
         File(dir, "a.txt").writeText("line1\nline2 staged then edited\n")
-        val staged = GitHostRepo.fileDiff(dir, "a.txt", staged = true, untracked = false)
+        val staged = GitHostRepoDiff.fileDiff(dir, "a.txt", staged = true, untracked = false)
         assertTrue(staged.contains("+line2 staged"))
         assertFalse("worktree-only edit must not leak into the staged diff", staged.contains("edited"))
-        val unstaged = GitHostRepo.fileDiff(dir, "a.txt", staged = false, untracked = false)
+        val unstaged = GitHostRepoDiff.fileDiff(dir, "a.txt", staged = false, untracked = false)
         assertTrue(unstaged.contains("+line2 staged then edited"))
     }
 
     @Test
-    fun `probe rejects a repo whose HEAD object is missing`() {
+    fun `probe survives a repo whose HEAD object is missing`() {
         val (dir, git) = initRepo()
         git.close()
         File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
-        assertFalse(GitHostRepo.probe(dir).isRepo)
+        // [T-git-panel-dual-source parity] A broken HEAD object no longer
+        // demotes the repo: any resolvable ref keeps it servable, mirroring
+        // the sandbox path's per-ref fallback. probe stays true AND history
+        // still flows from the surviving refs.
+        assertTrue(GitHostRepo.probe(dir).isRepo)
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 10)
+        assertEquals(1, page.size)
+        assertEquals("initial commit", page[0].subject)
+    }
+
+    @Test
+    fun `probe keeps a fresh empty repo a repo`() {
+        // [T-git-panel-dual-source parity] git init with zero commits: real
+        // `rev-parse --is-inside-work-tree` says true, the sandbox probe
+        // agrees, and status/branches work — the anchor-gated probe demoted
+        // it to "not a repo" and diverged from its own fallback.
+        val dir = tmp.newFolder("empty-repo")
+        Git.init().setDirectory(dir).call().close()
+        val info = GitHostRepo.probe(dir)
+        assertTrue(info.isRepo)
+        assertTrue(info.branch.isNotEmpty())
+        assertTrue(GitHostRepo.logPage(dir, offset = 0, limit = 10).isEmpty())
+        assertTrue(GitHostRepo.branches(dir).isEmpty())
+        // The user-facing regression: a fresh repo's untracked files show in
+        // the changes view instead of the panel saying "not a repo".
+        File(dir, "u.txt").writeText("x\n")
+        val status = GitHostRepo.status(dir)
+        assertNull(status.error)
+        assertTrue(status.entries.any { it.path == "u.txt" })
+    }
+
+    @Test
+    fun `status on a repo whose HEAD object is missing reports the error`() {
+        val (dir, git) = initRepo()
+        git.close()
+        File(dir, ".git/HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
+        // JGit throws MissingObject here — real `git status` fails the same
+        // way ("fatal: bad object HEAD"). Carry it as GitStatus.error, the
+        // sandbox path's shape, so the panel surfaces the cause.
+        assertNotNull(GitHostRepo.status(dir).error)
     }
 
     // ── commit detail / numstat / diff ─────────────────────────────────────
@@ -319,7 +385,7 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val detail = GitHostRepo.commitDetail(dir, hash)!!
+        val detail = GitHostRepoDiff.commitDetail(dir, hash)!!
         assertEquals("initial commit", detail.subject)
         assertEquals("T", detail.author)
         assertEquals("t@x", detail.authorEmail)
@@ -331,10 +397,10 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val files = GitHostRepo.commitNumstat(dir, hash)
+        val files = GitHostRepoDiff.commitNumstat(dir, hash)
         assertEquals(listOf("a.txt"), files.map { it.path })
         assertEquals(2, files[0].added)
-        val diff = GitHostRepo.commitFileDiff(dir, hash, "a.txt")
+        val diff = GitHostRepoDiff.commitFileDiff(dir, hash, "a.txt")
         assertTrue(diff.contains("+line1"))
     }
 
@@ -343,8 +409,125 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val diff = GitHostRepo.commitDiff(dir, hash)
+        val diff = GitHostRepoDiff.commitDiff(dir, hash)
         assertTrue(diff.contains("+++ b/a.txt"))
         assertTrue(diff.contains("+line1"))
+    }
+
+    // ── zcode graph contract ──────────────────────────────────────────────
+
+    @Test
+    fun `logPage multi-ref walk includes side branches exactly once`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("side").call()
+        File(dir, "b.txt").writeText("side work\n")
+        git.add().addFilepattern("b.txt").call()
+        git.commit().setMessage("side commit").setAuthor("T", "t@x").call()
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 10)
+        assertTrue("side commit visible", page.any { it.subject == "side commit" })
+        val hashes = page.map { it.hash }
+        assertEquals("each commit exactly once (multi-anchor dedup)", hashes.size, hashes.toSet().size)
+        git.close()
+    }
+
+    @Test
+    fun `logPage decorates HEAD, branch and annotated tag`() {
+        val (dir, git) = initRepo()
+        git.tag().setName("v1").setAnnotated(true).call()
+        File(dir, "b.txt").writeText("more\n")
+        git.add().addFilepattern("b.txt").call()
+        git.commit().setMessage("second").setAuthor("T", "t@x").call()
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 5)
+        // The tag decorates the FIRST commit — the badge shows on that row,
+        // not on HEAD's.
+        val initial = page.first { it.subject == "initial commit" }
+        assertTrue("annotated tag peeled onto its commit", initial.refs.contains("v1"))
+        val head = page.first()
+        // HEAD badge present exactly once on the checked-out branch's tip.
+        assertEquals(1, head.refs.count { it == "HEAD" })
+        assertTrue(head.refs.any { it != "HEAD" && !it.contains('/') })
+        git.close()
+    }
+
+    @Test
+    fun `checkout of a remote ref creates the tracking branch, never detached HEAD`() {
+        val (dir, git) = initRepo()
+        File(dir, "b.txt").writeText("remote work\n")
+        git.add().addFilepattern("b.txt").call()
+        val remoteCommit = git.commit().setMessage("remote commit").setAuthor("T", "t@x").call()
+        // Simulate the remote-tracking ref a fetch would create.
+        val ru = git.repository.updateRef("refs/remotes/origin/feature")
+        ru.setNewObjectId(remoteCommit.id)
+        ru.forceUpdate()
+        val err = GitHostRepoGraph.checkout(dir, "origin/feature")
+        assertNull(err)
+        // Read through Git.open(dir) — a FileRepositoryBuilder with only
+        // setWorkTree + findGitDir searches from the JVM's CWD and would land
+        // on the OUTER OpenMinis checkout instead of this temp repo.
+        Git.open(dir).use { g ->
+            // NOT detached: HEAD stays symbolic to a local branch.
+            assertEquals("refs/heads/feature", g.repository.fullBranch)
+            assertEquals("feature", g.repository.branch)
+        }
+        git.close()
+    }
+
+    @Test
+    fun `checkout of a local slashed branch never creates a phantom branch`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("feature/x").call()
+        val err = GitHostRepoGraph.checkout(dir, "feature/x")
+        assertNull(err)
+        Git.open(dir).use { g ->
+            assertEquals("feature/x", g.repository.branch)
+            // The old backwards route created refs/heads/x from feature/x.
+            assertNull(g.repository.exactRef("refs/heads/x"))
+        }
+        git.close()
+    }
+
+    @Test
+    fun `checkout refuses while an operation is in progress`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("other").call()
+        // A MERGE_HEAD file puts JGit into MERGING state (git's own guard).
+        File(File(dir, ".git"), "MERGE_HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
+        val err = GitHostRepoGraph.checkout(dir, "other")
+        assertTrue(err?.contains("in progress") == true)
+        git.close()
+    }
+
+    @Test
+    fun `status survives a shallow clone without ahead-behind`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("tracked").call()
+        // branch.<n>.remote/merge + an ACTUAL upstream ref + a shallow
+        // marker: without a resolvable upstream the aheadBehind walk never
+        // starts, which would make this test pass vacuously. With it, the
+        // pre-guard's shallow check is what prevents the MissingObjectException.
+        val tip = git.log().call().first().name
+        val ru = git.repository.updateRef("refs/remotes/origin/tracked")
+        ru.setNewObjectId(org.eclipse.jgit.lib.ObjectId.fromString(tip))
+        ru.forceUpdate()
+        val cfg = git.repository.config
+        cfg.setString("branch", "master", "remote", "origin")
+        cfg.setString("branch", "master", "merge", "refs/heads/tracked")
+        cfg.save()
+        File(File(dir, ".git"), "shallow").writeText("$tip\n")
+        val status = GitHostRepo.status(dir)
+        assertNull(status.error)
+        assertEquals(0, status.ahead)
+        assertEquals(0, status.behind)
+        git.close()
+    }
+
+    @Test
+    fun `locate finds a repo four levels deep`() {
+        val ws = tmp.newFolder("deep")
+        val nested = File(ws, "a/b/c/d").apply { mkdirs() }
+        Git.init().setDirectory(nested).call().close()
+        val (dir, rel) = GitHostRepo.locate(ws)!!
+        assertEquals(nested, dir)
+        assertEquals("a/b/c/d", rel)
     }
 }

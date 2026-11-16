@@ -43,6 +43,8 @@
     <string name="memory_revoke_result_not_found">在最近的日志中未找到该条目。</string>
     <string name="memory_revoke_result_io_error">写入文件出错：%1$s</string>
     <string name="memory_save_toast">已保存</string>
+
+    <string name="memory_save_failed_toast">保存失败——请检查存储后重试</string>
     <string name="memory_global_footer">每个会话中对 Agent 可见的持久指令和偏好。Agent 无法修改此文件。</string>
     <string name="check_update_section_header">应用更新</string>
     <string name="check_update_current_version">当前版本：%1$s</string>
@@ -103,6 +105,7 @@
     <string name="mention_model_badge">模型</string>
     <string name="mention_model_only">只叫这一个</string>
     <string name="mention_model_caption">群里的模型。群聊开着时，点一个，其他人这轮不发言</string>
+    <string name="chat_composer_queued_hint">输入将排队，当前任务结束后发送</string>
     <string name="chat_input_placeholder_group">发消息，@模型名只叫一个人</string>
     <string name="resume_banner_title">已中断 - 点击「继续」以恢复</string>
     <string name="resume_action">继续</string>
@@ -339,6 +342,13 @@
     <string name="voice_service_text_to_speech">文字转语音</string>
     <string name="voice_service_show_in_voice_services">在语音服务中显示</string>
     <string name="voice_service_shared_credential_note">该语音服务与其提供商共用 API 密钥和端点。要修改，请编辑对应的提供商。</string>
+    <string name="voice_service_no_audio_models">该提供商没有列出任何音频模型。百炼、硅基流动等提供商的模型列表不声明音频能力——请把 ASR/TTS 模型添加为带音频模态的自定义模型，或换一个语音服务。</string>
+    <string name="voice_error_network">语音识别失败：网络错误。请检查网络，或切换到设备端引擎 / 其他服务商。</string>
+    <string name="voice_error_transcription">语音识别没有返回文字。请重新说话，或检查转写服务商的模型与 API 密钥。</string>
+    <string name="voice_error_busy">语音识别器正忙，请稍后再试。</string>
+    <string name="voice_error_audio">录音失败。请检查麦克风权限，并确认没有其他应用占用麦克风。</string>
+    <string name="voice_error_language">当前引擎不支持所选语言，请更换语言。</string>
+    <string name="voice_error_unknown">语音识别失败：%1$s</string>
     <string name="voice_service_hidden_badge">已隐藏</string>
     <string name="add_provider_voice_chat_providers">语音对话提供商</string>
     <string name="zen_restore_section">恢复</string>
@@ -414,7 +424,7 @@
     <string name="gate_approval_title">工具需要批准</string>
     <string name="gate_approval_approve">允许</string>
     <string name="gate_approval_deny">拒绝</string>
-    <string name="gate_approval_allow_all">本会话全部允许</string>
+    <string name="gate_approval_allow_all">本会话总是允许（当前目标）</string>
     <string name="gate_intercept_denied">已被 SecurityGate 拦截</string>
     <string name="gate_intercept_rejected">工具已被拒绝</string>
     <string name="gate_intercept_dismiss">关闭</string>
@@ -506,8 +516,10 @@
     <string name="settings_storage_subtitle">管理 Ubuntu rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
     <string name="settings_permissions_subtitle">系统权限与逐工具访问：无障碍、Shizuku、主机 su、隐私档位；各工具的 Agent 权限在此页逐项配置。</string>
-    <string name="chat_menu_perm_yoyo">YOYO · 全授权</string>
-    <string name="chat_menu_perm_ask">审批 · 部分授权</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 全授权</string>
+    <string name="chat_menu_perm_safe_auto">安全自动 · 只读工具自动放行</string>
+    <string name="chat_menu_perm_ask">询问 · 每次调用都确认</string>
+    <string name="chat_menu_perm_off">关闭 · 拒绝所有工具</string>
 <string name="settings_section_logs">日志</string>
     <string name="settings_logs_subtitle">查看与导出应用日志</string>
     <string name="settings_section_about">关于</string>
@@ -568,6 +580,8 @@
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">级别</string>
+    <string name="token_usage_thinking_requested">请求档位</string>
+    <string name="token_usage_thinking_effective">实际档位</string>
     <string name="token_usage_thinking_supported">已支持</string>
     <string name="token_usage_section_tokens">Token（会话总计）</string>
     <string name="token_usage_input_with_cache">输入（含缓存）</string>
@@ -577,6 +591,20 @@
     <string name="token_usage_cache_write">缓存写入</string>
     <string name="token_usage_section_agent_loop">Agent 循环</string>
     <string name="token_usage_total_loops">总循环次数</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">系统提示与工具</string>
+    <string name="context_block_skills_mcps">技能与 MCP</string>
+    <string name="context_block_memory">记忆注入</string>
+    <string name="context_block_runtime">本轮临时上下文</string>
+    <string name="context_block_goal_plan">目标与计划注入</string>
+    <string name="context_block_history">历史窗口</string>
+    <string name="context_block_attachments">附件与图片</string>
+    <string name="context_usage_note_estimate">粗略估计（±10%）；打开此面板时刷新</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">交互卡片</string>
+    <string name="gen_ui_view_source">查看源码</string>
+    <string name="gen_ui_view_render">显示渲染</string>
+    <string name="gen_ui_view_fullscreen">全屏</string>
     <string name="common_on">开</string>
     <string name="common_off">关</string>
     <string name="common_yes">是</string>
@@ -697,6 +725,11 @@
     <string name="sessionlist_regenerate_title">重新生成标题</string>
     <string name="sessionlist_regenerating_title">正在重新生成标题…</string>
     <string name="sessionlist_duplicate">复制</string>
+    <string name="sessionlist_branch_tree">分支树</string>
+    <string name="sessionlist_branch_from_here">从最新消息开分支</string>
+    <string name="sessionlist_branch_empty">这个会话还没有分支。从最新消息开分支，重跑和实验都不会动原对话。</string>
+    <string name="sessionlist_branch_source">来源</string>
+    <string name="sessionlist_branch_children">分支</string>
     <string name="sessionlist_search_action">搜索</string>
     <string name="sessionlist_dismiss">关闭</string>
     <string name="sessionlist_delete_one_title">删除该对话？</string>
@@ -772,6 +805,7 @@
     <string name="common_edit">编辑</string>
     <string name="thinking_rules_section">思考规则</string>
     <string name="thinking_rules_footer">规则自上而下依次匹配，第一条匹配当前模型的规则决定发送哪些思考参数。默认规则为内置规则，不可删除——在其上方添加一条规则即可覆盖。</string>
+    <string name="thinking_rules_cache_not_ready">自定义规则尚未生效（%1$s）。当前请求使用内置默认规则；缓存加载完成后的下一条消息才会应用你的规则。</string>
     <string name="thinking_rules_official_protocol_notice">该服务商使用官方协议，其思考参数由 Minis Ultra 内置维护。自定义规则仅适用于走 Chat Completions API 的 OpenAI 兼容服务商。</string>
     <string name="thinking_rules_default_rules_count">默认规则（%1$d）</string>
     <string name="thinking_rules_add_rule">添加规则</string>
@@ -880,6 +914,8 @@
     <string name="env_var_privacy_header">隐私</string>
     <string name="env_var_privacy_toggle">隐私模式</string>
     <string name="env_var_privacy_footer">开启后，shell-execute 输出中检测到的环境变量值在送达模型前会被打码（例如 `sk-1********ajhks`）。少于 8 个字符的值会被全部替换为 `*`。聊天中用户可见的输出保持不变。</string>
+    <string name="outbound_mask_toggle">出站隐私遮蔽</string>
+    <string name="outbound_mask_footer">选择性开启的形状遮蔽：密钥形状字符串（含代码内密钥）、邮箱与电话号码会被替换为占位符；下方 embedding API 密钥以明文保存在应用私有 prefs 中。本机聊天记录不变。</string>
     <string name="env_var_platform_header">平台集成</string>
     <string name="env_var_platform_tier_2">完整</string>
     <string name="env_var_platform_tier_1">只读</string>
@@ -1049,6 +1085,8 @@
     <string name="skill_title">技能</string>
     <string name="skill_add">添加 Skill</string>
     <string name="skill_section_installed">已安装</string>
+    <string name="skill_display_name_skill_creator">技能创建器</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK 镜像</string>
     <string name="skill_section_footer">Skill 通过专门的指令和工作流扩展 Minis Ultra Agent。启用后会被载入 system prompt。</string>
     <string name="skill_empty_title">未安装 Skill</string>
     <string name="skill_empty_action">点击 + 导入 SKILL.md 或浏览 Minis Ultra Skills。</string>
@@ -1194,7 +1232,7 @@
     <string name="provider_list_add_provider">添加 AI 服务商</string>
     <string name="provider_list_no_providers_configured">未配置 AI 服务商</string>
     <string name="provider_list_add_a_provider_to_get_started">添加一个 AI 服务商以开始使用。</string>
-    <string name="provider_list_import_provider">Import Provider</string>
+    <string name="provider_list_import_provider">导入服务商</string>
     <string name="share_provider_json_title">检测到服务商配置</string>
     <string name="share_expired_toast">分享内容已过期，请重新分享。</string>
     <string name="share_provider_json_message">这个 JSON 文件看起来是导出的服务商配置。你想怎么处理？</string>
@@ -1237,12 +1275,14 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">使用 Azure OpenAI 认证（api-key 请求头）。将完整的 Azure 端点（含 ?api-version=… 查询参数）粘贴到上面的自定义 API Base。两种 API 格式均可用。</string>
+    <string name="provider_detail_force_thinking">强制开启思考</string>
+    <string name="provider_detail_force_thinking_footer">仅用于 Anthropic 兼容服务商。即使模型目录标注该模型不支持思考，也发送 thinking:{type:"enabled",budget_tokens:N}。当模型实际支持思考但目录条目缺失或错误时使用。</string>
     <string name="provider_detail_status">状态</string>
     <string name="provider_detail_enabled">已启用</string>
     <string name="provider_detail_refresh_models">刷新模型</string>
     <string name="provider_detail_add_custom_model">添加自定义模型</string>
     <string name="provider_detail_delete_provider">删除 AI 服务商</string>
-    <string name="provider_detail_delete_model">Delete Model</string>
+    <string name="provider_detail_delete_model">删除模型</string>
     <string name="provider_detail_hide_model">隐藏模型</string>
     <string name="provider_detail_show_model">显示模型</string>
     <string name="provider_detail_sign_out">退出登录</string>
@@ -1276,7 +1316,7 @@
     <string name="add_provider_signing_in">正在登录…</string>
     <string name="add_provider_oauth_network_unreachable">无法连接到登录服务器，请检查网络或代理设置后重试。</string>
     <string name="add_provider_or_configure_manually">或手动配置</string>
-    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">For third-party Coding Plans (e.g. MiniMax, Kimi) or compatible proxy endpoints, enter the API base URL and bearer token manually.</string>
+    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">第三方 Coding Plans（如 MiniMax、Kimi）或兼容代理端点，请手动填写 API base URL 和 Bearer 令牌。</string>
     <string name="add_provider_bearer_token">Bearer Token</string>
     <string name="add_custom_model_model_id">模型 ID</string>
     <string name="add_custom_model_display_name_optional">显示名称（可选）</string>
@@ -1302,6 +1342,12 @@
     <string name="modeldetail_temperature_invalid">请输入 0.0 到 2.0 的数字，或留空以不发送。</string>
     <string name="modeldetail_context_window">上下文窗口</string>
     <string name="modeldetail_thinking">思考</string>
+    <!-- [T-thinking-ultra-manual] 模型参数页手动思考等级上限。 -->
+    <string name="modeldetail_thinking_level_ceiling">思考等级上限</string>
+    <string name="modeldetail_thinking_level_auto">自动</string>
+    <string name="modeldetail_thinking_level_effective_auto">当前生效：%1$s（目录默认）</string>
+    <string name="modeldetail_thinking_level_effective_override">当前生效：%1$s（手动）</string>
+    <string name="modeldetail_thinking_level_footer">限制聊天页为该模型提供的思考档位。自动跟随目录声明。服务商声明 ultra、或你手动把上限设为至高时按字面发送，否则映射为 max。</string>
     <string name="modeldetail_capabilities_footer">上下文窗口和最大输出 Token 数（以 tokens 计）。留空使用服务商默认值。对支持扩展推理的模型启用思考模式。</string>
     <string name="modeldetail_provider_default">服务商默认</string>
     <string name="modeldetail_max_tokens_exceeds_warning">超过服务商上报的上限（%1$d）。值已保存，但可能导致请求失败。</string>
@@ -1520,6 +1566,8 @@
     <string name="git_panel_generate">AI</string>
     <string name="git_panel_commit">提交</string>
     <string name="git_panel_no_commits">还没有提交</string>
+    <string name="git_panel_history_read_failed">提交历史读取失败——详情见日志（GitPanel 标签）</string>
+    <string name="git_panel_status_read_failed">工作区状态读取失败——详情见日志（GitPanel 标签）</string>
     <string name="git_panel_title">Git</string>
     <string name="git_panel_back">返回</string>
     <string name="git_panel_refresh">刷新</string>
@@ -2257,8 +2305,8 @@
     <string name="provider_sync_mark_nokey">无密钥</string>
     <string name="provider_sync_mark_unchanged">未更新</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">连接失败</string>
+    <string name="provider_sync_mark_invalid">响应无效</string>
     <string name="sessionlist_untitled">新对话</string>
     <string name="sessionlist_no_messages">暂无消息</string>
 
@@ -2459,6 +2507,8 @@
     <string name="ma_add_role_sub">自定义名字/描述/提示词/工具白名单, 同名覆盖内置</string>
     <string name="ma_team_lead_suffix"> · 组长</string>
     <string name="ma_thinking_depth">本次思考深度</string>
+
+    <string name="ma_thinking_follows_main">跟随主会话</string>
     <string name="ma_role_dialog_title_builtin">内置角色 (保存为自定义副本)</string>
     <string name="ma_role_dialog_title_new">新增协作角色</string>
     <string name="ma_role_dialog_title_edit">编辑角色</string>
@@ -2475,6 +2525,7 @@
     <string name="usage_label_output_short">输出</string>
     <string name="plan_board_all_done">所有步骤已完成</string>
     <string name="cd_plan_board_toggle">展开或收起计划看板</string>
+    <string name="cd_plan_step_retry">重试这个失败的步骤</string>
     <string name="cd_goal_header">打开目标详情</string>
     <string name="cd_goal_status_active">目标进行中</string>
     <string name="cd_goal_status_paused">目标已暂停</string>
@@ -2647,6 +2698,9 @@
     <string name="mcp_approval_restart_notice">重启后有 %1$d 项待批准已失效</string>
     <string name="context_saver_title">上下文节约</string>
     <string name="context_saver_footer">请求变大后，把最近几条之外的旧工具输出折叠成一行占位，节省上下文。不删除任何内容——折叠结果保留落盘路径，或提示重新调用工具。</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">提示词缓存预热</string>
+    <string name="cache_warming_footer">开启后，闲时应用可能以单 token 输出上限重放最近一次成功请求，在缓存条目过期前刷新供应商的提示词缓存。会产生额外的计费请求，默认关闭。</string>
     <string name="context_saver_off">关闭</string>
     <string name="context_saver_balanced">均衡</string>
     <string name="context_saver_aggressive">激进</string>
@@ -2654,6 +2708,12 @@
     <string name="token_usage_saver_folded">已折叠工具结果</string>
     <string name="token_usage_saver_saved">本轮节省</string>
     <string name="memory_center_overview">概览</string>
+    <string name="memory_embedding_header">语义召回</string>
+    <string name="memory_embedding_toggle">Embedding 语义记忆召回</string>
+    <string name="memory_embedding_base_url">Embeddings Base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API Key</string>
+    <string name="memory_embedding_model">Embedding 模型</string>
+    <string name="memory_embedding_footer">默认关闭。开启后，记忆召回在关键词检索之外，增加通过 OpenAI 兼容 embeddings 端点的向量相似度检索。更改需重启应用进程后生效。</string>
     <string name="memory_center_stat_memory">记忆文件</string>
     <string name="memory_center_stat_recalls">被召回条目</string>
     <string name="memory_center_stat_failures">已拦截的重复</string>
@@ -2742,4 +2802,149 @@
     <string name="ssh_host_save">保存</string>
     <string name="ssh_host_pinned">已固定主机密钥</string>
     <string name="settings_ssh_subtitle">通过 SSH/SFTP 执行命令、传输文件</string>
+
+    <string name="git_panel_branch_search">搜索分支</string>
+
+
+    <string name="git_panel_branches_section">分支</string>
+
+    <string name="git_panel_uncommitted_count">未提交的更改：%1$d 个文件</string>
+
+    <string name="git_panel_detached_head">游离 HEAD</string>
+
+    <string name="git_panel_create_branch">创建并检出新分支…</string>
+
+    <string name="git_panel_branch_name_hint">分支名</string>
+    <string name="git_panel_diff_truncated">Diff 已在 200,000 字符处截断——完整内容以仓库文件为准。</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- 添加供应商页的厂商预设（[T-android-vendor-presets]）：一键预填主流厂商
+         公开文档的 OpenAI 兼容接入地址。 -->
+    <string name="add_provider_vendor_presets">厂商预设</string>
+    <string name="add_provider_vendor_presets_pick_hint">点按厂商可自动填入接口地址与名称。</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">智谱 GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi（Moonshot）</string>
+    <string name="add_provider_vendor_preset_qwen">通义千问</string>
+    <string name="add_provider_vendor_preset_ark">火山方舟</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">硅基流动</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">在 platform.deepseek.com 创建 API Key</string>
+    <string name="add_provider_vendor_hint_zhipu">在智谱开放平台 open.bigmodel.cn 控制台获取 API Key</string>
+    <string name="add_provider_vendor_hint_kimi">在 platform.moonshot.cn 创建 API Key</string>
+    <string name="add_provider_vendor_hint_qwen">在阿里云百炼控制台创建 API Key</string>
+    <string name="add_provider_vendor_hint_ark">在火山方舟控制台创建 API Key，模型名填接入点 ID 或模型 ID</string>
+    <string name="add_provider_vendor_hint_minimax">在 MiniMax 开放平台获取 API Key</string>
+    <string name="add_provider_vendor_hint_siliconflow">在 cloud.siliconflow.cn 创建 API Key</string>
+    <string name="add_provider_vendor_hint_groq">在 console.groq.com 创建 API Key</string>
+    <string name="add_provider_vendor_hint_together">在 Together 控制台 api.together.ai 获取 API Key</string>
+    <string name="add_provider_vendor_hint_mistral">在 console.mistral.ai 创建 API Key</string>
+    <string name="add_provider_vendor_hint_ollama">本地服务，无需 API Key</string>
+    <string name="add_provider_vendor_hint_lmstudio">本地服务，无需 API Key；请先在 LM Studio 启动 Developer 服务器</string>
+    <string name="chat_queued_edit_title">编辑排队消息</string>
+    <!-- [#38] 更新对话框：更新说明展开/收起 -->
+    <string name="check_update_notes_expand">展开全部</string>
+    <string name="check_update_notes_collapse">收起</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">归档</string>
+    <string name="sessionlist_unarchive">取消归档</string>
+    <string name="sessionlist_section_archived">已归档（%1$d）</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">导出供应商</string>
+    <string name="provider_transfer_export_title">导出供应商</string>
+    <string name="provider_transfer_export_body">将把 %1$d 个供应商导出为 JSON 文件。</string>
+    <string name="provider_transfer_include_keys">包含 API 密钥</string>
+    <string name="provider_transfer_include_keys_risk">API 密钥将以明文写入文件。任何获取该文件的人都可以使用你的密钥——请妥善保管，导入后及时删除。</string>
+    <string name="provider_transfer_export">导出</string>
+    <string name="provider_transfer_export_success">已导出 %1$d 个供应商</string>
+    <string name="provider_transfer_export_failed">导出失败</string>
+    <string name="provider_transfer_import_ok">已导入 %1$d 个供应商</string>
+    <string name="provider_transfer_import_partial">已导入 %1$d 个供应商，%2$d 个失败</string>
+    <string name="provider_transfer_import_partial_detail">已导入 %1$d 个供应商，%2$d 个失败：%3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH 工作区</string>
+    <string name="ssh_workspace_binding_title">SSH 工作区</string>
+    <string name="ssh_workspace_bound_to">已绑定 %1$s（%2$s）</string>
+    <string name="ssh_workspace_bound_local">正在本地沙盒中工作</string>
+    <string name="ssh_workspace_option_local">本地沙盒</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell 在本设备的 Linux 沙盒中运行</string>
+    <string name="ssh_workspace_no_hosts">还没有 SSH 主机——在 设置 → SSH 工作区 中添加。</string>
+    <string name="ssh_workspace_shell_only_note">SSH 工作区仅支持 shell 命令；绑定主机期间文件类工具将被拒绝。</string>
+    <string name="ssh_workspace_shell_only">SSH 工作区当前仅支持 shell 命令——已拒绝 \'%1$s\'。</string>
+    <string name="ssh_workspace_shell_only_hint">用 shell_execute 执行远程命令，或在聊天菜单 → SSH 工作区 解绑本会话以恢复本地文件工具。</string>
+    <string name="ssh_hosts_subtitle">Agent 可通过 SSH 访问的远程主机。凭据加密存储，从不显示。</string>
+    <string name="ssh_hosts_row_subtitle">添加主机、测试连接、管理主机密钥</string>
+    <string name="ssh_hosts_add">添加主机</string>
+    <string name="ssh_hosts_add_cancel">取消</string>
+    <string name="ssh_hosts_test">测试连接</string>
+    <string name="ssh_hosts_testing">测试中…</string>
+    <string name="ssh_hosts_test_ok">连接成功</string>
+    <string name="ssh_hosts_test_failed">连接失败</string>
+    <string name="ssh_hosts_forget_key">忘记主机密钥</string>
+    <string name="ssh_hosts_remove">移除</string>
+    <string name="ssh_hosts_pinned">主机密钥已固定：%1$s…</string>
+    <string name="ssh_field_name">名称（字母/数字/._-）</string>
+    <string name="ssh_field_hostname">主机名或 IP</string>
+    <string name="ssh_field_port">端口</string>
+    <string name="ssh_field_username">用户名</string>
+    <string name="ssh_auth_password">密码</string>
+    <string name="ssh_auth_key">私钥</string>
+    <string name="ssh_field_password">密码</string>
+    <string name="ssh_field_private_key">PEM 私钥</string>
+    <string name="ssh_field_passphrase">密钥口令（可选）</string>
+    <string name="ssh_save">保存</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">免提模式</string>
+    <string name="handsfree_state_starting">正在启动…</string>
+    <string name="handsfree_state_listening">正在聆听…</string>
+    <string name="handsfree_state_thinking">正在思考…</string>
+    <string name="handsfree_state_speaking">正在朗读…</string>
+    <string name="handsfree_exit_recognition">免提模式已停止：语音识别连续失败。点按免提模式可重试。</string>
+    <string name="handsfree_exit_tts">免提模式已停止：回复朗读失败。点按免提模式可重试。</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">每行一个 Android 包名，例如 com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">名单用作屏蔽列表</string>
+    <string name="a11y_app_policy_blocklist_sub">关 = 仅允许名单内应用；开 = 屏蔽名单内应用。</string>
+    <string name="a11y_app_policy_enabled">按应用限制</string>
+    <string name="a11y_app_policy_enabled_sub">每次读屏或点按前检查前台应用包名</string>
+    <string name="a11y_app_policy_footer">启用后，ui_read 和 ui_action 会在执行前对照当前前台应用检查。不在名单内（允许模式）或在名单内（屏蔽模式）的应用会被拒绝并给出可见提示。Minis 应用本身始终允许。</string>
+    <string name="a11y_app_policy_section">无障碍应用访问范围</string>
+    <string name="boot_hook_enable">启动时运行 /var/minis/boot.sh</string>
+    <string name="boot_hook_enable_sub">在 Linux rootfs 启动完成后于沙盒内执行</string>
+    <string name="boot_hook_footer">默认关闭。该路径位于可写沙盒内，任何能执行 shell 的智能体都可以替换此脚本——开启后这类文件会在每次启动时静默执行。执行前会再次检查开关，脚本的首见时间及大小/mtime 变化会写入应用日志。下次启动时生效。</string>
+    <string name="boot_hook_last_status">上次运行</string>
+    <string name="boot_hook_section">启动钩子</string>
+    <string name="lifecycle_hooks_command_hint">一行命令。通常填脚本路径最合适，例如 bash /var/minis/hooks/on-response.sh。留空即删除该钩子。</string>
+    <string name="lifecycle_hooks_enable">启用生命周期钩子</string>
+    <string name="lifecycle_hooks_enable_sub">在对应事件发生时执行下方脚本</string>
+    <string name="lifecycle_hooks_events_footer">脚本在沙盒内串行执行（独立通道），超时 20 秒。失败只记日志，不会阻塞聊天。</string>
+    <string name="lifecycle_hooks_help_body">每个脚本会收到 MINIS_HOOK_EVENT、MINIS_HOOK_SESSION_ID 和 MINIS_HOOK_DETAIL。脚本是一次性 PRoot 进程：跨次调用看不到其他命令的 /proc，flock 也不可靠，跨次状态请用文件保存。OnResponse 在每轮智能体回复完成后触发一次；OnSessionEnd 在会话删除时触发。</string>
+    <string name="lifecycle_hooks_help_header">环境与注意事项</string>
+    <string name="lifecycle_hooks_master_footer">默认关闭。关闭期间已配置的脚本会保留，但不会执行。</string>
+    <string name="lifecycle_hooks_not_set">未设置</string>
+    <string name="lifecycle_hooks_section_events">事件</string>
+    <string name="lifecycle_hooks_section_master">总开关</string>
+    <string name="lifecycle_hooks_title">生命周期钩子</string>
+    <string name="provider_detail_custom_headers">自定义请求头</string>
+    <string name="provider_detail_custom_headers_footer">每行一条“名称: 值”。仅应用于该服务商的聊天、/models 与 Responses 请求。Host、Content-Length 和 Connection 由 HTTP 客户端管理，不能覆盖。</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">默认关闭。开启后，发往该自定义端点的每个聊天请求都会携带稳定的会话级 ID（x-opencode-session），便于 OpenCode 兼容网关路由与缓存。仅对你信任的网关开启：该 ID 会在多轮对话间标识同一会话。</string>
+    <string name="provider_detail_opencode_session_header">OpenCode 会话头</string>
+    <string name="provider_detail_opencode_session_toggle">发送 x-opencode-session</string>
+    <string name="provider_detail_save_headers">保存请求头</string>
+    <string name="scheduled_task_prompt_template_hint">当前日期/时间和上次运行会自动附加。你也可以使用 {{date}}、{{time}}、{{datetime}}、{{weekday}}、{{last_fired}}、{{last_fired_ago}} 和 {{task_label}}。</string>
+    <string name="settings_lifecycle_hooks">生命周期钩子</string>
+    <string name="settings_lifecycle_hooks_subtitle">在会话开始 / 回复完成 / 会话结束时运行沙盒脚本</string>
+    <string name="web_search_tool_enabled">启用 web_search</string>
+    <string name="web_search_tool_enabled_sub">允许智能体在聊天中搜索网页。关闭 → 完全不提供该工具。</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">关闭该工具不会删除下方的引擎配置；重新开启即可恢复原行为。</string>
 </resources>

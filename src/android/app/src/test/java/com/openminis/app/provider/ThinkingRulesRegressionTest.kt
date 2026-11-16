@@ -60,6 +60,7 @@ class ThinkingRulesRegressionTest {
         supportsReasoning: Boolean? = true,
         reasoningEffortValues: List<String>? = null,
         interleavedReasoningField: String? = null,
+        maxThinkingLevel: ThinkingLevel? = null,
     ) = LLMModel(
         id = id,
         displayName = id,
@@ -67,6 +68,7 @@ class ThinkingRulesRegressionTest {
         supportsReasoning = supportsReasoning,
         reasoningEffortValues = reasoningEffortValues,
         interleavedReasoningField = interleavedReasoningField,
+        maxThinkingLevel = maxThinkingLevel,
     )
 
     private fun plainHistory(): List<LLMMessage> = listOf(
@@ -380,6 +382,121 @@ class ThinkingRulesRegressionTest {
             "literal 'ultra' must never be sent (backends 400 on it): $body",
             body.optString("reasoning_effort", "") == "ultra",
         )
+    }
+
+    /**
+     * [T-thinking-ultra-declared] The ONE exception: a backend that literally
+     * declares "ultra" in its effort set names the tier itself, so the literal
+     * IS the request — folding it to "max" would silently demote the declared
+     * top tier (and "max" is not even in this set, so clampEffort would then
+     * walk DOWN to "high", two rungs below what the user asked for).
+     */
+    @Test
+    fun `declared ultra tier reaches the wire as the literal`() {
+        val body = capture(
+            model = model(
+                "gpt-6-terra",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max", "ultra"),
+            ),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals(
+            "a declared ultra tier is the backend's own vocabulary: $body",
+            "ultra",
+            body.optString("reasoning_effort"),
+        )
+    }
+
+    /**
+     * [T-thinking-ultra-declared] Case-insensitive declaration: a relay
+     * publishing "Ultra" (capitalized) still names the tier.
+     */
+    @Test
+    fun `declared ultra tier matches case-insensitively on the wire`() {
+        val body = capture(
+            model = model("gpt-6-sol", reasoningEffortValues = listOf("high", "Max", "Ultra")),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals("ultra", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-declared] MAX on a declared-ultra model still sends
+     * "max" — the exception widens ULTRA only, it does not disturb MAX.
+     */
+    @Test
+    fun `max on a declared-ultra model still sends max`() {
+        val body = capture(
+            model = model(
+                "gpt-6-terra",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max", "ultra"),
+            ),
+            level = ThinkingLevel.MAX,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The SECOND exception: a manual ULTRA ceiling
+     * on the model params page IS the operator's vocabulary assertion — the
+     * picker offers 至高, so the wire must carry the literal tier. Before the
+     * fix, the send-boundary clamp was override-blind (LLMModel had no
+     * maxThinkingLevel field to fold into) and folded the level to MAX, then
+     * wireEffort sent "max" — the UI offered one thing, the request carried
+     * another. This model has NO declared "ultra" tier (a relay's unknown-
+     * model stamp looks exactly like this set), so only the override makes
+     * the literal legal to send.
+     */
+    @Test
+    fun `manual ultra ceiling reaches the wire as the literal`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+                maxThinkingLevel = ThinkingLevel.ULTRA,
+            ),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals(
+            "manual ULTRA ceiling is the operator's vocabulary assertion: $body",
+            "ultra",
+            body.optString("reasoning_effort"),
+        )
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The override widens the wire ONLY when the
+     * level itself is ULTRA — a MAX request on an override-ULTRA model still
+     * sends "max" (the exception widens ULTRA only, mirroring the declared
+     * case above).
+     */
+    @Test
+    fun `max on a manual-ultra model still sends max`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+                maxThinkingLevel = ThinkingLevel.ULTRA,
+            ),
+            level = ThinkingLevel.MAX,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] No override, no declaration — the ORIGINAL
+     * invariant still holds: ULTRA folds to "max" (b38bf3d5, iOS evidence).
+     */
+    @Test
+    fun `ultra without override or declaration still folds to max`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+            ),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
     }
 
     // ============================================================ OFF semantics
@@ -709,5 +826,86 @@ class ThinkingRulesRegressionTest {
             model("gpt-4o", supportsReasoning = false, reasoningEffortValues = listOf("high", "max"))
                 .catalogMaxThinkingLevel,
         )
+    }
+
+    /**
+     * [OpenMinis#356] `deepseek-flash` is a live alias for the V4 flash model,
+     * so it must travel on the V4 wire shape (root `thinking` switch + root
+     * `reasoning_effort` sibling) instead of the generic reasoning_effort
+     * fallback. The alias row in the catalog predates V4 and carries no effort
+     * tiers, so the request must be clamped against V4's legal set — an xhigh
+     * request may never reach an endpoint that only knows low|medium|high|max.
+     */
+    @Test
+    fun `deepseek flash alias uses the v4 sibling shape and clamps effort`() {
+        val body = capture(
+            model = model("deepseek-flash", reasoningEffortValues = null),
+            level = ThinkingLevel.XHIGH,
+        )
+        val thinking = body.optJSONObject("thinking")
+        assertTrue("`thinking` switch must be present for the alias: $body", thinking != null)
+        assertEquals("thinking.type must be 'enabled': $body", "enabled", thinking?.optString("type"))
+        assertEquals(
+            "xhigh must be clamped to V4's legal set: $body",
+            "high",
+            body.optString("reasoning_effort", null),
+        )
+    }
+
+    /**
+     * [OpenMinis#377] The compaction / title / sub-agent lanes pin thinking OFF;
+     * on official OpenAI that used to emit the allowlist value "none"
+     * unconditionally. gpt-5 and o-series do not accept it (400), so the OFF
+     * tier must be clamped onto the lowest DECLARED tier. Asserted at the
+     * resolver (not through MockWebServer: the allowlist keys on the real
+     * api.openai.com base URL, which a local server cannot impersonate).
+     */
+    @Test
+    fun `openai off tier is clamped to the lowest declared tier`() {
+        val body = JSONObject()
+        val ctx = com.openminis.app.provider.thinking.ThinkingResolveContext(
+            modelId = "gpt-5.3",
+            instanceId = null,
+            supportsReasoning = true,
+            declaredEffortValues = listOf("minimal", "low", "medium", "high"),
+            level = ThinkingLevel.OFF,
+            maxTokens = 4096,
+            isOpenRouter = false,
+            usesUnifiedReasoningEffort = false,
+            isMistral = false,
+            isDashScope = false,
+            offEffort = "none",
+        )
+        com.openminis.app.provider.thinking.ThinkingRuleResolver.apply(body, ctx)
+        assertEquals(
+            "OFF must send a legal floor, never the undeclared 'none': $body",
+            "minimal",
+            body.optString("reasoning_effort", null),
+        )
+    }
+
+    /**
+     * [OpenMinis#377] A model that only declares high/max has no legal off tier
+     * below "low": the field must be OMITTED rather than forcing a strong tier
+     * on a request the caller explicitly wanted cheap.
+     */
+    @Test
+    fun `off tier is omitted when the model declares only high tiers`() {
+        val body = JSONObject()
+        val ctx = com.openminis.app.provider.thinking.ThinkingResolveContext(
+            modelId = "glm-5.2",
+            instanceId = null,
+            supportsReasoning = true,
+            declaredEffortValues = listOf("high", "max"),
+            level = ThinkingLevel.OFF,
+            maxTokens = 4096,
+            isOpenRouter = false,
+            usesUnifiedReasoningEffort = false,
+            isMistral = false,
+            isDashScope = false,
+            offEffort = "none",
+        )
+        com.openminis.app.provider.thinking.ThinkingRuleResolver.apply(body, ctx)
+        assertFalse("no legal off tier exists; the field must be omitted: $body", body.has("reasoning_effort"))
     }
 }

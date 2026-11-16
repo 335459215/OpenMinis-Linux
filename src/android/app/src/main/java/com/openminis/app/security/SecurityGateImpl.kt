@@ -11,7 +11,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Adapted from XINCODE-Public SecurityGateImpl (GPL-3.0-or-later)
  * https://github.com/kusesad-1122/XINCODE-Public
  *
- * Audit is an in-memory sha256 hash chain (no Room). Tests can tamper entries.
+ * Audit is an in-memory sha256 hash chain (no Room dependency — the gate stays
+ * a pure JVM class). Persistence is opt-in via [auditSink]: the app installs a
+ * sink at startup that mirrors each entry into the `audit_entries` Room table.
+ * Tests can tamper entries.
  */
 class SecurityGateImpl : SecurityGate {
 
@@ -47,6 +50,21 @@ class SecurityGateImpl : SecurityGate {
      */
     @Volatile
     var sdcardMounted: (() -> Boolean)? = null
+
+    /**
+     * [T-audit-room-persist] App-installed persistence hook for the audit
+     * chain, fired once per [audit] call AFTER the in-memory record has landed.
+     *
+     * The gate itself must stay Room-free (pure JVM, heavily unit-tested), so
+     * persistence is inverted: the app wires a sink that mirrors the entry into
+     * `audit_entries`. The call is fire-and-forget by contract — [audit]
+     * wraps it in `runCatching`, so a throwing or slow sink can never break
+     * (or even delay the verdict of) a tool decision, and a null sink leaves
+     * the historical memory-only behaviour byte-for-byte intact. Long-running
+     * work belongs in the sink's own coroutine, not in this call.
+     */
+    @Volatile
+    var auditSink: ((AuditEntry) -> Unit)? = null
 
     /** Run [block] with [sessionId] visible to the path policies inside it. */
     fun <T> withCallerSession(sessionId: String?, block: () -> T): T {
@@ -251,15 +269,19 @@ class SecurityGateImpl : SecurityGate {
         // tighten-only prefix layer (PrefixRulePolicy) went with it.
 
         // [1] Always pass: read-only tools (unless mode==DENY_ALL).
+        // [#31] ASK_ALL (strict asking) also exempts itself: every call,
+        // reads included, goes to the user.
         if ((cmd.toolName in READ_ONLY_TOOLS || (cmd.toolName == "browser_use" && isBrowserReadOnlyAction(cmd))) &&
-            mode != PermissionMode.DENY_ALL
+            mode != PermissionMode.DENY_ALL && mode != PermissionMode.ASK_ALL
         ) {
             return Decision.Allow("只读工具自动放行")
         }
 
         // [2] Always pass: coordinator tools (unless mode blocks them).
+        // [#31] ASK_ALL prompts on them too.
         if (cmd.toolName in COORDINATOR_TOOLS && mode != PermissionMode.DENY_ALL &&
-            mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN
+            mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN &&
+            mode != PermissionMode.ASK_ALL
         ) {
             return Decision.Allow("协调工具自动放行")
         }
@@ -335,7 +357,8 @@ class SecurityGateImpl : SecurityGate {
             // mode and must stay strictly stricter than YOYO. YOYO keeps the
             // confirm: its contract is "full-auto except fatal-confirm", and
             // a session that opened the gate has already said yes.
-            if (mode == PermissionMode.ASK) {
+            // [#31] ASK_ALL is at least as strict as ASK → same hard deny.
+            if (mode == PermissionMode.ASK || mode == PermissionMode.ASK_ALL) {
                 return Decision.Denied(
                     describeFatalViolation(command),
                 )
@@ -422,7 +445,8 @@ class SecurityGateImpl : SecurityGate {
         }
 
         // [7] Approval: low-risk auto-run. Everything else confirms.
-        if (isLowRisk(cmd, command, risk)) {
+        // [#31] ASK_ALL exempts itself — the tier promises "every call asks".
+        if (mode != PermissionMode.ASK_ALL && isLowRisk(cmd, command, risk)) {
             return Decision.Allow("审批：低风险自动放行")
         }
         return Decision.NeedConfirm(cmd.why, preview(cmd))
@@ -468,26 +492,31 @@ class SecurityGateImpl : SecurityGate {
             is Decision.NeedConfirm -> "NeedConfirm: ${decision.reason}"
             is Decision.Denied -> "Denied: ${decision.reason}"
         }
-        synchronized(auditTrail) {
+        val entry: AuditEntry = synchronized(auditTrail) {
             // [T-audit-trail-bounded] rationale lives on AUDIT_TRAIL_MAX.
             val prev = auditTrail.lastOrNull()?.hash ?: ""
             val ts = System.currentTimeMillis()
             val hash = computeAuditHash(prev, ts, cmd.toolName, cmd.toolArgs, ds, result)
-            auditTrail.add(
-                AuditEntry(
-                    timestamp = ts,
-                    toolName = cmd.toolName,
-                    toolArgs = cmd.toolArgs,
-                    capability = cmd.capability,
-                    reversibility = cmd.reversibility,
-                    decision = ds,
-                    result = result,
-                    prevHash = prev,
-                    hash = hash,
-                ),
+            val e = AuditEntry(
+                timestamp = ts,
+                toolName = cmd.toolName,
+                toolArgs = cmd.toolArgs,
+                capability = cmd.capability,
+                reversibility = cmd.reversibility,
+                decision = ds,
+                result = result,
+                prevHash = prev,
+                hash = hash,
             )
+            auditTrail.add(e)
             while (auditTrail.size > AUDIT_TRAIL_MAX) auditTrail.removeAt(0)
+            e
         }
+        // [T-audit-room-persist] Fire-and-forget persistence hook. Outside the
+        // lock so an unknown sink can never stall concurrent classify/decide
+        // traffic; runCatching so a broken sink cannot reach the caller — the
+        // in-memory record has already landed and is the source of truth here.
+        auditSink?.let { sink -> runCatching { sink(entry) } }
     }
 
     override fun getAuditTrail(): List<AuditEntry> = synchronized(auditTrail) { auditTrail.toList() }

@@ -34,8 +34,12 @@ import java.util.concurrent.TimeUnit
  *    Settings → MCP re-authorization.
  *
  * Blocking OkHttp calls — the tool dispatcher invokes this on a worker
- * dispatcher. Thread-safety: [lock] serializes requests (a single in-flight
- * JSON-RPC exchange per client), matching the CLI daemon's per-server lock.
+ * dispatcher. Thread-safety: [lock] guards ONLY the initialize handshake and
+ * session teardown; listTools/callTool/resources/prompts run concurrently
+ * (each is an independent POST, and the replayed [sessionId] is a volatile
+ * read set once during initialize). The stdio transport stays serialized by
+ * protocol necessity (one stdin/stdout pipe); this HTTP transport does not
+ * need that and never did.
  */
 class McpHttpClient(
     override val serverName: String,
@@ -95,12 +99,21 @@ class McpHttpClient(
 
     @Volatile private var negotiatedVersion: String = McpJsonRpc.PROTOCOL_VERSION
 
+    private fun pageParams(cursor: String?): JSONObject =
+        if (cursor == null) JSONObject() else JSONObject().put("cursor", cursor)
+
+    /**
+     * [T-mcp-list-all] All pages of `tools/list` (pi client.ts listAll):
+     * capped at 1000 pages, duplicate cursors refuse — shared with the stdio
+     * transport so the pagination contract cannot drift.
+     */
     override fun listTools(): JSONArray {
         ensureInitialized()
-        val id = McpJsonRpc.nextId()
-        val result = post(McpJsonRpc.request(id, "tools/list", JSONObject()), id)
-            ?: throw McpError(McpError.PROTOCOL_ERROR, "tools/list returned no result")
-        return result.optJSONArray("tools") ?: JSONArray()
+        return McpListPager.collect("tools/list", "tools") { cursor ->
+            val id = McpJsonRpc.nextId()
+            post(McpJsonRpc.request(id, "tools/list", pageParams(cursor)), id)
+                ?: throw McpError(McpError.PROTOCOL_ERROR, "tools/list returned no result")
+        }
     }
 
     override fun callTool(tool: String, arguments: JSONObject): JSONObject {
@@ -112,6 +125,59 @@ class McpHttpClient(
         }
         return post(McpJsonRpc.request(id, "tools/call", params), id)
             ?: throw McpError(McpError.PROTOCOL_ERROR, "tools/call returned no result")
+    }
+
+    /**
+     * JSON-RPC -32601 (method not found) is the wire-level expression of
+     * "this server does not implement this capability" — normalize it to the
+     * same UnsupportedOperationException the interface default throws, so the
+     * tool layer's wrapServerSupport handles stdio and HTTP transports
+     * uniformly. Any other McpError propagates unchanged.
+     */
+    private inline fun <T> notFoundAsUnsupported(method: String, block: () -> T): T =
+        try {
+            block()
+        } catch (e: McpError) {
+            if (e.code == "RPC_-32601") {
+                throw UnsupportedOperationException("$method not supported by this server")
+            }
+            throw e
+        }
+
+    /** [T-mcp-list-all] All pages of `resources/list`. */
+    override fun listResources(): JSONArray = notFoundAsUnsupported("resources/list") {
+        ensureInitialized()
+        McpListPager.collect("resources/list", "resources") { cursor ->
+            val id = McpJsonRpc.nextId()
+            post(McpJsonRpc.request(id, "resources/list", pageParams(cursor)), id)
+                ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/list returned no result")
+        }
+    }
+
+    override fun readResource(uri: String): JSONObject = notFoundAsUnsupported("resources/read") {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val params = JSONObject().put("uri", uri)
+        post(McpJsonRpc.request(id, "resources/read", params), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "resources/read returned no result")
+    }
+
+    /** [T-mcp-list-all] All pages of `prompts/list`. */
+    override fun listPrompts(): JSONArray = notFoundAsUnsupported("prompts/list") {
+        ensureInitialized()
+        McpListPager.collect("prompts/list", "prompts") { cursor ->
+            val id = McpJsonRpc.nextId()
+            post(McpJsonRpc.request(id, "prompts/list", pageParams(cursor)), id)
+                ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/list returned no result")
+        }
+    }
+
+    override fun getPrompt(name: String, arguments: JSONObject): JSONObject = notFoundAsUnsupported("prompts/get") {
+        ensureInitialized()
+        val id = McpJsonRpc.nextId()
+        val params = JSONObject().put("name", name).put("arguments", arguments)
+        post(McpJsonRpc.request(id, "prompts/get", params), id)
+            ?: throw McpError(McpError.PROTOCOL_ERROR, "prompts/get returned no result")
     }
 
     override fun close() {

@@ -45,7 +45,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderConfigMetaEntity::class,
         ProviderThinkingRuleEntity::class,
     ],
-    version = 6,
+    version = 9,
     exportSchema = true,
 )
 abstract class ProviderDatabase : RoomDatabase() {
@@ -139,6 +139,46 @@ abstract class ProviderDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * [OpenMinis#311] Force extended thinking for Anthropic-compatible
+         * relays whose catalog entry says `supportsReasoning = false`. Pure
+         * additive ALTER with NOT NULL DEFAULT 0: existing rows keep the old
+         * "capability decides" behaviour, no data rewrite, no provider drop.
+         * The exported schema (7.json) lands with the next Gradle build.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("provider_instances", "force_thinking", "INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * [T-compat-flags-persist] Add the per-model compat-flags overlay column
+         * (pi models.json `compat` equivalent). Pure additive nullable TEXT
+         * ALTER: existing rows read NULL (= no overlay, family defaults apply),
+         * no data rewrite, no provider drop. The exported schema (8.json) is
+         * hand-rebuilt from 7.json on the AppDatabase 34.json precedent — Room
+         * re-exports the compiled schema (with its own identityHash) on the
+         * next build.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("provider_model_entries", "compat_json", "TEXT")
+            }
+        }
+
+        /**
+         * [T-codex-client-fingerprint] Add the per-provider Codex-client
+         * fingerprint switch. Pure additive ALTER with NOT NULL DEFAULT 0 so
+         * every existing provider row backfills to "off" — outbound bytes for
+         * instances that do not opt in stay byte-identical.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("provider_instances", "codex_client_fingerprint", "INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): ProviderDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -146,7 +186,10 @@ abstract class ProviderDatabase : RoomDatabase() {
                     ProviderDatabase::class.java,
                     "provider.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    )
                     .build()
                     .also { INSTANCE = it }
             }

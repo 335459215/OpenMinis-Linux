@@ -107,11 +107,25 @@ enum class ThinkingLevel {
     // [T-android-thinking-level-arch] New cases MUST be appended at the end.
     // Kotlinx Serialization encodes enums by NAME string ("OFF"/"LOW"/...),
     // not declaration-order ordinal, so appending does not corrupt already-
-    // persisted data. GPT-5.6 sol/terra reach ULTRA, luna reaches MAX.
+    // persisted data. Max reachable level per model: the ThinkingLevelCatalog
+    // caps sol/terra/luna at MAX — ULTRA is ONLY reachable when a model's
+    // reasoningEffortValues explicitly declares "ultra".
     OFF, LOW, MEDIUM, HIGH, XHIGH, MAX, ULTRA;
 
     val isEnabled: Boolean get() = this != OFF
 
+    /**
+     * HARD-CODED ENGLISH label — serialisation/debug surface ONLY.
+     *
+     * [T-thinking-level-i18n] UI layers MUST NOT consume this: it is not
+     * localized, and it caused four shipped UI bugs (multi-agent picker,
+     * token-usage sheet, system-info toast). Android UI uses
+     * `ThinkingLevel.localizedName(context)` (app module,
+     * ThinkingLevelLocalized.kt); minis-config bridging uses
+     * `ConfigBuiltins.thinkingLevelToToken`. Copy-pasting this property into
+     * new UI is how the multi-agent settings page shipped an English-only
+     * picker inside a Chinese UI.
+     */
     val displayName: String
         get() = when (this) {
             OFF -> "Off"
@@ -134,12 +148,15 @@ enum class ThinkingLevel {
          * build reading a token a NEWER build persisted (Room DB / JSON mirror).
          * Mirrors the `runCatching { … }.getOrNull()` guard already used for
          * ImageEndpointMode (ProviderConfigMapping.kt). NEVER throws: an unknown
-         * value clamps to the highest level THIS build knows (XHIGH) rather than
-         * letting the caller handle an exception or drop the whole config. Use
-         * this for every "read from persisted data" path.
+         * value clamps to the highest level THIS build knows (ULTRA since
+         * [T-thinking-ultra-manual]; XHIGH before it) rather than letting the
+         * caller handle an exception or drop the whole config. The wire layer
+         * clamps onto the model's declared set, so a generous decode fallback
+         * can only widen the picker, never the request. Use this for every
+         * "read from persisted data" path.
          */
         fun decoded(raw: String): ThinkingLevel =
-            runCatching { valueOf(raw) }.getOrElse { XHIGH }
+            runCatching { valueOf(raw) }.getOrElse { ULTRA }
     }
 }
 
@@ -289,6 +306,21 @@ data class ProviderInstance(
     // so existing OpenAI instances are completely unaffected. Field name
     // matches iOS for cross-platform export/import interop.
     var azureMode: Boolean = false,
+    // [OpenMinis#311] Anthropic-compatible relays (DeepSeek / Bailian / a
+    // self-hosted gateway speaking /v1/messages) can be forced to accept
+    // extended thinking even when their catalog entry declares
+    // `supportsReasoning = false` (or the catalog has no entry at all). The
+    // provider-level switch bypasses the capability clamp and always emits the
+    // legacy `thinking:{type:"enabled",budget_tokens:N}` shape. Off by default
+    // so existing Anthropic instances (and the official endpoint) are
+    // byte-identical. iOS-compatible name: `forceThinkingEnabled`.
+    var forceThinkingEnabled: Boolean = false,
+    // [T-codex-client-fingerprint] 让自定义 OpenAI 兼容中转站上的请求以「官方
+    // Codex 客户端」身份出站：补 originator / session-id / thread-id /
+    // x-codex-app-version / x-codex-turn-metadata 等头，并在 body 里写
+    // client_metadata。只有中转站开了 codex_cli_only 之类准入校验时才需要。
+    // 默认 false，所以已有实例的出站字节完全不变。
+    var codexClientFingerprint: Boolean = false,
     // Favorites: pinned instances render in a dedicated section at the top of
     // the provider list. Default false so older JSON still deserializes.
     var pinned: Boolean = false,
@@ -317,14 +349,23 @@ data class ProviderInstance(
      * Deliberately NOT extended to official endpoints (no custom base URL —
      * an empty key against the official API is always a misconfiguration) or
      * OAuth instances (their credential is the token). Mirrors iOS
-     * `ProviderInstance.allowsEmptyAPIKey`; Android has no `openAIResponses`
-     * type — the `useResponsesAPI` flag rides on `.openAI`, so the type gate
-     * is just {openAI, anthropic}.
+     * `ProviderInstance.allowsEmptyAPIKey`.
+     *
+     * [GH#218] `openAIResponses` is a real type here (decode-only for the
+     * "add provider" screen, but fully usable once restored from an iOS
+     * package) and its third-party gateways are exactly the ones that often
+     * run without a key. Leaving it out made the client-side credential gate
+     * reject a Responses gateway whose key field is intentionally blank —
+     * the restored instance looked permanently unconfigured. The gate is a
+     * configuration-shape check, NOT a key-format check: never validate the
+     * key's prefix/length on the client; the server is the authority.
      */
     val allowsEmptyAPIKey: Boolean
         get() = credentialType == ProviderCredential.apiKey &&
             !customBaseURL.isNullOrBlank() &&
-            (providerType == ProviderType.openAI || providerType == ProviderType.anthropic)
+            (providerType == ProviderType.openAI ||
+                providerType == ProviderType.openAIResponses ||
+                providerType == ProviderType.anthropic)
 
     /**
      * [T-android-image-endpoint-mode] Whether the "Image Generation" endpoint
@@ -396,7 +437,7 @@ data class ModelOverrides(
     val maxThinkingLevel: ThinkingLevel? = null,
     /** Per-model auto-compact; null inherits the app default (on). */
     val autoCompactEnabled: Boolean? = null,
-    /** Compact when context usage reaches this percent (50–95). null = app default 90. */
+    /** Compact when context usage reaches this percent (50–95). null = app default 75. */
     val compactThresholdPercent: Int? = null,
     /** Same-provider retries on 429 / 5xx / network. null = default 5. */
     val maxRetries: Int? = null,
@@ -433,6 +474,16 @@ data class ModelEntry(
      *  `ModelEntry.userModifiedAt` is a `Date?` decoded with `.iso8601`. */
     @Serializable(with = Iso8601MillisNullableSerializer::class)
     val userModifiedAt: Long? = null,
+    // [T-compat-flags-persist] Serialized [CompatFlags] overlay for this model
+    // (pi models.json `compat` equivalent), stored verbatim as JSON so the
+    // core:model layer stays provider-module-free. Deserialized and fed to
+    // CompatResolver.override at repository load; write side (UI editor /
+    // models.json import) is future work — the field round-trips so any future
+    // writer survives every save. Null = no overlay, family defaults apply.
+    // Additive with a default: older persisted JSON lacking the key decodes
+    // cleanly (kotlinx.serialization), and older builds ignore the key
+    // (ignoreUnknownKeys).
+    val compatJson: String? = null,
 ) {
     val id: String get() = uuid
 
@@ -446,6 +497,14 @@ data class ModelEntry(
                 supportsReasoning = overrides.supportsReasoning ?: baseModel.supportsReasoning,
                 inputModalities = overrides.inputModalities ?: baseModel.inputModalities,
                 outputModalities = overrides.outputModalities ?: baseModel.outputModalities,
+                // [T-thinking-ultra-manual] Fold the ceiling override onto the
+                // resolved model so provider-side clamping (LLMProvider.
+                // clampThinkingLevel reads model.catalogMaxThinkingLevel) and
+                // the wire layer see the SAME ceiling the chat picker offered.
+                // Previously the override lived only on ModelOverrides, the
+                // provider clamp was blind to it, and a picker-selected ULTRA
+                // was silently clamped back to MAX at the send boundary.
+                maxThinkingLevel = overrides.maxThinkingLevel ?: baseModel.maxThinkingLevel,
             )
             // A user who explicitly saved output modalities wins over the
             // empty-catalog repair. Otherwise a persisted ["text"] stamp on

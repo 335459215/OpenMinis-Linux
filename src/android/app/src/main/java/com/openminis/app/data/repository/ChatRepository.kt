@@ -50,7 +50,7 @@ class ChatRepository(
         // here; existing call sites that omit it keep the prior
         // memoryEnabled=1 behavior (legacy default).
         memoryEnabled: Boolean = true,
-        permissionMode: String = "ASK",
+        permissionMode: String = com.openminis.app.security.SessionPermissionMode.SAFE_AUTO.toStoredToken(),
     ): ChatSessionEntity {
         val now = System.currentTimeMillis()
         val session = ChatSessionEntity(
@@ -63,6 +63,14 @@ class ChatRepository(
             permissionMode = permissionMode,
         )
         dao.insertSession(session)
+        // [GH#131] Lifecycle hook: a session row now exists. Fired for every
+        // creation path (user draft promotion, scheduled task, automation) so
+        // consumers see one event per real conversation. Non-blocking.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.SESSION_START,
+            session.id,
+            title.orEmpty(),
+        )
         return session
     }
 
@@ -462,6 +470,13 @@ class ChatRepository(
             runCatching { ExecutionCoordinator.sessionDidTerminate(id) }
             SessionWorkspace.deleteEntire(dir, id)
         }
+        // [GH#131] Lifecycle hook: the conversation is gone. Fired after the DB
+        // commit + file cleanup so a hook can rely on neither existing.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.SESSION_END,
+            id,
+            "deleted",
+        )
     }
 
     // Session groups ("folders") live in ChatRepositoryFolders.kt as
@@ -469,7 +484,7 @@ class ChatRepository(
 
 
     suspend fun searchSessions(query: String): List<ChatSessionEntity> =
-        searchDao().searchSessions("%$query%")
+        searchSessionsWordAware(query)
 
     // [Wave3-fix-5] `observeMessages(sessionId)` was deleted: a dead Flow with
     // zero collectors in the whole repository, wrapping a query silently

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -37,15 +39,24 @@ import com.openminis.app.i18n.uppercaseForDisplay
  * every other "⋯" menu sheet.
  *
  * Sections (top to bottom):
- *   - Context: Context Used / Context Window / Max Output
+ *   - Context: progress bar + Context Used / Context Window / Max Output
+ *     + per-block breakdown (what the next request is made of, [#25] merged
+ *     here from the former standalone ContextUsageSheet — one entry point,
+ *     one sheet, no duplicated header stats)
  *   - Thinking (only when the model supports reasoning): On/Off / Level / Supported
  *   - Tokens (Session Total): Input (incl. cache) / Output
  *   - Cache (Session Total): Cache Read / Cache Write
  *   - Agent Loop: Total Loops
+ *   - Tool calls (only when the loaded window carries tool_use blocks):
+ *     one "name × N" row per tool, busiest first, top 5 + folded remainder
+ *     (the UsageLedger tools bucket, [T-pi-tools-bucket])
  *
  * Data loads asynchronously via [ChatViewModel.loadSessionTokenStats] when the
  * sheet appears; we intentionally don't hold a live subscription — token
  * counters change per API call, not per keystroke, so pull-on-open is enough.
+ * The context breakdown ([ChatViewModel.buildContextBreakdown]) is a suspend
+ * IO call, so it fills in after the first frame; the block list simply stays
+ * hidden until it lands rather than flashing zeros.
  */
 @Composable
 fun TokenUsageSheet(
@@ -61,6 +72,12 @@ fun TokenUsageSheet(
     val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
     // [T-tool-result-aging] Latest fold stats from the send path.
     val saver by ContextSaverRuntime.stats.collectAsStateWithLifecycle()
+    // [#25] Per-block context breakdown (merged from the former standalone
+    // ContextUsageSheet). Sheet-local state per the data-flow convention:
+    // filled once on open, no live subscription — the prompt composition only
+    // changes at request boundaries.
+    val breakdownState = remember { mutableStateOf<ContextBreakdown?>(null) }
+    val breakdown by breakdownState
 
     LaunchedEffect(Unit) {
         // Recompute the context rows on open: contextUsage is a snapshot that
@@ -68,6 +85,7 @@ fun TokenUsageSheet(
         // pre-compaction reading ([T-android-compact-stale-usage]).
         viewModel.refreshContextUsage()
         stats = viewModel.loadSessionTokenStats()
+        breakdownState.value = runCatching { viewModel.buildContextBreakdown() }.getOrNull()
     }
 
     StandardChatSheet(
@@ -93,6 +111,25 @@ fun TokenUsageSheet(
             val yesText = stringResource(R.string.common_yes)
             val noText = stringResource(R.string.common_no)
             StatSection(title = stringResource(R.string.token_usage_section_context)) {
+                // Water-level progress bar: the real reported ratio when the
+                // provider has answered at least once, else the block-sum
+                // estimate from the breakdown (same fallback ladder the
+                // former standalone sheet used).
+                val ratio = if (contextUsage.known) {
+                    contextUsage.ratio
+                } else {
+                    breakdown?.let { b ->
+                        if (b.windowTokens > 0) {
+                            (b.totalTokens.toFloat() / b.windowTokens).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                    } ?: 0f
+                }
+                LinearProgressIndicator(
+                    progress = { ratio },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 StatRow(
                     stringResource(R.string.token_usage_context_used),
                     formatTokens(
@@ -107,12 +144,52 @@ fun TokenUsageSheet(
                     if (contextUsage.known) "${(contextUsage.ratio * 100).toInt()}%" else "?",
                 )
                 maxOutput?.let { StatRow(stringResource(R.string.token_usage_max_output), formatTokens(it)) }
+                // [#25] Per-block composition of the next request — the
+                // unique payload of the former ContextUsageSheet, largest
+                // block first so the dominant cost sits on top.
+                breakdown?.let { b ->
+                    if (b.blocks.isNotEmpty()) {
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        )
+                        ContextBlockList(b)
+                        Text(
+                            text = stringResource(R.string.context_usage_note_estimate),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             thinking?.let { t ->
                 StatSection(title = stringResource(R.string.token_usage_section_thinking)) {
                     StatRow(stringResource(R.string.token_usage_thinking_label), if (t.enabled) onText else offText)
                     if (t.enabled) StatRow(stringResource(R.string.token_usage_thinking_level), t.level)
+                    // [T-thinking-dual-ledger] The session's most recent turn:
+                    // what the user requested vs what the response evidenced.
+                    // "—" = unknown (pre-ledger rows, no thinking streamed, or
+                    // the wire tier could not be named honestly).
+                    val lastRequested = s?.thinkingLevelRequested
+                    if (s != null && lastRequested != null) {
+                        val requestedLevel = com.openminis.app.data.model.ThinkingLevel.decoded(lastRequested)
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_requested),
+                            requestedLevel.localizedName(LocalContext.current),
+                        )
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_effective),
+                            // Same localized format as the requested row when
+                            // the wire tier decodes to a session level; raw
+                            // wire value otherwise (it is the provider's own
+                            // naming and must not be invented into a level).
+                            s.thinkingLevelEffective?.let { raw ->
+                                com.openminis.app.data.model.ThinkingLevel.decoded(raw)
+                                    ?.localizedName(LocalContext.current) ?: raw
+                            } ?: "—",
+                        )
+                    }
                     StatRow(stringResource(R.string.token_usage_thinking_supported), if (t.supported) yesText else noText)
                 }
             }
@@ -141,6 +218,30 @@ fun TokenUsageSheet(
 
             StatSection(title = stringResource(R.string.token_usage_section_agent_loop)) {
                 StatRow(stringResource(R.string.token_usage_total_loops), (s?.loopCount ?: 0).toString())
+            }
+            // [T-pi-tools-bucket] UsageLedger tools bucket: one row per tool the loaded
+            // window carries, busiest first ("name × N"). Bounded — top rows plus a folded
+            // remainder row for MCP-heavy sessions. Hidden while the map is empty: empty
+            // means "no tool_use in memory", never a fabricated zero.
+            val toolCounts = s?.toolCallCounts.orEmpty()
+            if (toolCounts.isNotEmpty()) {
+                StatSection(title = stringResource(R.string.token_usage_section_tool_calls)) {
+                    val rows = toolCounts.entries.toList()
+                        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                    rows.take(TOOL_ROWS_SHOWN).forEach { (name, calls) ->
+                        StatRow(name, "× $calls")
+                    }
+                    if (rows.size > TOOL_ROWS_SHOWN) {
+                        val remaining = rows.drop(TOOL_ROWS_SHOWN)
+                        StatRow(
+                            stringResource(
+                                R.string.token_usage_tools_more,
+                                remaining.size,
+                            ),
+                            "× ${remaining.sumOf { it.value }}",
+                        )
+                    }
+                }
             }
             // [T-tool-result-aging] What the history-side saver actually did on
             // the most recent request. Zero rows read "—" instead of 0 so an
@@ -208,3 +309,61 @@ private fun formatTokens(n: Long): String =
     formatTokenCount(n, uppercaseSuffix = true)
 
 private fun formatTokens(n: Int): String = formatTokens(n.toLong())
+
+/**
+ * [#25] Per-block rows of the context breakdown (merged from the former
+ * standalone ContextUsageSheet). One row per semantic block, largest-first
+ * so the dominant cost is on top; share is vs the estimated block sum.
+ */
+@Composable
+private fun ContextBlockList(data: ContextBreakdown) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        data.blocks
+            .sortedByDescending { it.tokens }
+            .forEach { block ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(block.key.labelRes()),
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "${(block.share * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = formatTokens(block.tokens),
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                )
+            }
+    }
+}
+
+/** Localized name per semantic block (UI mapping only — the core stays resource-free). */
+private fun ContextBlockKey.labelRes(): Int = when (this) {
+    ContextBlockKey.SYSTEM_TOOLS -> R.string.context_block_system
+    ContextBlockKey.SKILLS_MCPS -> R.string.context_block_skills_mcps
+    ContextBlockKey.MEMORY -> R.string.context_block_memory
+    ContextBlockKey.RUNTIME_TAIL -> R.string.context_block_runtime
+    ContextBlockKey.GOAL_PLAN -> R.string.context_block_goal_plan
+    ContextBlockKey.HISTORY -> R.string.context_block_history
+    ContextBlockKey.PENDING_ATTACHMENTS -> R.string.context_block_attachments
+}
+
+/** Per-tool rows shown before the calls fold into the "more kinds" remainder row. */
+private const val TOOL_ROWS_SHOWN = 5

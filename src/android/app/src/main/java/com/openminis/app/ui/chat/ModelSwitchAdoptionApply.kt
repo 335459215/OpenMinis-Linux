@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
 
 /**
@@ -58,3 +59,27 @@ internal fun ChatViewModel.resolveModelSwitch(
         epoch = snapshotModelSelectionEpoch(),
     )
 }
+
+
+/**
+ * [T-android-persona-switch-rebuild] Rebuild the system prompt for the
+ * ADOPTED entry: the persona keys on providerInstanceId, so the send-time
+ * prompt still speaks in the previous provider's voice — every remaining
+ * request of the run would otherwise carry the old persona (the reported
+ * "switched provider but the old persona still applies"). A failed rebuild
+ * returns null and the caller keeps the old prompt rather than blanking
+ * the run.
+ */
+internal fun ChatViewModel.rebuildSystemPromptForAdoptedEntry(provider: LLMProvider): String? =
+    // [T-oauth-prefix-offset] The rebuilt prompt rides the SAME wrapper as the
+    // five request-side paths (wrap + stablePrefixLen shift) — an unwrapped
+    // base was self-consistent (the provider injects its own prefix block) but
+    // shaped differently and one contract change away from drifting.
+    runCatching { wrapSystemPromptForOAuth(provider, buildSystemPrompt()) }
+        .onFailure {
+            // [T-persona-switch-rebuild] A silent failure would leave the rest
+            // of this run on the OLD provider's persona — exactly the symptom
+            // #353 set out to fix. Surface it.
+            AppLogger.warning(ChatViewModel.TAG, "[ModelSwitch] prompt rebuild failed: ${it.message}")
+        }
+        .getOrNull()

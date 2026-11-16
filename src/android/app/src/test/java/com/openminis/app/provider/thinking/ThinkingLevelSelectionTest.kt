@@ -33,6 +33,7 @@ class ThinkingLevelSelectionTest {
         id: String,
         supportsReasoning: Boolean? = true,
         tiers: List<String>? = null,
+        maxThinkingLevel: ThinkingLevel? = null,
     ): LLMModel {
         val base = LLMModel(
             id = id,
@@ -45,7 +46,11 @@ class ThinkingLevelSelectionTest {
         // Mirror how the repository actually populates the tier list: a model
         // that declares nothing must stay `null`, because OpenAIRequestBodies
         // reads `declaresNoEffortTiers == true` as "omit the field entirely".
-        return if (tiers == null) base else base.copy(reasoningEffortValues = tiers)
+        // maxThinkingLevel mirrors the ModelEntry.model fold — the resolved
+        // model carries the operator's ceiling override.
+        val withTiers = if (tiers == null) base else base.copy(reasoningEffortValues = tiers)
+        return if (maxThinkingLevel == null) withTiers
+        else withTiers.copy(maxThinkingLevel = maxThinkingLevel)
     }
 
     // ── the shipped fix: sparse declared sets must stay reachable ─────────────
@@ -178,8 +183,12 @@ class ThinkingLevelSelectionTest {
     // ── the invariants that must hold for every model ────────────────────────
 
     /**
-     * ULTRA serializes as `"max"` — same bytes as MAX — so offering it as a
-     * separate rung is exactly the lie this suite exists to prevent.
+     * ULTRA serializes as `"max"` for every model whose declared set stops at
+     * "max" — same bytes as MAX — so offering it as a separate rung is exactly
+     * the lie this suite exists to prevent.
+     *
+     * [T-thinking-ultra-declared] The declared set here is fullLadder()
+     * (low..max, no "ultra"), so the fold still applies to all of them.
      */
     @Test
     fun `ultra is never offered as a distinct rung`() {
@@ -195,6 +204,55 @@ class ThinkingLevelSelectionTest {
                 levels.contains(ThinkingLevel.ULTRA),
             )
         }
+    }
+
+    // ── [T-thinking-ultra-declared] the declared-ultra exception ─────────────
+
+    /**
+     * A backend that literally declares "ultra" in its effort set names the
+     * tier itself: ULTRA IS a distinct wire value there (clampEffort passes
+     * the literal through), so the rung must be offered and the ceiling must
+     * reach it — otherwise the declared top tier is dead.
+     */
+    @Test
+    fun `declared ultra tier is offered and lifts the ceiling to ULTRA`() {
+        val m = model("gpt-6-terra", tiers = listOf("low", "medium", "high", "xhigh", "max", "ultra"))
+        assertEquals(
+            "a declared ultra tier is a real wire value and must be offered",
+            listOf(
+                ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH,
+                ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA,
+            ),
+            m.selectableThinkingLevels,
+        )
+        assertEquals(
+            "the ceiling must reach the declared top tier",
+            ThinkingLevel.ULTRA,
+            m.catalogMaxThinkingLevel,
+        )
+    }
+
+    /**
+     * Case-insensitive match on the declared tier: a relay publishing "Ultra"
+     * (capitalized) still names the tier.
+     */
+    @Test
+    fun `declared ultra tier matches case-insensitively`() {
+        val m = model("gpt-6-sol", tiers = listOf("high", "Max", "Ultra"))
+        assertTrue(m.selectableThinkingLevels.contains(ThinkingLevel.ULTRA))
+        assertEquals(ThinkingLevel.ULTRA, m.catalogMaxThinkingLevel)
+    }
+
+    /**
+     * A sparse declared set containing only "ultra" above "high" keeps both
+     * rungs — they are distinct wire values, exactly like the sparse
+     * ["high","max"] shape pinned above.
+     */
+    @Test
+    fun `sparse high-ultra declaration keeps both rungs`() {
+        val m = model("future-relay-model", tiers = listOf("high", "ultra"))
+        assertEquals(listOf(ThinkingLevel.HIGH, ThinkingLevel.ULTRA), m.selectableThinkingLevels)
+        assertEquals(ThinkingLevel.ULTRA, m.catalogMaxThinkingLevel)
     }
 
     /**
@@ -280,6 +338,37 @@ class ThinkingLevelSelectionTest {
             ThinkingLevelCatalog.declaredWireLadder("gemini-2.5-pro"),
         )
         assertEquals(null, ThinkingLevelCatalog.declaredWireLadder("gpt-5.6-sol"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The folded operator override is the
+     * highest-priority ceiling source (after the capability guard): it beats
+     * the declared set AND the family rules. This is the fixture-side half of
+     * the UI/wire contract — LLMProvider.clampThinkingLevel reads
+     * catalogMaxThinkingLevel, so the override living here is what lets a
+     * picker-selected ULTRA survive the send boundary instead of being
+     * clamped back to the catalog MAX.
+     */
+    @Test
+    fun `folded override is the ceiling above any catalog opinion`() {
+        // Beats the five-tier declared set (whose own top is MAX).
+        assertEquals(
+            ThinkingLevel.ULTRA,
+            model("some-unknown-reasoner", tiers = fullLadder(), maxThinkingLevel = ThinkingLevel.ULTRA)
+                .catalogMaxThinkingLevel,
+        )
+        // Beats a family rule: mimo-v2.5 caps at HIGH by ladder, override lifts it.
+        assertEquals(
+            ThinkingLevel.MAX,
+            model("mimo-v2.5", maxThinkingLevel = ThinkingLevel.MAX).catalogMaxThinkingLevel,
+        )
+        // The capability guard still wins: an override cannot resurrect a
+        // model that cannot reason.
+        assertEquals(
+            ThinkingLevel.OFF,
+            model("mimo-v2.5-tts", supportsReasoning = false, maxThinkingLevel = ThinkingLevel.ULTRA)
+                .catalogMaxThinkingLevel,
+        )
     }
 
     private fun fullLadder() =

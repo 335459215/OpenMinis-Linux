@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.network.AppTrustStore
 import com.openminis.app.network.ConnectionWarmup
 import com.openminis.app.provider.anthropic.AnthropicProvider
 import com.openminis.app.provider.gemini.GeminiProvider
@@ -22,8 +23,10 @@ object ProviderFactory {
      * was up to 14 fresh clients per turn, every turn. The memo keys on
      * everything that shapes the client: instance identity + full instance
      * state (data-class hashCode covers baseURL/UA/azure/responses flags),
-     * resolved model state, and a fingerprint of the credential so a rotated
-     * OAuth token yields a fresh provider. Config writes call [invalidateAll]
+     * resolved model state, a fingerprint of the credential so a rotated
+     * OAuth token yields a fresh provider, the user-header snapshot, and
+     * [AppTrustStore.generation] so a CA imported/removed in Settings takes
+     * effect without a restart. Config writes call [invalidateAll]
      * via ProviderRepository.
      *
      * [T-provider-factory-lru] Eviction is LRU-by-last-access, not a full
@@ -57,11 +60,26 @@ object ProviderFactory {
     internal const val CACHE_CAP = 64
 
     fun create(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+        // [GH#221] 用户自定义请求头存在 ProviderHeaderStore（不改 Room schema）。
+        // memo key 带上 header 指纹：保存后内容一变就是新 key，下一次发送
+        // 重建 provider；内容相同的旧缓存继续复用。
+        //
+        // [GH#221][OpenMinis#221] headersFor 不再在调用线程上做首次 Keystore
+        // 加载：冷启动时 MinisApp 的 IO 预热协程可能还没完成，这里会拿到空
+        // map —— 这是可接受的。预热完成后 header 指纹进入 memo key，下一次
+        // create 自然重建带用户头的 provider（首个请求可能不带，之后都带）。
+        val userHeaders = ProviderHeaderStore.headersFor(instance.id)
+        // [GH#258][GH#287] 用户 CA 的 generation 必须进 memo key：TLS socket
+        // factory 在 provider 构造时就固化进 OkHttpClient（构造函数里 build），
+        // 只清配置缓存不重建 provider 的话，导入/删除 CA 后仍会复用旧信任链，
+        // 直到进程重启。generation 变化 → 新 key → 下一次 create 重建 client；
+        // Settings 的导入/删除入口另外调用 invalidateAll() 立即丢弃旧条目。
         val key = instance.id + "|" + model.hashCode() + "|" +
-            ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode()
+            ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode() +
+            "|h" + userHeaders.hashCode() + "|ca" + AppTrustStore.generation
         cache[key]?.let { return it }
         val genAtEntry = generation.get()
-        val built = createUncached(instance, apiKey, model, context)
+        val built = createUncached(instance, apiKey, model, context, userHeaders)
         // Build runs OUTSIDE the lock (OkHttpClient construction is slow); the
         // generation re-check + cap + put run INSIDE it, and every invalidator
         // bumps the generation under the same lock. Without that, a check-then-put
@@ -123,7 +141,14 @@ object ProviderFactory {
      * Create a provider, optionally with OAuth support.
      * [context] is needed for OpenAI OAuth to access encrypted storage for token refresh.
      */
-    private fun createUncached(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+    private fun createUncached(
+        instance: ProviderInstance,
+        apiKey: String,
+        model: LLMModel,
+        context: Context? = null,
+        // [GH#221] ProviderHeaderStore.headersFor(instance.id) 的快照。
+        userHeaders: Map<String, String> = emptyMap(),
+    ): LLMProvider {
         // T174: route through ProviderInstance.effectiveBaseURL instead of
         // re-implementing the trim-+-endsWith dance inline. The previous
         // version did `url.endsWith("/v1")` on the raw, untrimmed string,
@@ -144,16 +169,32 @@ object ProviderFactory {
                 val isOAuth = instance.credentialType == ProviderCredential.oauth
                 // [T-provider-custom-user-agent] Only meaningful for custom-base
                 // (relay) instances; on the official direct path it's null.
-                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent)
-                else AnthropicProvider(apiKey, model, isOAuth = isOAuth)
+                // [OpenMinis#311] `forceThinkingEnabled` reaches the provider so
+                // an Anthropic-compatible relay can force extended thinking even
+                // when the catalog says the model is non-reasoning.
+                // [GH#221] `extraHeaders` carries user-configured provider headers.
+                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent, forceThinkingEnabled = instance.forceThinkingEnabled, extraHeaders = userHeaders)
+                else AnthropicProvider(apiKey, model, isOAuth = isOAuth, forceThinkingEnabled = instance.forceThinkingEnabled, extraHeaders = userHeaders)
                 // [port-upstream-1.16][T-quota-claude-subscription] Tag OAuth
                 // instances so their replies' usage headers reach the quota store.
                 if (isOAuth) anthropic.quotaInstanceId = instance.id
                 anthropic
             }
             ProviderType.gemini -> {
-                if (basePath != null) GeminiProvider(apiKey, model, basePath)
-                else GeminiProvider(apiKey, model)
+                // [T-android-gemini-oauth] OAuth instances drive the provider
+                // with a per-call Bearer token (Code Assist subscriptions
+                // reject ?key=); API-key instances keep the classic query
+                // parameter byte-for-byte.
+                val oauthProvider = if (context != null &&
+                    instance.credentialType == ProviderCredential.oauth
+                ) {
+                    com.openminis.app.auth.GeminiOAuthManager(context, instance.id)
+                } else null
+                val tokenProvider: (suspend () -> String?)? = oauthProvider?.let { mgr ->
+                    { mgr.validAccessToken() }
+                }
+                if (basePath != null) GeminiProvider(apiKey, model, basePath, tokenProvider, extraHeaders = userHeaders)
+                else GeminiProvider(apiKey, model, oauthTokenProvider = tokenProvider, extraHeaders = userHeaders)
             }
             // [T-android-provider-type-parity] openAIResponses shares this
             // branch: on iOS it is "OpenAI with forceResponsesAPI = true", and
@@ -181,6 +222,7 @@ object ProviderFactory {
                         oauthTokenProvider = { oauthManager.validAccessToken() ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey() },
                         model = model,
                         codexAccountId = oauthManager.accountId,
+                        extraHeaders = userHeaders,
                     ).also {
                         // [port-upstream-1.16][T-quota-codex-subscription] Replies'
                         // x-codex-* headers feed this instance's quota.
@@ -208,6 +250,8 @@ object ProviderFactory {
                         // /responses for custom-base OpenAI-compat relays; null
                         // on the official direct path.
                         customUserAgent = instance.customUserAgent,
+                        // [GH#221] 用户自定义请求头（同实例级别的 KV）。
+                        extraHeaders = userHeaders,
                         // [T-android-azure-openai] Azure auths with api-key +
                         // deployments-path URL. Pass the RAW customBaseURL (not
                         // the /v1-appended, query-stripped effectiveBaseURL) so
@@ -226,7 +270,7 @@ object ProviderFactory {
                     extraHeaders = mapOf(
                         "HTTP-Referer" to "https://github.com/OpenMinis/OpenMinis",
                         "X-Title" to "Minis App",
-                    ),
+                    ) + userHeaders,
                 )
             }
             ProviderType.xAI -> {
@@ -259,6 +303,7 @@ object ProviderFactory {
                         },
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     ).also { it.supportsPriorityProcessing = true }
                 } else {
                     val effectiveKey = if (!manualBearer.isNullOrEmpty()) manualBearer else apiKey
@@ -266,6 +311,7 @@ object ProviderFactory {
                         apiKey = effectiveKey,
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     ).also { it.supportsPriorityProcessing = true }
                 }
             }
@@ -293,6 +339,8 @@ object ProviderFactory {
                         },
                         model = model,
                         basePath = base,
+                        // [GH#221] 用户自定义请求头。
+                        extraHeaders = userHeaders,
                     )
                 } else {
                     // Manual Moonshot API key (or manual bearer) path.
@@ -301,6 +349,7 @@ object ProviderFactory {
                         apiKey = effectiveKey,
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     )
                 }
             }
@@ -311,7 +360,15 @@ object ProviderFactory {
             // credential error rather than constructing a provider that would
             // emit malformed requests. iOS throws FactoryError here likewise.
             ProviderType.antigravity, ProviderType.unsupported -> {
-                throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                // [T-antigravity-honest-error] Antigravity has no mobile path
+                // today: magpie's desktop integration proxies the local CLI
+                // sign-in files, which do not exist on Android, and the
+                // service API is not public. Fail with an actionable message
+                // instead of a bare InvalidApiKey that reads as a bad key.
+                throw com.openminis.app.data.model.LLMError.ProviderError(
+                    "Antigravity is not supported on Android yet (no mobile sign-in path). " +
+                        "Pick a different provider for this session.",
+                )
             }
         }
         // [T-android-thinking-rules-phase2] Tag OpenAI-family providers with their
@@ -320,7 +377,19 @@ object ProviderFactory {
         // custom-rule path (Gemini/Anthropic use their own emitters), so this is the
         // only type that needs it.
         (provider as? OpenAIProvider)?.thinkingRuleInstanceId = instance.id
-        SamplingIdentity.bind(provider, instance.id)
+        // [T-codex-client-fingerprint] Opt-in per-instance switch: make this
+        // provider send Codex-official client identity headers. Set here (not
+        // as a ctor param) for the same reason as thinkingRuleInstanceId —
+        // both the API-key and the OAuth construction paths exist.
+        (provider as? OpenAIProvider)?.codexClientFingerprintEnabled = instance.codexClientFingerprint
+        // [T-llm-middleware] Bind the family tag + effective base URL the
+        // request middleware context reports (custom relay base only; null on
+        // the official direct path).
+        SamplingIdentity.bind(
+            provider, instance.id,
+            providerType = instance.providerType.name,
+            baseUrl = instance.effectiveBaseURL,
+        )
         // [T-llm-connection-warmup] This constructor path only runs on a
         // provider-cache miss (cold start, provider/model switch) — exactly
         // the moments where the FIRST request would otherwise pay the full

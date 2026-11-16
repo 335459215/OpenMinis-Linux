@@ -135,16 +135,31 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart> = emptyList(),
         tools: List<AgentToolDefinition> = emptyList(),
         thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): LLMResponse {
         val level = clampThinkingLevel(thinkingLevel)
         val instanceId = SamplingIdentity.of(this)
         val wire = SamplingPolicy.wire(instanceId, model.id, temperature, level.isEnabled)
+        // [T-llm-middleware] Run the header middleware chain ONCE, before the
+        // [#28] masking step: the chain is transport-scoped (headers only) and
+        // must never see or alter the masked payload, so OutboundMasker stays
+        // OUTSIDE the chain at its existing position. With the default chain
+        // the output map carries exactly the caller's extraHeaders — the four
+        // entries' wire behavior is unchanged.
+        val effectiveHeaders = LlmMiddlewareChain.run(
+            LlmRequestContext.of(this, messages, systemPrompt, maxTokens, temperature, tools, level, extraHeaders),
+            LlmMiddlewareRegistry.middlewares,
+        ).headers
+        // [#28] Outbound privacy masking — the public entry is the single
+        // choke point every non-streaming caller passes through. Disabled
+        // (default) returns the input instances untouched.
+        val (outMessages, outSystem) = maskOutboundIfEnabled(messages, systemPrompt)
         return try {
-            sendMessageOnce(messages, systemPrompt, maxTokens, wire, imageParts, tools, level)
+            sendMessageOnce(outMessages, outSystem, maxTokens, wire, imageParts, tools, level, effectiveHeaders)
         } catch (e: Throwable) {
             if (wire != null && SamplingPolicy.isTemperatureRejection(e)) {
                 SamplingPolicy.deny(instanceId, model.id)
-                sendMessageOnce(messages, systemPrompt, maxTokens, null, imageParts, tools, level)
+                sendMessageOnce(outMessages, outSystem, maxTokens, null, imageParts, tools, level, effectiveHeaders)
             } else {
                 throw e
             }
@@ -159,12 +174,14 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         level: ThinkingLevel,
+        extraHeaders: Map<String, String>,
     ): LLMResponse {
         try {
             return withTimeout(nonStreamDeadlineMs) {
                 ProviderKeyGate.withPermit(callGateKey) {
                     sendMessageClamped(
                         messages, systemPrompt, maxTokens, temperature, imageParts, tools, level,
+                        extraHeaders = extraHeaders,
                     )
                 }
             }
@@ -185,10 +202,24 @@ interface LLMProvider : ModelProvider {
         tools: List<AgentToolDefinition> = emptyList(),
         thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
         systemStablePrefixLen: Int = -1,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): Flow<LLMStreamChunk> {
         val level = clampThinkingLevel(thinkingLevel)
         val instanceId = SamplingIdentity.of(this)
         val first = SamplingPolicy.wire(instanceId, model.id, temperature, level.isEnabled)
+        // [T-llm-middleware] Same contract as [sendMessage]: the header chain
+        // runs ONCE here, transport-scoped, and the [#28] mask below stays
+        // OUTSIDE the chain — payload bytes are untouched by middlewares. The
+        // resulting map is captured before channelFlow so every retry attempt
+        // (temperature-strip loop) reuses identical headers.
+        val effectiveHeaders = LlmMiddlewareChain.run(
+            LlmRequestContext.of(this, messages, systemPrompt, maxTokens, temperature, tools, level, extraHeaders),
+            LlmMiddlewareRegistry.middlewares,
+        ).headers
+        // [#28] Outbound privacy masking — the public entry is the single
+        // choke point every streaming caller passes through. Masked once
+        // before the retry loop so every attempt sees identical bytes.
+        val (outMessages, outSystem) = maskOutboundIfEnabled(messages, systemPrompt)
         // channelFlow: [ProviderKeyGate.withPermit] uses withContext(HeldKeys),
         // which is a different coroutine than the collector. Regular `flow { emit }`
         // forbids that (IllegalStateException: Flow invariant is violated).
@@ -199,8 +230,8 @@ interface LLMProvider : ModelProvider {
                 var emitted = false
                 try {
                     val inner = streamMessageClamped(
-                        messages, systemPrompt, maxTokens, temp, imageParts, tools, level,
-                        systemStablePrefixLen,
+                        outMessages, outSystem, maxTokens, temp, imageParts, tools, level,
+                        systemStablePrefixLen, effectiveHeaders,
                     )
                     val key = callGateKey
                     if (key.isBlank()) {
@@ -270,6 +301,7 @@ interface LLMProvider : ModelProvider {
         imageParts: List<LLMMessage.ImagePart>,
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): LLMResponse
 
     /** See [sendMessageClamped]. */
@@ -282,7 +314,21 @@ interface LLMProvider : ModelProvider {
         tools: List<AgentToolDefinition>,
         thinkingLevel: ThinkingLevel,
         systemStablePrefixLen: Int = -1,
+        extraHeaders: Map<String, String> = emptyMap(),
     ): Flow<LLMStreamChunk>
+
+    /**
+     * [OpenMinis#311] Provider-level "force thinking" capability.
+     *
+     * A model catalog describes the OFFICIAL models of a vendor; an
+     * Anthropic-compatible relay (DeepSeek / Bailian / self-hosted gateway)
+     * can expose ids whose catalog row says `supportsReasoning = false` while
+     * the endpoint in fact accepts extended thinking. When a provider opts in
+     * here, an ENABLED level bypasses [catalogMaxThinkingLevel] in
+     * [clampThinkingLevel]; an OFF request is unchanged. Default false keeps
+     * every existing provider byte-identical.
+     */
+    val forcesThinkingWhenEnabled: Boolean get() = false
 
     /**
      * [T-android-thinking-level-arch] Cap a requested thinking level to the
@@ -291,10 +337,32 @@ interface LLMProvider : ModelProvider {
      * `model`.
      */
     fun clampThinkingLevel(level: ThinkingLevel): ThinkingLevel {
+        // [OpenMinis#311] A forcing provider is the operator's assertion that
+        // the catalog is wrong for this endpoint.
+        if (forcesThinkingWhenEnabled && level.isEnabled) return level
         val ceiling = model.catalogMaxThinkingLevel
         return if (level.rank > ceiling.rank) ceiling else level
     }
 }
+
+/**
+ * [#28] Outbound privacy masking gate, shared by [LLMProvider.sendMessage]
+ * and [LLMProvider.streamMessage] — the two public entries every caller
+ * passes through. Reads [com.openminis.app.data.OutboundMaskPrefs] (default
+ * OFF, opt-in); when enabled, [com.openminis.app.security.OutboundMasker]
+ * rewrites credential/e-mail/phone-shaped substrings in the payload. The
+ * disabled path returns the input instances untouched, so no allocation and
+ * no behavioural change for the default configuration.
+ */
+private fun maskOutboundIfEnabled(
+    messages: List<LLMMessage>,
+    systemPrompt: String?,
+): Pair<List<LLMMessage>, String?> =
+    if (com.openminis.app.data.OutboundMaskPrefs.isEnabled) {
+        com.openminis.app.security.OutboundMasker.maskPayload(messages, systemPrompt)
+    } else {
+        messages to systemPrompt
+    }
 
 /**
  * [T-android-empty-stream-retry] Detect a silently-truncated stream.

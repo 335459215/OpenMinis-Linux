@@ -2,8 +2,6 @@ package com.openminis.app.goal
 
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.LLMMessage
 
 private fun quoteObjective(value: String): String = buildString {
     append('"')
@@ -31,8 +29,8 @@ internal fun goalContextPrompt(goal: SessionGoalEntity): String = buildString {
     appendLine("<untrusted_objective_json>")
     appendLine(quoteObjective(goal.objective))
     appendLine("</untrusted_objective_json>")
-    appendLine("Current stored state: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
-    appendLine("Use update_goal(op=get) to verify current status before acting. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
+    appendLine("State when this note was written: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
+    appendLine("The numbers above are a snapshot, not a live read. Do not call update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
     appendLine("</goal_context>")
 }
 
@@ -62,10 +60,10 @@ internal fun goalMount(
 /**
  * The loop's early-exit decision after per-turn goal usage accounting.
  * A mounted goal ends the loop when the usage lookup failed (a broken
- * mount must not keep spinning the run) or the stored goal reached a
- * state that can no longer continue (terminal, paused, or budget-limited
- * — the next /goal resume re-mounts it). Unmounted requests never exit
- * here: ordinary user turns have no goal to follow.
+ * mount must not keep spinning the run) or reaches a hard stop: blocked,
+ * paused, or budget-limited. Completion only dismounts the goal: the
+ * provider still needs the tool result to finish the current reply.
+ * Unmounted requests never exit here.
  */
 internal fun shouldExitForGoalState(
     goalUsageResult: Result<SessionGoalEntity?>,
@@ -75,7 +73,6 @@ internal fun shouldExitForGoalState(
     if (goalUsageResult.isFailure) return true
     val status = goalUsageResult.getOrNull()?.status ?: return false
     return status in setOf(
-        GoalStatus.COMPLETE,
         GoalStatus.BLOCKED,
         GoalStatus.PAUSED,
         GoalStatus.BUDGET_LIMITED,
@@ -144,3 +141,10 @@ internal fun withGoalContext(
     }
     return requestHistory
 }
+
+/** An internal Goal kick needs an active Goal to start, not to finish its reply. */
+internal fun shouldSkipGoalRunRequest(
+    goalRunRequested: Boolean,
+    requestStarted: Boolean,
+    mount: GoalMount,
+): Boolean = goalRunRequested && !requestStarted && !mount.canContinue

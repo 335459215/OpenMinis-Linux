@@ -23,16 +23,27 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProjectExperienceEntity::class,
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
+        AuditEntryEntity::class,
+        MemoryEmbeddingEntity::class,
     ],
-    version = 28, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 34, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep; 34 = sessions.dormant_thinking_override (P2 1-8), 33 = memory_embeddings (#27)
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
-    // validate migrations against the committed schema json. Note the honest
-    // scope: src/android/app/schemas/…AppDatabase/ currently holds 12, 14, 15,
-    // 16, 18-23 — 13.json and 17.json were never committed, so the 12→13
-    // (code_symbols/code_edges) and 16→17 (permission_mode) steps have no
-    // baseline to validate against. Room only exports the schema of the version
-    // being compiled, so those two can't be recovered retro; the entity
-    // declarations plus the in-code comments are the spec for them.
+    // validate migrations against the committed schema json. The chain now
+    // runs 12-34 complete. 13.json and 17.json were never exported by a
+    // compiling build (Room only writes the version it compiles) and were
+    // reconstructed in place from their neighbours: 13 = 12 + the
+    // code_symbols/code_edges entities copied verbatim from 16.json, 17 =
+    // 16 + the sessions.permissionMode field copied verbatim from 18.json —
+    // exactly what MIGRATION_12_13 / MIGRATION_16_17 produce. 34.json follows
+    // the same reconstruction discipline (33 + the
+    // sessions.dormant_thinking_override field that MIGRATION_33_34 adds —
+    // the fix phase for P2 1-8 ran without a Gradle build, so Room's export
+    // did not exist yet): its identityHash is carried over from 33.json as a
+    // placeholder. MigrationTestHelper validates TABLE SHAPE, not the hash
+    // (only Room's runtime open check reads it), so replay validation is
+    // sound; the first compiling build regenerates 34.json with the true
+    // hash. If a future test ever asserts on those hashes, regenerate them
+    // by compiling at the corresponding version.
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun projectExperienceDao(): ProjectExperienceDao
     abstract fun instructionStateDao(): com.openminis.app.data.instruction.InstructionStateDao
     abstract fun automationRuleDao(): com.openminis.app.automation.AutomationRuleDao
+    abstract fun auditEntryDao(): AuditEntryDao
+    abstract fun memoryEmbeddingDao(): MemoryEmbeddingDao
 
     companion object {
         @Volatile
@@ -274,6 +287,22 @@ abstract class AppDatabase : RoomDatabase() {
 
         /**
          * Downgrade 17 → 16. No-op (keep the permission_mode column).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
+
+        /**
+         * [T-audit-room-persist] 29 → 31: audit_entries — the durable mirror of
+         * SecurityGateImpl's in-memory audit hash chain (written via the app-side
+         * auditSink hook). Pure additive: a new table plus two plain indices, no
+         * existing entity touched, no data rewritten. 29 → 30 is a bridge no-op:
+         * schema v30 never shipped, it only completes the migration graph so
+         * every on-disk v29 database has a path to v31.
+         */
+
+        /**
+         * Downgrade 31 → 30 and 30 → 29. No-op (keep audit_entries): the older
+         * builds never knew the table and simply ignore it, and a version
+         * round-trip must not lose the audit trail.
          * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
 

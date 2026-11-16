@@ -28,7 +28,8 @@ data class BrowserActionInput(
     /** Cookie-name / scroll_and_collect keyword filter. */
     val keywords: List<String>? = null,
     /** Fuzzy-match cookie names for get_cookies. */
-    val fuzzy: Boolean = false,
+    // [T-cookie-fuzzy-default] Schema says "fuzzy=true by default" — align.
+    val fuzzy: Boolean = true,
     /** Item selector for scroll_and_collect (each matching element is captured). */
     val itemSelector: String? = null,
     /** Scroll iterations for scroll_and_collect. */
@@ -71,7 +72,12 @@ data class BrowserActionInput(
                         (0 until arr.length()).mapNotNull { arr.optString(it).takeIf(String::isNotBlank) }
                             .takeIf { it.isNotEmpty() }
                     },
-                    fuzzy = obj.optBoolean("fuzzy", false),
+                    // [T-cookie-fuzzy-default] Parse-layer default must match
+                    // the schema contract (fuzzy=true) — the data-class default
+                    // is true, but this optBoolean overrode it with false, so
+                    // every parsed call ran exact matching unless the model
+                    // explicitly passed fuzzy:true.
+                    fuzzy = obj.optBoolean("fuzzy", true),
                     itemSelector = obj.optString("item_selector").ifEmpty { null },
                     scrollCount = if (obj.has("scroll_count")) obj.optInt("scroll_count") else null,
                     timeoutMs = if (obj.has("timeout")) obj.optInt("timeout") else null,

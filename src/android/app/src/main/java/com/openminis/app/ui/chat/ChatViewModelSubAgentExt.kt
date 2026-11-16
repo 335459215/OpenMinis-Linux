@@ -47,7 +47,7 @@ private const val MAX_BACKOFF_S = 60
  * millisecond against one provider is the cheapest way to manufacture the 429
  * that then kills a lane; a few hundred ms of spread costs nothing.
  */
-private const val SPAWN_STAGGER_MS = 400L
+internal const val SPAWN_STAGGER_MS = 400L
 
 /**
  * Backoff for [attempt] (1-based, the attempt that just failed), never below
@@ -58,14 +58,21 @@ internal fun backoffSeconds(attempt: Int, retryAfterSeconds: Int): Int {
     return maxOf(ladder, retryAfterSeconds).coerceAtMost(MAX_BACKOFF_S)
 }
 
-private fun parseThinkingLevel(raw: String?, max: ThinkingLevel): ThinkingLevel {
+/**
+ * [T-thinking-ceiling-sync] Session level must never exceed the model
+ * ceiling — pure core of the ChatViewModel ceiling-sync flow.
+ */
+internal fun clampThinkingToCeiling(level: ThinkingLevel, ceiling: ThinkingLevel): ThinkingLevel =
+    if (level.rank > ceiling.rank) ceiling else level
+
+internal fun parseThinkingLevel(raw: String?, max: ThinkingLevel): ThinkingLevel {
     val requested = raw?.trim()?.takeIf { it.isNotEmpty() }
         ?.let { runCatching { ThinkingLevel.valueOf(it.uppercase()) }.getOrNull() }
         ?: max
     return if (requested.rank <= max.rank) requested else max
 }
 
-private suspend fun publishSubAgentUi(trackerId: String, event: com.openminis.app.tools.SubAgentRunner.UiEvent) {
+internal suspend fun publishSubAgentUi(trackerId: String, event: com.openminis.app.tools.SubAgentRunner.UiEvent) {
     val tracker = com.openminis.app.service.SubAgentActivityTracker
     when (event) {
         is com.openminis.app.tools.SubAgentRunner.UiEvent.Phase ->
@@ -305,20 +312,54 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         if (spawns.size == 1) {
             val total = waveSize.coerceAtLeast(1)
             val index = if (total > 1) waveIndex + 1 else 1
-            return try {
-                supervisorScope {
+            // [T-android-slot-pairing] Slot depths persist across dispatches —
+            // the settings page renders them as durable per-slot preferences
+            // (depth pairs with the slot's model), so dispatches no longer
+            // clear them; switching a slot's model resets its own depth.
+            return supervisorScope {
+                try {
+                    sem.withPermit {
+                        runOneSubAgent(
+                            spawn = spawns[0],
+                            toolId = toolId,
+                            toolBlocks = toolBlocks,
+                            assistantId = assistantId,
+                            currentText = currentText,
+                            parallelWriters = writerTotal,
+                            index = index,
+                            total = total,
+                            cardIndex = null,
+                            tokenBudget = sharedBudget,
+                            batchId = batch.id,
+                            batchSession = ownerSession,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    ToolExecutionResult(
+                        "Sub-agent failed: ${t.javaClass.simpleName}: ${t.message}",
+                        false,
+                    )
+                }
+            }
+        }
+        // [T-android-slot-pairing] Depths persist — see the single-spawn note.
+        val results = supervisorScope {
+            spawns.mapIndexed { i, spawn ->
+                async {
                     try {
                         sem.withPermit {
                             runOneSubAgent(
-                                spawn = spawns[0],
+                                spawn = spawn,
                                 toolId = toolId,
                                 toolBlocks = toolBlocks,
                                 assistantId = assistantId,
                                 currentText = currentText,
                                 parallelWriters = writerTotal,
-                                index = index,
-                                total = total,
-                                cardIndex = null,
+                                index = i + 1,
+                                total = spawns.size,
+                                cardIndex = i + 1,
                                 tokenBudget = sharedBudget,
                                 batchId = batch.id,
                                 batchSession = ownerSession,
@@ -328,49 +369,12 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                         throw e
                     } catch (t: Throwable) {
                         ToolExecutionResult(
-                            "Sub-agent failed: ${t.javaClass.simpleName}: ${t.message}",
+                            "Sub-agent ${i + 1} failed: ${t.javaClass.simpleName}: ${t.message}",
                             false,
                         )
                     }
                 }
-            } finally {
-                multiAgentSettings.clearSlotThinkingLevels()
-            }
-        }
-        val results = try {
-            supervisorScope {
-                spawns.mapIndexed { i, spawn ->
-                    async {
-                        try {
-                            sem.withPermit {
-                                runOneSubAgent(
-                                    spawn = spawn,
-                                    toolId = toolId,
-                                    toolBlocks = toolBlocks,
-                                    assistantId = assistantId,
-                                    currentText = currentText,
-                                    parallelWriters = writerTotal,
-                                    index = i + 1,
-                                    total = spawns.size,
-                                    cardIndex = i + 1,
-                                    tokenBudget = sharedBudget,
-                                    batchId = batch.id,
-                                    batchSession = ownerSession,
-                                )
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (t: Throwable) {
-                            ToolExecutionResult(
-                                "Sub-agent ${i + 1} failed: ${t.javaClass.simpleName}: ${t.message}",
-                                false,
-                            )
-                        }
-                    }
-                }.awaitAll()
-            }
-        } finally {
-            multiAgentSettings.clearSlotThinkingLevels()
+            }.awaitAll()
         }
         val ok = results.count { it.success }
         val body = buildString {
@@ -447,8 +451,6 @@ private fun ChatViewModel.launchDetachedSubAgentBatch(
                 }
             } catch (e: CancellationException) {
                 Log.i(ChatViewModel.TAG, "background dispatch ${batch.id.take(8)} cancelled")
-            } finally {
-                multiAgentSettings.clearSlotThinkingLevels()
             }
         }
         val summary = spawns.mapIndexed { i, s ->
@@ -530,15 +532,10 @@ private fun ChatViewModel.recordLaneOutcome(
         val success = outcome?.success == true
         runCatching {
             registry.markFinished(
-                sessionId = sessionId,
-                context = context,
-                batchId = batchId,
-                index = index,
-                success = success,
-                output = outcome?.output.orEmpty(),
+                sessionId = sessionId, context = context, batchId = batchId, index = index,
+                success = success, output = outcome?.output.orEmpty(),
                 error = error ?: if (!success && !stopped) outcome?.output?.trim()?.take(300) else null,
-                attempts = lane.attempts,
-                stopped = stopped,
+                attempts = lane.attempts, stopped = stopped, filesDir = context.filesDir,
             )
         }
         val planId = lane.planId ?: return
@@ -555,455 +552,12 @@ private fun ChatViewModel.recordLaneOutcome(
         }
     }
 
-private suspend fun ChatViewModel.runOneSubAgentInner(
-        spawn: ChatSubAgentSpawn,
-        toolId: String,
-        toolBlocks: MutableList<AssistantBlock>?,
-        assistantId: String,
-        currentText: String,
-        parallelWriters: Int,
-        cardIndex: Int? = null,
-        index: Int,
-        total: Int,
-        tokenBudget: SubAgentTokenBudget? = null,
-        /** [T-subagent-plan-autolog] Wave this lane belongs to, for the registry. */
-        batchId: String? = null,
-        batchSession: String = "",
-    ): ToolExecutionResult {
-        val prompt = spawn.prompt
-        val role = spawn.role
-        val skills = spawn.skills
-        val requested = spawn.requestedModel
-        val kind = spawn.kind
-        val writePaths = spawn.writePaths
-        val maxTurns = spawn.maxTurns
-        // [T-subagent-badge-count] i/N belongs to the chip badge; a title carrying it rendered twice.
-        val title = spawn.title.ifBlank { context.getString(com.openminis.app.R.string.subagent_fallback_label) }
-        // A present-but-all-invalid `write_paths` parses to the poison marker,
-        // which WritePathGuard resolves to "deny every write" — correct, but
-        // useless to the model, which would see a worker that cannot write
-        // anything and no explanation. Treat it as "not supplied" so the
-        // actionable error below fires instead of a silent denial at runtime.
-        if (SubAgentKind.requiresWritePaths(kind, parallelWriters) &&
-            (writePaths.isEmpty() || com.openminis.app.tools.WritePathGuard.isPoisoned(writePaths))
-        ) {
-            val msg = "Error: parallel workers must set write_paths to non-overlapping directories, or write_paths=none if this task must not write."
-            publishSubAgentCard(
-                parentToolId = toolId,
-                cardIndex = cardIndex,
-                title = title,
-                assistantId = assistantId,
-                currentText = currentText,
-                toolBlocks = toolBlocks,
-                log = currentSubAgentLine(spawn, index, total, msg),
-                status = ToolBlockStatus.FAILED,
-            )
-            return ToolExecutionResult(msg, false)
-        }
-        // [T-subagent-config-race] `config.value` is whatever the StateFlow
-        // holds RIGHT NOW. A spawn that lands before the one-shot async config
-        // load publishes (cold app start, process recreate after memory
-        // pressure) sees empty modelEntries, resolves baseEntry to null and
-        // dies with "No model available for sub-agent" — on a device that has
-        // models configured. Intermittent by construction: it is a start-up
-        // window, not a state, and the retry loop further down never runs
-        // because the failure happens before it. Wait for the load, bounded,
-        // and only then fall through to the actionable error.
-        if (providerRepository.config.value.modelEntries.isEmpty()) {
-            kotlinx.coroutines.withTimeoutOrNull(5_000L) {
-                providerRepository.configLoaded.first { it }
-            }
-        }
-        val config = providerRepository.config.value
-        // [T-subagent-pin-main-provider] A lane runs on the chat's own provider: the old
-        // code fell back to every entry and round-robined across channels. See SubAgentModelResolver.
-        val resolved = SubAgentModelResolver.resolve(
-            config = config,
-            mainEntryId = _activeEntryId.value,
-            storedSlots = multiAgentSettings.selectedModelEntryIds.value,
-            maxConcurrent = multiAgentSettings.maxConcurrent.value,
-            requested = requested,
-            roundRobinIndex = subAgentRoundRobin.getAndIncrement(),
-        ) ?: return ToolExecutionResult(
-            "No model available for sub-agent. Select models under Settings → Multi-agent, or keep the main session model selected.",
-            false,
-        )
-        val baseEntry = resolved.entry
-        // Retry rotation stays on the pinned provider; raw slots here would let a 429 hop channels.
-        val pool = resolved.pinnedSlots
-        val requestedThinking = spawn.thinkingLevel ?: parseThinkingLevel(
-            multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0)),
-            baseEntry.effectiveMaxThinkingLevel,
-        )
-        // [T-android-subagent-depth-leak] Claim the depth slot inside a
-        // try/finally that covers EVERYTHING after the claim. The lane body has
-        // its own try/finally, but between this claim and entering that block
-        // sit suspension points (activity-tracker start, lane-id resolution).
-        // Stopping a dispatch while it was parked in one of them threw
-        // CancellationException before the lane's finally existed, so the
-        // decrement never ran: depth stayed above zero for the rest of the
-        // ViewModel's life and every later dispatch was refused with
-        // "sub-agents cannot spawn further sub-agents" until the app was killed.
-        subAgentDepth.incrementAndGet()
-        return try {
-        val parentSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
-        val laneId = kotlin.coroutines.coroutineContext[SubAgentLane]?.id
-            ?: SubAgentLane.idFor(parentSession, System.nanoTime())
-        val trackerId = com.openminis.app.service.SubAgentActivityTracker.start(
-            parentSessionId = parentSession,
-            parentToolId = toolId,
-            title = title,
-            role = role,
-            model = baseEntry.model.displayName,
-            index = index,
-            total = total,
-            kind = kind,
-            turnCap = maxTurns,
-        )
-        val subAgentJob = kotlinx.coroutines.SupervisorJob(kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job])
-        com.openminis.app.service.SubAgentActivityTracker.attachJob(trackerId, subAgentJob)
-        val steerChannel = com.openminis.app.service.SubAgentActivityTracker.openSteer(trackerId)
-        return try {
-            withContext(subAgentJob) {
-            // [T-subagent-429-selfheal] Fan-out used to fire every lane in the
-            // same millisecond, which is the cheapest way to provoke the very
-            // rate limit that then killed one of them. Spread the wave.
-            if (total > 1 && index > 1) {
-                delay(SPAWN_STAGGER_MS * (index - 1) + Random.nextLong(0, 150))
-            }
-            // Bounded retry with pool-endpoint rotation. Sub-agent failures are
-            // mostly transient upstream errors (429 / truncated stream); the main
-            // session already retries those, sub-agents used to die on first blip.
-            // Attempts budget is user-tunable (Settings → Multi-agent, 1 = no retry).
-            val maxAttempts = multiAgentSettings.subagentMaxAttempts.value
-            var attempt = 0
-            var lastError: Exception? = null
-            var lastFailedGateKey: String? = null
-            var lastFailedEntryId: String? = null
-            while (attempt < maxAttempts) {
-                attempt++
-                val entry = if (attempt == 1) {
-                    baseEntry
-                } else {
-                    val rotated = pickRetryEntry(
-                        entries = config.modelEntries,
-                        pool = pool,
-                        excludeEntryId = lastFailedEntryId,
-                        excludeGateKey = lastFailedGateKey,
-                        gateKeyOf = { e -> providerForModelEntry(e)?.callGateKey },
-                        seed = subAgentRoundRobin.getAndIncrement(),
-                    )
-                    if (rotated != null) {
-                        rotated
-                    } else {
-                        // [T-subagent-429-selfheal] "Nothing to rotate to" used
-                        // to be treated as "nothing left to try": a 429 on a
-                        // single-provider pool returned a final failure at once,
-                        // discarding the remaining attempt budget. That is why a
-                        // concurrent wave lost exactly one member at random —
-                        // whichever lane hit the rate limit first — while its
-                        // siblings finished normally. Rotation and retry are
-                        // separate questions: with no alternative bucket, wait
-                        // out the cooldown on the same entry and keep going.
-                        val last = lastError
-                        val rateLimited = last is LLMError.RateLimited ||
-                            (last as? LLMError)?.isFallbackable == true
-                        if (rateLimited && attempt < maxAttempts) {
-                            val waitS = backoffSeconds(
-                                attempt,
-                                (last as? LLMError.RateLimited)?.retryAfterSeconds ?: 0,
-                            )
-                            Log.i(
-                                ChatViewModel.TAG,
-                                "Sub-agent 429 lane=$laneId no rotation target; cooling down ${waitS}s on ${baseEntry.model.displayName} (attempt $attempt/$maxAttempts)",
-                            )
-                            runCatching {
-                                com.openminis.app.service.SubAgentActivityTracker.updateProgress(
-                                    trackerId, 0, maxTurns, "rate-limited; retry in ${waitS}s",
-                                )
-                            }
-                            com.openminis.app.service.SubAgentEventBus.publish(
-                                com.openminis.app.service.SubAgentEvent.RetryScheduled(
-                                    runId = trackerId,
-                                    parentSessionId = parentSession,
-                                    attempt = attempt,
-                                    maxAttempts = maxAttempts,
-                                    waitMs = waitS * 1000L,
-                                    reason = "rate-limit-cooldown",
-                                    atMs = System.currentTimeMillis(),
-                                ),
-                            )
-                            delay(waitS * 1000L + Random.nextLong(0, 800))
-                        }
-                        baseEntry
-                    }
-                }
-                // [T-subagent-plan-autolog] Publish the attempt before it runs:
-                // a lane that dies mid-call still shows which model and which
-                // attempt it was on, instead of a stale `pending`.
-                if (batchId != null) {
-                    runCatching {
-                        com.openminis.app.tools.SubAgentBatchRegistry.markRunning(
-                            parentSession, context, batchId, index, trackerId,
-                            entry.model.displayName, attempt,
-                        )
-                    }
-                }
-                if (!ensureA2aGatewayForEntry(entry)) {
-                    if (attempt >= maxAttempts) {
-                        return@withContext ToolExecutionResult(
-                            "A2A gateway unavailable for ${entry.model.displayName} (attempt $attempt/$maxAttempts)",
-                            false,
-                        )
-                    }
-                    lastFailedEntryId = entry.id
-                    continue
-                }
-                val provider = providerForModelEntry(entry)
-                if (provider == null) {
-                    if (attempt >= maxAttempts) {
-                        return@withContext ToolExecutionResult(
-                            "Failed to create provider for ${entry.model.displayName} (attempt $attempt/$maxAttempts)",
-                            false,
-                        )
-                    }
-                    lastFailedEntryId = entry.id
-                    continue
-                }
-                if (attempt > 1) {
-                    Log.i(ChatViewModel.TAG, "Sub-agent retry lane=$laneId attempt=$attempt/$maxAttempts model=${entry.model.displayName} prev=${lastError?.message}")
-                    runCatching {
-                        com.openminis.app.service.SubAgentActivityTracker.updateProgress(
-                            trackerId, 0, maxTurns, "retry ${attempt - 1} → ${entry.model.displayName}",
-                        )
-                    }
-                    com.openminis.app.service.SubAgentEventBus.publish(
-                        com.openminis.app.service.SubAgentEvent.RetryScheduled(
-                            runId = trackerId,
-                            parentSessionId = parentSession,
-                            attempt = attempt,
-                            maxAttempts = maxAttempts,
-                            waitMs = 0L,
-                            reason = "model-rotation:${entry.model.displayName}",
-                            atMs = System.currentTimeMillis(),
-                        ),
-                    )
-                }
-                val attemptResult: ToolExecutionResult? = try {
-            withContext(SubAgentLane(laneId)) {
-            var lastUiMs = 0L
-            suspend fun onStep(turn: Int, toolName: String) {
-                com.openminis.app.service.SubAgentActivityTracker.updateProgress(
-                    trackerId, turn, maxTurns, toolName,
-                )
-                if (toolName.isNotBlank()) {
-                    com.openminis.app.service.SubAgentActivityTracker.appendLog(
-                        trackerId,
-                        "turn $turn/$maxTurns · $toolName",
-                    )
-                }
-                val now = System.currentTimeMillis()
-                val important = toolName.isNotBlank()
-                if (!important && now - lastUiMs < 250L) return
-                lastUiMs = now
-                val step = if (toolName.isNotBlank()) "turn $turn/$maxTurns · $toolName" else "turn $turn/$maxTurns"
-                publishSubAgentCard(
-                    parentToolId = toolId,
-                    cardIndex = cardIndex,
-                    title = title,
-                    assistantId = assistantId,
-                    currentText = currentText,
-                    toolBlocks = toolBlocks,
-                    log = currentSubAgentLine(spawn, index, total, step),
-                )
-            }
-            val result = com.openminis.app.tools.WritePathGuard.withPaths(writePaths) {
-                SubAgentRunner.run(
-                    provider = provider,
-                    temperature = entry.overrides.temperature,
-                    modelDisplayName = entry.model.displayName,
-                    userPrompt = prompt,
-                    role = role,
-                    roleContext = context,
-                    skillsHint = skills,
-                    tools = com.openminis.app.tools.DispatchAgentsTool.filterToolsForType(
-                        com.openminis.app.tools.SubAgentTypeStore.find(context, role.orEmpty()),
-                        SubAgentKind.filterTools(
-                            kind,
-                            AgentTools.makeAgentTools(
-                                supportsImageInput = entry.model.hasImageInput,
-                                visionGroupConfigured = com.openminis.app.tools.VisionGroupResolver.isConfigured(
-                                    providerRepository, context,
-                                ),
-                                memoryEnabled = false,
-                                subAgentEnabled = false,
-                                hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
-                            ) + AgentTools.makeSubAgentExtraTools(),
-                            role,
-                            context,
-                        ),
-                    ),
-                    maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                    executeTool = { name, json ->
-                        if (SubAgentKind.blocks(kind, name)) {
-                            ToolExecutionResult("Error: $kind sub-agent cannot use $name.", false)
-                        } else if (com.openminis.app.tools.CollabRoles.toolsFor(context, role)?.let { name !in it } == true) {
-                            ToolExecutionResult("Error: role $role cannot use $name.", false)
-                        } else if (run {
-                            val type = com.openminis.app.tools.SubAgentTypeStore.find(context, role.orEmpty())
-                            type != null && type.toolNames.isNotEmpty() && name !in type.toolNames
-                        }) {
-                            ToolExecutionResult("Error: type $role cannot use $name.", false)
-                        } else {
-                            grepSourceToolResult(name, json)
-                                // [T-subagent-owner-sid] The lane must carry the parent's
-                                // session id into the gate: a blank caller degrades to ASK
-                                // and prompts on every write/execute even in YOLO sessions.
-                                ?: executeTool(name, json, parentSession)
-                        }
-                    },
-                    onStep = { turn, toolName -> onStep(turn, toolName) },
-                    onUi = { event -> publishSubAgentUi(trackerId, event) },
-                    kind = kind,
-                    writePaths = writePaths,
-                    maxTurns = maxTurns,
-                    tokenBudget = tokenBudget,
-                    thinkingLevel = requestedThinking,
-                    steers = steerChannel,
-                )
-            }
-            com.openminis.app.service.SubAgentActivityTracker.appendLog(
-                trackerId,
-                "---\n" + result.output,
-            )
-            publishSubAgentCard(
-                parentToolId = toolId,
-                cardIndex = cardIndex,
-                title = title,
-                assistantId = assistantId,
-                currentText = currentText,
-                toolBlocks = toolBlocks,
-                log = currentSubAgentLine(spawn, index, total, SubAgentRunner.cardStep(result.output)),
-                status = if (result.success) ToolBlockStatus.SUCCESS else ToolBlockStatus.FAILED,
-            )
-            com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, result.success)
-            // [T-event-bus] Parent-session awareness: the coordinator used to
-            // receive only the lane's final text — append what the bus
-            // observed for this run so turn counts, tool volume and retry
-            // storms are visible in the dispatch result itself.
-            val lifecycle = com.openminis.app.service.SubAgentEventBus.summaryFor(trackerId)
-                ?.let { s -> "\n\n[lifecycle] turns=${s.turns} toolCalls=${s.toolCalls} retries=${s.retries}" }
-                .orEmpty()
-            result.copy(
-                output = result.output + lifecycle,
-                toolTitle = title.ifEmpty { "Sub-agent · ${entry.model.displayName}" },
-            )
-            }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                lastError = e
-                lastFailedEntryId = entry.id
-                lastFailedGateKey = provider.callGateKey
-                val retryable = (e as? LLMError)?.isRetryable ?: isUpstreamTruncation(e)
-                Log.w(ChatViewModel.TAG, "Sub-agent lane=$laneId attempt=$attempt/$maxAttempts retryable=$retryable err=${e.message}")
-                if (retryable && attempt < maxAttempts) {
-                    // Same ladder as the rotation path, and capped: an uncapped
-                    // Retry-After could park a lane (holding its concurrency
-                    // permit) for minutes while siblings waited on it.
-                    val waitS = backoffSeconds(
-                        attempt,
-                        (e as? LLMError.RateLimited)?.retryAfterSeconds ?: 0,
-                    )
-                    runCatching {
-                        com.openminis.app.service.SubAgentActivityTracker.updateProgress(
-                            trackerId, 0, maxTurns, "retry in ${waitS}s (${e.javaClass.simpleName})",
-                        )
-                    }
-                    com.openminis.app.service.SubAgentEventBus.publish(
-                        com.openminis.app.service.SubAgentEvent.RetryScheduled(
-                            runId = trackerId,
-                            parentSessionId = parentSession,
-                            attempt = attempt,
-                            maxAttempts = maxAttempts,
-                            waitMs = waitS * 1000L,
-                            reason = e.javaClass.simpleName,
-                            atMs = System.currentTimeMillis(),
-                        ),
-                    )
-                    delay(waitS * 1000L + Random.nextLong(0, 800))
-                    null
-                } else {
-                    // Final failure: RETURN, do not throw — an exception escaping
-                    // this lane would cancel its fan-out siblings via awaitAll.
-                    com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, false, e.message)
-                    return@withContext ToolExecutionResult(
-                        "Sub-agent failed after $attempt attempt(s): ${e.message ?: e.javaClass.simpleName}",
-                        false,
-                    )
-                }
-            }
-            if (attemptResult != null) {
-                return@withContext if (attempt > 1) attemptResult.copy(
-                    output = "(recovered on attempt $attempt/$maxAttempts via ${entry.model.displayName})\n" + attemptResult.output,
-                ) else attemptResult
-            }
-            }
-            val failed = ToolExecutionResult(
-                "Sub-agent failed after $maxAttempts attempt(s): ${lastError?.message ?: "unknown error"}",
-                false,
-            )
-            publishSubAgentCard(
-                parentToolId = toolId,
-                cardIndex = cardIndex,
-                title = title,
-                assistantId = assistantId,
-                currentText = currentText,
-                toolBlocks = toolBlocks,
-                log = currentSubAgentLine(spawn, index, total, failed.output),
-                status = ToolBlockStatus.FAILED,
-            )
-            failed
-            }
-        } catch (e: CancellationException) {
-            val stoppedByUser = com.openminis.app.service.SubAgentActivityTracker.wasUserStopped(trackerId)
-            com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, false, e.message)
-            if (stoppedByUser) return ToolExecutionResult("Sub-agent stopped by user", false)
-            throw e
-        } catch (t: Throwable) {
-            com.openminis.app.service.SubAgentActivityTracker.finish(trackerId, false, t.message)
-            val failed = ToolExecutionResult(
-                "Sub-agent failed: ${t.javaClass.simpleName}: ${t.message}",
-                false,
-            )
-            publishSubAgentCard(
-                parentToolId = toolId,
-                cardIndex = cardIndex,
-                title = title,
-                assistantId = assistantId,
-                currentText = currentText,
-                toolBlocks = toolBlocks,
-                log = currentSubAgentLine(spawn, index, total, failed.output),
-                status = ToolBlockStatus.FAILED,
-            )
-            return failed
-        } finally {
-            withContext(NonCancellable) {
-                runCatching { ExecutionCoordinator.sessionDidTerminate(laneId) }
-                subAgentJob.cancel()
-            }
-            com.openminis.app.service.SubAgentActivityTracker.closeSteer(trackerId, steerChannel)
-        }
-        } finally {
-            subAgentDepth.decrementAndGet()
-        }
-    }
-
-private fun isUpstreamTruncation(e: Exception): Boolean {
+internal fun isUpstreamTruncation(e: Exception): Boolean {
         val m = (e.message ?: "").lowercase()
         return "empty response" in m || "connection dropped" in m || "upstream" in m ||
             "eof" in m || "truncat" in m
     }
+
 internal fun ChatViewModel.providerForModelEntry(entry: ModelEntry): LLMProvider? {
         val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
         var apiKey = providerRepository.requestCredential(instance)?.first ?: return null // rotation pick; every lane advances the pool

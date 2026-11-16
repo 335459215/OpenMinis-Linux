@@ -141,20 +141,26 @@ class CompactToolPairingTest {
         assertEquals("continue", repaired[0].content)
     }
 
+    /**
+     * [T-orphan-use-pairing] ZCode: every visible call owns exactly one
+     * result. A mid-history unanswered call is paired with a NEUTRAL
+     * interrupted result — kept, and not flagged as an error, so the model
+     * neither loses the call nor re-issues it as a failed one.
+     */
     @Test
-    fun `orphan sweep synthesises a result for a mid-history unanswered call`() {
+    fun `orphan sweep pairs a mid-history unanswered call with an interrupted result`() {
         val slice = listOf(
             assistantToolUse("call_LOST"),  // never answered, and NOT the tail
             userText("next question"),
         )
         val repaired = dropOrphanedToolParts(slice)
         val (uses, results) = allIds(repaired)
-        assertEquals("the call is preserved, not deleted", setOf("call_LOST"), uses)
-        assertEquals("and it is now paired", setOf("call_LOST"), results)
-        val synthesized = repaired.first { m ->
-            m.contentParts.any { it is AgentContentPart.ToolResult }
-        }.contentParts.filterIsInstance<AgentContentPart.ToolResult>().first()
-        assertTrue("the placeholder is flagged as an error", synthesized.isError)
+        assertEquals("the call stays visible", setOf("call_LOST"), uses)
+        assertEquals("and is paired", setOf("call_LOST"), results)
+        val paired = repaired.first { m -> m.contentParts.any { it is AgentContentPart.ToolResult } }
+            .contentParts.filterIsInstance<AgentContentPart.ToolResult>().first()
+        assertTrue("interrupted is not failed", !paired.isError)
+        assertTrue(paired.content.contains("interrupted before resume"))
     }
 
     /**
@@ -179,8 +185,8 @@ class CompactToolPairingTest {
 
     /**
      * The exemption is scoped to the TAIL only. An unanswered call earlier in
-     * the slice is a genuine orphan and must still be repaired, even when the
-     * history also ends on a live in-flight call.
+     * the slice is paired with an interrupted result, even when the history
+     * also ends on a live in-flight call.
      */
     @Test
     fun `exemption covers only the tail, not earlier unanswered calls`() {
@@ -191,7 +197,7 @@ class CompactToolPairingTest {
         )
         val repaired = dropOrphanedToolParts(slice)
         val (uses, results) = allIds(repaired)
-        assertTrue("both calls survive", uses.containsAll(setOf("call_OLD", "call_INFLIGHT")))
+        assertEquals("both calls stay visible", setOf("call_OLD", "call_INFLIGHT"), uses)
         assertEquals("only the stale one is paired", setOf("call_OLD"), results)
     }
 
@@ -218,8 +224,14 @@ class CompactToolPairingTest {
             ),
         )
         val repaired = dropOrphanedToolParts(slice)
-        assertTrue(repaired.any { it.contentParts.any { p -> p is AgentContentPart.ToolResult && p.name == "shell_execute" && p.isError } })
-        assertTrue(repaired.none { it.contentParts.any { p -> p is AgentContentPart.ToolResult && p.name == "different_tool" } })
+        assertTrue("the mismatched result is dropped", repaired.none { m ->
+            m.contentParts.any { p -> p is AgentContentPart.ToolResult && p.name == "different_tool" }
+        })
+        assertTrue("the call is paired with a neutral interrupted result", repaired.any { m ->
+            m.contentParts.any { p ->
+                p is AgentContentPart.ToolResult && p.name == "shell_execute" && !p.isError
+            }
+        })
     }
 
     @Test

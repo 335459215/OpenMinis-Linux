@@ -3,6 +3,7 @@ package com.openminis.app.tools
 import com.openminis.app.browser.BrowserAction
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 
 /**
  * Central registry of all agent tool definitions.
@@ -11,14 +12,33 @@ import com.openminis.app.data.model.AgentToolParam
  */
 object AgentTools {
 
-    // [T-ui-skill-prompt-fragment-dead] `UI_SKILL_PROMPT_FRAGMENT` (the
-    // `- ui_skill: …` system-prompt guidance) was deleted here: it had ZERO
-    // readers. ChatViewModelPromptExt never assembled it into the "Available
-    // tools" section its KDoc promised, so the ui_skill workflow text the model
-    // was supposed to see was simply never sent — a constant that looks like it
-    // is doing something. ui/** owns whether that guidance gets re-added to the
-    // prompt (it has to be, to be of any use); until then keeping the dead
-    // string here only invites someone to assume it is wired up.
+    /**
+     * [pi-port §2.4] Long-tail tools whose loading is ALREADY deferred get the
+     * explicit exposure level. Behaviour is unchanged — none of them is in the
+     * alwaysOn core set, so find_tools was already the only way they reach the
+     * schema; [ToolExposureGate] now carries the policy on the definition data
+     * instead of only in the alwaysOn set comment.
+     *
+     * Marked centrally (a post-buildList map) rather than `.copy()` at each
+     * add site on purpose: scripts/ci/check_announced_tools.py resolves
+     * registry tool names from the exact `add(X.definition())` shapes; a
+     * `.copy()` wrapper there would drop the name from that resolution and
+     * silently un-guard the announced-tool gate for these tools.
+     */
+    private val deferredExposureTools: Set<String> = setOf(
+        SshTool.NAME,
+        JobTools.NAME,
+        PresentTool.NAME,
+    )
+
+    // [T-ui-skill-prompt-fragment-dead → wired] `UI_SKILL_PROMPT_FRAGMENT`
+    // (the `- ui_skill: …` guidance) used to live here with ZERO readers —
+    // the workflow text never reached the prompt while the tool was always
+    // registered and dispatchable. It is now WIRED: the prose lives in
+    // ui/chat/ToolPromptFragments (the per-tool guidance registry, pinned by
+    // ToolPromptFragmentsTest) and ChatViewModelPromptExt interpolates
+    // ToolPromptFragments.render() into the "Available tools" section. A new
+    // tool with workflow guidance registers there, not here.
 
     fun makeAgentTools(
         supportsImageInput: Boolean = true,
@@ -58,6 +78,12 @@ object AgentTools {
         includeLongTail: Boolean = true,
         /** Long-tail tools enabled by a prior find_tools call. */
         enabledToolNames: Set<String> = emptySet(),
+        /**
+         * [GH#298] Settings → Web search 的总开关。关掉时整个 web_search
+         * schema 都不出现（而不是出现后每次失败）——模型看不见才会改用
+         * browser_use / web_fetch。默认 true 保持历史行为。
+         */
+        webSearchEnabled: Boolean = true,
     ): List<AgentToolDefinition> {
         val all = buildList {
         add(shellExecuteDefinition())
@@ -76,7 +102,8 @@ object AgentTools {
             add(ReadImageTool.definition())
         }
         add(browserUseDefinition())
-        add(WebSearchTool.definition())
+        // [GH#298] web_search is removable; see the webSearchEnabled KDoc.
+        if (webSearchEnabled) add(WebSearchTool.definition())
         add(OcrTool.definition())
         add(ScreenTimeTool.definition())
         add(WebFetchTool.definition())
@@ -101,6 +128,13 @@ object AgentTools {
         }
         add(GoalTool.definition())
         add(ExecuteCodeTool.definition())
+        // [pi-port §2.7] Codemode entry: multi-step aggregation in one JS
+        // program; nested tool results stay OUT of the conversation and only
+        // the script's return value is returned. exposure=direct (declared),
+        // while the codemode-callable set deliberately EXCLUDES it: a script
+        // re-entering this tool parks an IO thread per nesting level and
+        // deadlocks the pool (CodemodeTool KDoc, review P1-8).
+        add(CodemodeTool.definition())
         add(InvokeSkillTool.definition())
         add(SkillManageTool.definition())
         // Agent-facing surface for the evolution engine (status/list/decide).
@@ -166,20 +200,23 @@ object AgentTools {
             add(CheckAgentTool.definition())
         }
         }
-        // [T-find-tools] With long-tail loading, the main session schema starts
-        // with the core set plus find_tools; everything else is enabled on
-        // demand. Gated tools (memory / code_graph / sub-agent dispatch) stay
-        // present whenever their gate is on so existing injected prompts still
-        // resolve. Full mode (sub-agents / group chat) keeps the historical
-        // all-tools schema unchanged.
-        if (includeLongTail) return all
+            // [pi-port §2.4] Stamp the explicit deferred exposure on the
+            // long-tail tools named above (see deferredExposureTools KDoc).
+            .map { if (it.name in deferredExposureTools) it.copy(exposure = ToolExposureGate.DEFERRED) else it }
+        // [pi-port §2.4] Full mode (sub-agents / group chat) keeps the
+        // historical all-tools schema. The active set names every registered
+        // tool, so deferred tools stay present here; the Gate still runs so
+        // model_only / codemode / hidden can never leak into ANY schema.
+        if (includeLongTail) {
+            return ToolExposureGate.filterForSchema(all, all.map { it.name }.toSet())
+        }
         val alwaysOn = buildSet {
             addAll(
                 listOf(
                     "shell_execute", "file_read", "file_write", "file_edit", "multi_edit",
                     FileCheckpointTool.NAME,
                     "list_dir", "grep", "glob", "browser_use", "web_search", "web_fetch",
-                    "ui_read", "ui_action", "read_image", "ask_user_question", "update_goal",
+                    "ui_read", "ui_action", "ui_skill", "read_image", "ask_user_question", "update_goal",
                 ),
             )
             // [T-announced-tools-core] A prompt fragment that NAMES a tool is an
@@ -194,6 +231,9 @@ object AgentTools {
             // and the "Scheduled tasks" fragment. evolution: named by the memory
             // fragment AND the learned-rules fragment, and the latter is not
             // gated by memoryOn — hence unconditional, not under the memory flag.
+            // ui_skill: ToolPromptFragments announces the match/replay workflow
+            // unconditionally — an announced tool must be core, so it rides the
+            // unconditional list rather than long-tail find_tools.
             addAll(
                 listOf(
                     AgentPlanTool.NAME, CronJobTool.NAME, EvolutionTool.NAME,
@@ -219,7 +259,21 @@ object AgentTools {
                 add(CheckAgentTool.NAME)
             }
         }
-        return (all.filter { it.name in alwaysOn || it.name in enabledToolNames } + FindTools.definition())
+        // [T-find-tools] With long-tail loading, the main session schema starts
+        // with the core set plus find_tools; everything else is enabled on
+        // demand. Gated tools (memory / code_graph / sub-agent dispatch) stay
+        // present whenever their gate is on so existing injected prompts still
+        // resolve.
+        // [pi-port §2.4] The Gate is the last say on what is DECLARED: a
+        // find_tools-enabled deferred tool rides enabledToolNames into the
+        // schema exactly as before, while codemode / hidden tools can never be
+        // declared regardless of how they were enabled.
+        return (
+            ToolExposureGate.filterForSchema(
+                all.filter { it.name in alwaysOn || it.name in enabledToolNames },
+                alwaysOn + enabledToolNames,
+            ) + FindTools.definition()
+            )
             .distinctBy { it.name }
     }
 
@@ -267,10 +321,10 @@ object AgentTools {
                 ),
                 "thinking_level" to AgentToolParam(
                     "string",
-                    "Per-dispatch reasoning depth. Defaults to ULTRA; the provider clamps it to the selected model ceiling.",
+                    "Per-dispatch reasoning depth. Omit to follow the main session's live thinking level (may be Off) — set it explicitly when a lane must think deeper. The provider clamps it to the selected model ceiling.",
                     enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA"),
                 ),
-                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Other strings are labels only."),
+                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Sub-agent presets (代码审计/方案规划/调研/复现/提炼, plus 探索者/审查员/编码员/研究员) are read-only by default and enforce their own tool scope. Other strings are labels only."),
                 "skills" to AgentToolParam("string", "Comma-separated skill ids the worker should read first."),
                 "model" to AgentToolParam("string", "Optional model-entry id from the configured sub-agent pool. Omit to round-robin."),
                 "tool_title" to AgentToolParam("string", "Short live-status title, e.g. 'Review RootfsManager'."),
@@ -296,7 +350,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
                 ),
                 "tool_title" to AgentToolParam("string", "Short live-status title when not using tasks[]."),
                 "prompt" to AgentToolParam("string", "Legacy single-task brief. Ignored when tasks[] is non-empty."),
-                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Other strings are labels only."),
+                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Sub-agent presets (代码审计/方案规划/调研/复现/提炼, plus 探索者/审查员/编码员/研究员) are read-only by default and enforce their own tool scope. Other strings are labels only."),
                 "skills" to AgentToolParam("string", "Comma-separated skill ids the worker should read first."),
                 "model" to AgentToolParam("string", "Optional model-entry id from the configured sub-agent pool. Omit to round-robin."),
                 "kind" to AgentToolParam(
@@ -306,7 +360,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
                 ),
                 "write_paths" to AgentToolParam("string", "Comma-separated Linux path prefixes this worker may modify, or none. Required for parallel workers."),
                 "max_turns" to AgentToolParam("integer", "Omit to auto-size: simple ≈ 10, medium ≈ 30, complex 40–60."),
-                "thinking_level" to AgentToolParam("string", "Default ULTRA; clamped to model ceiling.", enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA")),
+                "thinking_level" to AgentToolParam("string", "Omit to follow the main session's live level; clamped to model ceiling.", enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA")),
                 "background" to AgentToolParam(
                     "boolean",
                     "true = return a dispatch_id immediately and let the lanes run detached; collect " +
@@ -337,6 +391,10 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout", "delay", "resource_class"),
+        // [pi-port §4.1] shell_execute runs arbitrary commands (installs, rm,
+        // redirects): destructive by nature, not read-only. Consumed by the
+        // approval layer to phrase the confirmation.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 
     // Aligned with iOS AIChatViewModel.swift browser_use definition
@@ -354,7 +412,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
             "fetch to download files/resources using the page's session (returns metadata and a minis:// URL), " +
             "new_tab to open an additional tab, close_tab to close a tab, and list_tabs to see all open tabs. " +
             "Use set_viewport with viewport_width + viewport_height to override the viewport for the current session (e.g. before screenshotting a 1920×1080 HTML composition that would otherwise be cropped to the phone viewport); pass reset=true to drop the session override and fall back to the global browser setting. " +
-            "Use get_cookies to retrieve cookies for the current page URL / current site root domain only (including HttpOnly cookies). get_cookies supports optional 'keywords' (filter by cookie name) and 'fuzzy' (true=contains match, false=exact match, default true). It returns only a summary and an offload env file path — raw cookie values are NOT included in the tool response. To reuse cookies in shell commands: `. /var/minis/offloads/env_cookies_xxx.sh && command`. You may define alias variables when needed. " +
+            "Use get_cookies to retrieve cookies for the current page URL / current site root domain only (including HttpOnly cookies). get_cookies supports optional 'keywords' (filter by cookie name) and 'fuzzy' (true=contains-all, false=exact-any; default true). It returns a summary with TRUNCATED values (~80 chars) — raw full cookie values are NOT included in the tool response; cookies are already live in the browser session for fetch/navigation, and shell-side reuse via cookie file is not available on this platform. " +
             "Use set_cookies to write cookies into the current page's cookie store via the native cookie store (so even HttpOnly cookies, which JS cannot set, land). Pass a 'cookies' array of objects, each with name + value (required) and optional domain (defaults to the current page host), path (defaults to '/'), secure, http_only, and expires (Unix timestamp in seconds; omit for a session cookie). " +
             "Use wait_for_dom_stable to wait until the page DOM stops changing (useful after navigation or interactions that trigger async data loading — polls every 0.5s, resolves when mutation rate gradient is stable for 3+ intervals, default timeout 10s). " +
             "Use tab_id to target a specific tab (defaults to the most recently used tab).",
@@ -440,5 +498,8 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout"),
+        // [pi-port §4.1] Root commands on the HOST: destructive, worst blast
+        // radius of the shell family.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 }

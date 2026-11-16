@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Kayıt, son günlük kayıtlarda bulunamadı.</string>
     <string name="memory_revoke_result_io_error">Dosya yazılamadı: %1$s</string>
     <string name="memory_save_toast">Kaydedildi</string>
+
+    <string name="memory_save_failed_toast">Kaydetme başarısız — depolamayı kontrol edip tekrar deneyin</string>
     <string name="memory_global_footer">Agent\'ın her oturumda gördüğü kalıcı talimatlar ve tercihler. Agent bu dosyayı değiştiremez.</string>
     <string name="check_update_section_header">Uygulama Güncellemesi</string>
     <string name="check_update_current_version">Geçerli sürüm: %1$s</string>
@@ -181,8 +183,8 @@
     <string name="zen_deleted_models_title">Silinen ücretsiz modelleri geri yükle (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Bu sağlayıcıda kayıtlı silmeleri geri alır</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Bağlantı başarısız</string>
+    <string name="provider_sync_mark_invalid">Geçersiz yanıt</string>
     <string name="add_provider_voice_templates_footer">Konuşmadan metne ve metinden konuşmaya sağlayıcıları. Sağlayıcı türü ve temel URL önceden doldurulmuştur — yalnızca API anahtarınızı eklemeniz yeterli.</string>
     <string name="add_provider_voice_capability_tts">Konuşma sentezi (TTS)</string>
     <string name="add_provider_voice_capability_asr">Konuşma tanıma (ASR)</string>
@@ -257,8 +259,8 @@
     <string name="soul_icon_choose_image">Görsel Seç</string>
     <string name="soul_icon_image_hint">Kare olarak kırpılır ve köşeleri yuvarlatılır</string>
     <string name="soul_icon_use_default">Varsayılanı Kullan</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Model simgesini kullan</string>
+    <string name="soul_icon_use_model_hint">Çalışan modelin sağlayıcı simgesini izler</string>
     <string name="soul_icon_emoji_title">Kimlik simgesi</string>
     <string name="soul_icon_emoji_field">Ya da bir emoji yazın</string>
     <string name="soul_icon_set">Ayarla</string>
@@ -325,6 +327,8 @@
     <string name="token_usage_section_thinking">Düşünme</string>
     <string name="token_usage_thinking_label">Düşünme</string>
     <string name="token_usage_thinking_level">Düzey</string>
+    <string name="token_usage_thinking_requested">İstenen</string>
+    <string name="token_usage_thinking_effective">Etkin</string>
     <string name="token_usage_thinking_supported">Destekleniyor</string>
     <string name="token_usage_section_tokens">Token (Oturum Toplamı)</string>
     <string name="token_usage_input_with_cache">Giriş (önbellek dahil)</string>
@@ -334,6 +338,20 @@
     <string name="token_usage_cache_write">Önbellek Yazma</string>
     <string name="token_usage_section_agent_loop">Agent Döngüsü</string>
     <string name="token_usage_total_loops">Toplam Döngü</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">Sistem istemi ve araçlar</string>
+    <string name="context_block_skills_mcps">Beceriler ve MCP\'ler</string>
+    <string name="context_block_memory">Bellek enjeksiyonu</string>
+    <string name="context_block_runtime">Bu turun geçici bağlamı</string>
+    <string name="context_block_goal_plan">Hedef ve plan enjeksiyonu</string>
+    <string name="context_block_history">Geçmiş penceresi</string>
+    <string name="context_block_attachments">Ekler ve görseller</string>
+    <string name="context_usage_note_estimate">Kaba tahminler (±%10); bu panel açıldığında yenilenir</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Etkileşimli kart</string>
+    <string name="gen_ui_view_source">Kaynağı gör</string>
+    <string name="gen_ui_view_render">Görselleştirmeyi göster</string>
+    <string name="gen_ui_view_fullscreen">Tam ekran</string>
     <string name="common_on">Açık</string>
     <string name="common_off">Kapalı</string>
     <string name="common_yes">Evet</string>
@@ -441,6 +459,11 @@
     <string name="sessionlist_regenerate_title">Başlığı Yeniden Oluştur</string>
     <string name="sessionlist_regenerating_title">Başlık yeniden oluşturuluyor…</string>
     <string name="sessionlist_duplicate">Çoğalt</string>
+    <string name="sessionlist_branch_tree">Dal ağacı</string>
+    <string name="sessionlist_branch_from_here">Son mesajdan dallan</string>
+    <string name="sessionlist_branch_empty">Bu oturumun henüz dalı yok. Yeniden çalıştırmaların özgün sohbeti değiştirmemesi için son mesajdan dallan.</string>
+    <string name="sessionlist_branch_source">Kaynak</string>
+    <string name="sessionlist_branch_children">Dallar</string>
     <string name="sessionlist_search_action">Ara</string>
     <string name="sessionlist_dismiss">Kapat</string>
     <string name="sessionlist_delete_one_title">Sohbet silinsin mi?</string>
@@ -461,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s düşünüyor</string>
     <string name="read_aloud_unavailable">Sesli okuma başarısız: kullanılabilir ses motoru yok. Ses Çıkışı ayarlarını denetleyin ya da bir sistem konuşma motoru kurun.</string>
     <string name="chat_error_stream_dropped_partial">Bağlantı koptu — bu yanıt eksik olabilir. Devam etmek için Yeniden Dene\'ye dokunun.</string>
+    <string name="chat_composer_queued_hint">Girdi kuyruğa alınacak ve geçerli görev bittiğinde gönderilecek</string>
     <string name="chat_input_placeholder">%1$s için mesaj (@ ile dosya)</string>
     <string name="chat_input_placeholder_hint_1">%1$s için @ ile dosya belirtin</string>
     <string name="chat_input_placeholder_hint_2">SKILL ve hızlı komutlar için / yazın</string>
@@ -609,6 +633,14 @@
     <string name="env_var_privacy_header">Gizlilik</string>
     <string name="env_var_privacy_toggle">Gizlilik Modu</string>
     <string name="env_var_privacy_footer">Etkinleştirildiğinde, shell-execute çıktısında görünen her ortam değişkeni değeri, modele ulaşmadan önce maskelenmiş biçimiyle (örn. `sk-1********ajhks`) değiştirilir. 8 karakterden kısa değerler tümüyle `*` olur. Sohbette kullanıcının gördüğü çıktı değişmez.</string>
+    <string name="outbound_mask_toggle">Giden gizlilik maskeleme</string>
+    <string name="outbound_mask_footer">Opt-in şekil maskeleme: anahtar biçimli dizeler (kod dahil), e-postalar ve telefon benzeri sayılar yer tutucuya dönüşür. Aşağıdaki embedding API anahtarı uygulama prefs’te düz metin saklanır. Cihaz geçmişi değişmez.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · tam otomatik</string>
+    <string name="chat_menu_perm_safe_auto">Güvenli otomatik · salt okunur araçlar serbest çalışır</string>
+    <string name="chat_menu_perm_ask">Sor · her çağrıyı onayla</string>
+    <string name="chat_menu_perm_off">Kapalı · tüm araçları reddet</string>
+    <string name="gate_approval_allow_all">Bu oturumda her zaman izin ver (geçerli hedef)</string>
+    <string name="approval_action_allow_all_session">Bu oturumda her zaman izin ver</string>
     <string name="env_var_section_header">Değişkenler</string>
     <string name="env_var_section_footer">Ortam değişkenleri, oturum başlangıcında sanal alan shell\'ine aktarılır. Adlar büyük harfe çevrilir ve POSIX shell değişken kurallarına uymalıdır.</string>
     <string name="env_var_empty_title">Ortam Değişkeni Yok</string>
@@ -973,6 +1005,12 @@
     <string name="modeldetail_section_capabilities">Yetenekler</string>
     <string name="modeldetail_context_window">Bağlam Penceresi</string>
     <string name="modeldetail_thinking">Düşünme</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Düşünme seviyesi üst sınırı</string>
+    <string name="modeldetail_thinking_level_auto">Otomatik</string>
+    <string name="modeldetail_thinking_level_effective_auto">Etkin: %1$s (katalog varsayılanı)</string>
+    <string name="modeldetail_thinking_level_effective_override">Etkin: %1$s (elle)</string>
+    <string name="modeldetail_thinking_level_footer">Sohbet seçicisinin bu model için sunduğu düşünme seviyelerini sınırlar. Otomatik, katalog bildirimini izler. Ultra, sağlayıcı bildirdiğinde veya bu üst sınırı manuel olarak Ultra yaptığınızda olduğu gibi gönderilir; aksi halde max\'a eşlenir.</string>
     <string name="modeldetail_capabilities_footer">Bağlam penceresi ve en fazla çıkış token\'ı (token cinsinden). Sağlayıcı varsayılanlarını kullanmak için boş bırakın. Genişletilmiş akıl yürütmeyi destekleyen modeller için Düşünme\'yi etkinleştirin.</string>
     <string name="modeldetail_provider_default">Sağlayıcı varsayılanı</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Sağlayıcının bildirdiği sınırı aşıyor (%1$d). Değer kaydedilir ancak hatalara yol açabilir.</string>
@@ -1114,7 +1152,7 @@
     <string name="settings_bg_overlay">Arka Plan Görev Yer Paylaşımı</string>
     <string name="settings_bg_overlay_footer">Minis Ultra arka plandayken geçerli aracı gösteren küçük bir yüzen kapsül gösterir. Diğer uygulamaların üzerinde gösterme izni gerekir. Minis Ultra\'i öne getirmek için kapsüle dokunun; taşımak için sürükleyin.</string>
     <string name="settings_bg_overlay_permission_needed">Etkinleştirmek için diğer uygulamaların üzerinde göstermeye izin verin</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (canlı güncellemeler)</string>
     <string name="settings_dynamic_island_footer">Agent durumunu Android 16 durum çipinde canlı gösterir. Açıkken yüzen yer paylaşımının yerini alır, böylece aynı anda iki durum göstergesi görmezsiniz.</string>
     <string name="settings_dynamic_island_unsupported">Geçerli sistem sürümünüz Live Updates özelliğini henüz desteklemiyor (Android 16+ ve özelliğin etkin olması gerekir).</string>
     <string name="agent_loop_section_title">Minis Ultra\'in Çalışırken Çağırabileceği Modeller</string>
@@ -1762,7 +1800,7 @@
     <string name="dev_suite_installing">Kuruluyor…</string>
     <string name="dev_suite_failed">başarısız</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Kurulum hatası ayrıntıları</string>
     <string name="dev_suite_ready">Hazır</string>
     <string name="dev_suite_not_installed">Kurulu değil</string>
     <string name="dev_suite_required">zorunlu</string>
@@ -1839,6 +1877,8 @@
     <string name="ma_add_role_sub">Özel ad/açıklama/komut istemi/araç izin listesi; aynı adı taşıyan yerleşik rol geçersiz kılınır</string>
     <string name="ma_team_lead_suffix"> · ekip lideri</string>
     <string name="ma_thinking_depth">Bu çalıştırma için düşünme derinliği</string>
+
+    <string name="ma_thinking_follows_main">Ana oturumu takip eder</string>
     <string name="ma_role_dialog_title_builtin">Yerleşik rol (özel kopya olarak kaydedilir)</string>
     <string name="ma_role_dialog_title_new">Yeni işbirliği rolü</string>
     <string name="ma_role_dialog_title_edit">Rolü düzenle</string>
@@ -1856,6 +1896,7 @@
     <string name="usage_label_output_short">Çıktı</string>
     <string name="plan_board_all_done">Tüm adımlar tamamlandı</string>
     <string name="cd_plan_board_toggle">Plan panosunu genişlet veya daralt</string>
+    <string name="cd_plan_step_retry">Başarısız olan bu adımı yeniden dene</string>
     <string name="cd_goal_header">Hedef ayrıntılarını aç</string>
     <string name="cd_goal_status_active">Hedef devam ediyor</string>
     <string name="cd_goal_status_paused">Hedef duraklatıldı</string>
@@ -2028,6 +2069,9 @@
     <string name="mcp_approval_restart_notice">Yeniden başlatma %1$d bekleyen onayı geçersiz kıldı</string>
     <string name="context_saver_title">Bağlam tasarrufu</string>
     <string name="context_saver_footer">İstek büyüdüğünde son sonuçların ötesindeki eski araç çıktılarını tek satırlık yer tutuculara katlar. Hiçbir şey silinmez - katlanan sonuç dosya yolunu korur veya aracı yeniden çalıştırmayı söyler.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Prompt önbelleği ısıtma</string>
+    <string name="cache_warming_footer">Etkinleştirildiğinde, boşta kalma arasından sonra uygulama, sağlayıcının prompt önbelleğini süre dolmadan tazelemek için son başarılı isteği tek tokenlik çıkı sınırıyla yeniden gönderebilir. Ek ücretli istekler gönderir; varsayılan olarak kapalı.</string>
     <string name="context_saver_off">Kapalı</string>
     <string name="context_saver_balanced">Dengeli</string>
     <string name="context_saver_aggressive">Agresif</string>
@@ -2035,6 +2079,12 @@
     <string name="token_usage_saver_folded">Katlanan araç sonuçları</string>
     <string name="token_usage_saver_saved">Bu turda tasarruf</string>
     <string name="memory_center_overview">Bir bakışta</string>
+    <string name="memory_embedding_header">Anlamsal geri çağırma</string>
+    <string name="memory_embedding_toggle">Embedding ile anlamsal bellek geri çağırma</string>
+    <string name="memory_embedding_base_url">Embeddings taban URL\'si</string>
+    <string name="memory_embedding_api_key">Embeddings API anahtarı</string>
+    <string name="memory_embedding_model">Embedding modeli</string>
+    <string name="memory_embedding_footer">Varsayılan olarak kapalıdır. Açık olduğunda, bellek geri çağırma anahtar kelime aramasına ek olarak OpenAI uyumlu bir embeddings uç noktası üzerinden vektör benzerliği araması ekler. Değişiklikler ancak uygulama süreci yeniden başlatıldığında geçerli olur.</string>
     <string name="memory_center_stat_memory">Bellek dosyaları</string>
     <string name="memory_center_stat_recalls">Geri çağrılan kayıtlar</string>
     <string name="memory_center_stat_failures">Engellenen tekrarlar</string>
@@ -2110,4 +2160,179 @@
     <string name="pool_mode_random">Rastgele</string>
     <string name="pool_mode_round_robin">Sırayla</string>
     <string name="pool_mode_title">Anahtar kullanım modu</string>
+
+    <string name="git_panel_branch_search">Dalları ara</string>
+
+
+    <string name="git_panel_branches_section">Dallar</string>
+
+    <string name="git_panel_uncommitted_count">Commitlanmamış değişiklikler: %1$d dosya</string>
+
+    <string name="git_panel_detached_head">kopmuş HEAD</string>
+
+    <string name="git_panel_create_branch">Yeni dal oluştur ve checkout yap…</string>
+
+    <string name="git_panel_branch_name_hint">Dal adı</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Tümünü göster</string>
+    <string name="check_update_notes_collapse">Daha az göster</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arşivle</string>
+    <string name="sessionlist_unarchive">Arşivden çıkar</string>
+    <string name="sessionlist_section_archived">Arşivlendi (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Sağlayıcı ön ayarları</string>
+    <string name="add_provider_vendor_presets_pick_hint">Bir sağlayıcıya dokunun; endpoint ve ad otomatik olarak doldurulur.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">platform.deepseek.com adresinde bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_zhipu">Zhipu açık platform konsolundan (open.bigmodel.cn) bir API anahtarı alın</string>
+    <string name="add_provider_vendor_hint_kimi">platform.moonshot.cn adresinde bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_qwen">Alibaba Cloud Model Studio (Bailian) konsolunda bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_ark">Volcano Ark konsolunda bir API anahtarı oluşturun; model adı bir endpoint ID veya model ID\'dir</string>
+    <string name="add_provider_vendor_hint_minimax">MiniMax açık platformundan bir API anahtarı alın</string>
+    <string name="add_provider_vendor_hint_siliconflow">cloud.siliconflow.cn adresinde bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_groq">console.groq.com adresinde bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_together">Together konsolundan (api.together.ai) bir API anahtarı alın</string>
+    <string name="add_provider_vendor_hint_mistral">console.mistral.ai adresinde bir API anahtarı oluşturun</string>
+    <string name="add_provider_vendor_hint_ollama">Yerel sunucu — API anahtarı gerekmez</string>
+    <string name="add_provider_vendor_hint_lmstudio">Yerel sunucu — API anahtarı gerekmez. Önce LM Studio\'daki Developer sunucusunu başlatın</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Kuyruktaki mesajı düzenle</string>
+    <string name="git_panel_diff_truncated">Diff 200.000 karakterde kesildi — metnin tamamı depodaki dosyanın kendisindedir.</string>
+    <string name="voice_service_no_audio_models">Bu sağlayıcı için listelenmiş ses modeli yok. Bazı sağlayıcıların (Bailian, SiliconFlow) model listeleri ses desteğini bildirmez — ASR/TTS modelini ses modaliteli özel model olarak ekle veya başka bir ses hizmeti seç.</string>
+    <string name="voice_error_network">Konuşma tanıma hatası: ağ hatası. Bağlantını kontrol et veya cihaz üzerindeki motora / başka bir sağlayıcıya geç.</string>
+    <string name="voice_error_transcription">Konuşma tanıma metin döndürmedi. Yeniden konuş veya transkripsiyon sağlayıcısının modelini ve API anahtarını kontrol et.</string>
+    <string name="voice_error_busy">Konuşma tanıma meşgul. Biraz bekle ve tekrar dene.</string>
+    <string name="voice_error_audio">Ses yakalanamadı. Mikrofon iznini ve başka bir uygulamanın mikrofonu kullanmadığını kontrol et.</string>
+    <string name="voice_error_language">Seçilen dil bu motor tarafından desteklenmiyor. Başka bir dil seç.</string>
+    <string name="voice_error_unknown">Konuşma tanıma hatası: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Özel kurallar henüz etkin değil (%1$s). İstekler şu anda yerleşik varsayılanları kullanıyor; önbellek yüklendikten sonraki ilk mesajdan itibaren kuralların uygulanır.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Genişletilmiş düşünmeyi zorla</string>
+    <string name="provider_detail_force_thinking_footer">Yalnızca Anthropic uyumlu aktarıcılar için. Model kataloğu modelin akıl yürütemediğini söylese bile thinking:{type:"enabled",budget_tokens:N} gönderir. Model düşünmeyi desteklerken katalog kaydı eksik veya yanlışsa kullan.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Sağlayıcıları dışa aktar</string>
+    <string name="provider_transfer_export_title">Sağlayıcıları dışa aktar</string>
+    <string name="provider_transfer_export_body">%1$d sağlayıcı bir JSON dosyasına dışa aktarılacak.</string>
+    <string name="provider_transfer_include_keys">API anahtarlarını dahil et</string>
+    <string name="provider_transfer_include_keys_risk">API anahtarları dosyaya düz metin olarak yazılır. Bu dosyayı alan herkes anahtarlarınızı kullanabilir — dosyayı güvenli bir yerde saklayın ve içe aktardıktan sonra silin.</string>
+    <string name="provider_transfer_export">Dışa Aktar</string>
+    <string name="provider_transfer_export_success">%1$d sağlayıcı dışa aktarıldı</string>
+    <string name="provider_transfer_export_failed">Dışa aktarma başarısız</string>
+    <string name="provider_transfer_import_ok">%1$d sağlayıcı içe aktarıldı</string>
+    <string name="provider_transfer_import_partial">%1$d sağlayıcı içe aktarıldı, %2$d başarısız</string>
+    <string name="provider_transfer_import_partial_detail">%1$d sağlayıcı içe aktarıldı, %2$d başarısız: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH Çalışma Alanı</string>
+    <string name="ssh_workspace_binding_title">SSH Çalışma Alanı</string>
+    <string name="ssh_workspace_bound_to">%1$s (%2$s) bağlandı</string>
+    <string name="ssh_workspace_bound_local">Yerel korumalı alanda çalışıyor</string>
+    <string name="ssh_workspace_option_local">Yerel korumalı alan</string>
+    <string name="ssh_workspace_option_local_subtitle">Kabuk, bu cihazın Linux korumalı alanında çalışır</string>
+    <string name="ssh_workspace_no_hosts">Henüz SSH ana makinesi yok — Ayarlar → SSH Çalışma Alanı\'ndan ekleyin.</string>
+    <string name="ssh_workspace_shell_only_note">SSH çalışma alanları yalnızca kabuk komutlarını destekler; bir ana makine bağlıyken dosya araçları reddedilir.</string>
+    <string name="ssh_workspace_shell_only">SSH çalışma alanı yalnızca kabuk komutlarını destekler — \'%1$s\' reddedildi.</string>
+    <string name="ssh_workspace_shell_only_hint">Uzak komutları shell_execute ile çalıştırın ya da sohbet menüsü → SSH Çalışma Alanı\'ndan bu oturumun bağını çözerek yerel dosya araçlarını geri getirin.</string>
+    <string name="ssh_hosts_title">SSH ana makineleri</string>
+    <string name="ssh_hosts_subtitle">Ajanın SSH üzerinden ulaşabildiği uzak ana makineler. Kimlik bilgileri şifreli saklanır ve hiçbir zaman gösterilmez.</string>
+    <string name="ssh_hosts_row_subtitle">Ana makine ekle, bağlantıları test et, ana makine anahtarlarını yönet</string>
+    <string name="ssh_hosts_empty">Henüz ana makine yok.</string>
+    <string name="ssh_hosts_add">Ana makine ekle</string>
+    <string name="ssh_hosts_add_cancel">İptal</string>
+    <string name="ssh_hosts_test">Bağlantıyı test et</string>
+    <string name="ssh_hosts_testing">Test ediliyor…</string>
+    <string name="ssh_hosts_test_ok">Bağlantı başarılı</string>
+    <string name="ssh_hosts_test_failed">Bağlantı başarısız</string>
+    <string name="ssh_hosts_forget_key">Ana makine anahtarını unut</string>
+    <string name="ssh_hosts_remove">Kaldır</string>
+    <string name="ssh_hosts_pinned">Ana makine anahtarı sabitlendi: %1$s…</string>
+    <string name="ssh_field_name">Ad (harf/rakam/._-)</string>
+    <string name="ssh_field_hostname">Ana makine veya IP</string>
+    <string name="ssh_field_port">Bağlantı noktası</string>
+    <string name="ssh_field_username">Kullanıcı adı</string>
+    <string name="ssh_auth_password">Parola</string>
+    <string name="ssh_auth_key">Özel anahtar</string>
+    <string name="ssh_field_password">Parola</string>
+    <string name="ssh_field_private_key">PEM özel anahtarı</string>
+    <string name="ssh_field_passphrase">Anahtar parolası (isteğe bağlı)</string>
+    <string name="ssh_save">Kaydet</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Eller serbest</string>
+    <string name="handsfree_state_starting">Başlatılıyor…</string>
+    <string name="handsfree_state_listening">Dinleniyor…</string>
+    <string name="handsfree_state_thinking">Düşünüyor…</string>
+    <string name="handsfree_state_speaking">Konuşuyor…</string>
+    <string name="handsfree_exit_recognition">Eller serbest durduruldu: konuşma tanıma tekrar tekrar başarısız oldu. Yeniden denemek için Eller serbest\'e dokunun.</string>
+    <string name="handsfree_exit_tts">Eller serbest durduruldu: yanıtlar sesli okunamadı. Yeniden denemek için Eller serbest\'e dokunun.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Her satıra bir Android paket adı, örn. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Listeyi engelleme listesi olarak kullan</string>
+    <string name="a11y_app_policy_blocklist_sub">Kapalı = yalnızca listelenen uygulamalara izin verilir. Açık = listelenen uygulamalar engellenir.</string>
+    <string name="a11y_app_policy_enabled">Uygulamaya göre sınırla</string>
+    <string name="a11y_app_policy_enabled_sub">Her ekran okuma veya dokunmadan önce ön plandaki uygulamanın paketini denetle</string>
+    <string name="a11y_app_policy_footer">Etkinleştirildiğinde ui_read ve ui_action, çalıştırılmadan önce geçerli ön plan uygulamasıyla karşılaştırılır. Liste dışındaki (izin modu) veya listedeki (engelleme modu) uygulamalar görünür bir mesajla reddedilir. Minis uygulamasının kendisine her zaman izin verilir.</string>
+    <string name="a11y_app_policy_section">Erişilebilirlik uygulama kapsamı</string>
+    <string name="boot_hook_enable">Başlangıçta /var/minis/boot.sh çalıştır</string>
+    <string name="boot_hook_enable_sub">Linux rootfs önyüklendikten sonra sandbox içinde çalışır</string>
+    <string name="boot_hook_footer">Varsayılan olarak kapalı. Bu yol yazılabilir sandbox\'ın içindedir; shell çalıştırabilen her ajan betiği değiştirebilir — etkinleştirildiğinde böyle bir dosya her açılışta sessizce çalışır. Anahtar, çalıştırmadan hemen önce yeniden denetlenir; betiğin ilk görülme zamanı ile boyut/mtime değişiklikleri uygulama günlüğüne yazılır. Sonraki açılışta etkili olur.</string>
+    <string name="boot_hook_last_status">Son çalıştırma</string>
+    <string name="boot_hook_section">Önyükleme kancası</string>
+    <string name="lifecycle_hooks_command_hint">Tek bir komut satırı. Genelde en iyisi bir betik yoludur, örn. bash /var/minis/hooks/on-response.sh. Kancayı silmek için boş bırak.</string>
+    <string name="lifecycle_hooks_enable">Yaşam döngüsü kancalarını etkinleştir</string>
+    <string name="lifecycle_hooks_enable_sub">Aşağıdaki betikleri kendi olaylarında çalıştır</string>
+    <string name="lifecycle_hooks_events_footer">Betikler sandbox içinde, kendi şeritlerinde sırayla çalışır; 20 saniye zaman aşımı vardır. Hatalar günlüğe yazılır ve sohbeti asla engellemez.</string>
+    <string name="lifecycle_hooks_help_body">Her betik MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID ve MINIS_HOOK_DETAIL alır. Betikler tek kullanımlık PRoot süreçleridir: çağrılar arasında diğer komutların /proc\'u görünmez ve flock güvenilir değildir — çalıştırmalar arası durum için dosya kullan. OnResponse, tamamlanan her ajan yanıtında bir kez; OnSessionEnd, sohbet silindiğinde tetiklenir.</string>
+    <string name="lifecycle_hooks_help_header">Ortam ve uyarılar</string>
+    <string name="lifecycle_hooks_master_footer">Varsayılan olarak kapalı. Kapalıyken yapılandırılmış betikler korunur ama asla çalıştırılmaz.</string>
+    <string name="lifecycle_hooks_not_set">Ayarlanmadı</string>
+    <string name="lifecycle_hooks_section_events">Olaylar</string>
+    <string name="lifecycle_hooks_section_master">Ana anahtar</string>
+    <string name="lifecycle_hooks_title">Yaşam Döngüsü Kancaları</string>
+    <string name="network_trusted_ca_count">%1$d sertifika içe aktarıldı</string>
+    <string name="network_trusted_ca_duplicate">Bu sertifika zaten içe aktarılmış.</string>
+    <string name="network_trusted_ca_failed">Dosya PEM/X.509 sertifikası olarak okunamadı.</string>
+    <string name="network_trusted_ca_footer">HTTPS uç noktası kendi imzalı veya özel bir CA kullanan sağlayıcılar için. Sertifika yalnızca Minis içinde saklanır ve bu uygulama için Android\'in güven bağlantı noktalarına eklenir; normal sertifika ve ana bilgisayar adı denetimleri açık kalır. Bir sonraki sağlayıcı isteğinde etkili olur — yeniden başlatma gerekmez.</string>
+    <string name="network_trusted_ca_import">PEM Sertifikası İçe Aktar</string>
+    <string name="network_trusted_ca_imported">%1$d sertifika içe aktarıldı. İsteği yeniden dene.</string>
+    <string name="network_trusted_ca_none">İçe aktarılmış sertifika yok</string>
+    <string name="network_trusted_ca_remove_all">Tümünü Kaldır</string>
+    <string name="network_trusted_ca_removed">İçe aktarılan sertifikalar kaldırıldı.</string>
+    <string name="network_trusted_ca_title">Güvenilen Sertifikalar</string>
+    <string name="provider_detail_custom_headers">Özel istek başlıkları</string>
+    <string name="provider_detail_custom_headers_footer">Satır başına bir «Ad: değer». Yalnızca bu sağlayıcının chat, /models ve Responses isteklerine uygulanır. Host, Content-Length ve Connection HTTP istemcisi tarafından yönetilir, üzerine yazılamaz.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Varsayılan olarak kapalı. Açıkken bu özel uç noktaya yapılan her sohbet isteği, OpenCode uyumlu aktarıcıların yönlendirmesi ve önbelleğe alması için kararlı bir oturum kimliği (x-opencode-session) taşır. Yalnızca güvendiğin bir ağ geçidi için aç: bu kimlik sohbeti turlar boyunca tanımlar.</string>
+    <string name="provider_detail_opencode_session_header">OpenCode oturum başlığı</string>
+    <string name="provider_detail_opencode_session_toggle">x-opencode-session gönder</string>
+    <string name="provider_detail_save_headers">Başlıkları kaydet</string>
+    <string name="scheduled_task_prompt_template_hint">Geçerli tarih/saat ve son çalıştırma otomatik eklenir. Ayrıca {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} ve {{task_label}} kullanabilirsin.</string>
+    <string name="settings_lifecycle_hooks">Yaşam döngüsü kancaları</string>
+    <string name="settings_lifecycle_hooks_subtitle">Oturum başlangıcında / yanıt bittiğinde / oturum sonunda sandbox betiklerini çalıştırır</string>
+    <string name="web_search_tool_enabled">web_search\'i etkinleştir</string>
+    <string name="web_search_tool_enabled_sub">Ajanın sohbette web\'de arama yapmasına izin ver. Kapalı → araç hiç sunulmaz.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Aracı kapatmak aşağıdaki motor yapılandırmasını silmez; aynı davranışı geri getirmek için yeniden aç.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Bu eki açacak uygulama yok.</string>
+    <string name="chat_move_to_capsule">Şuraya taşı…</string>
+<string name="git_panel_history_read_failed">Commit geçmişi okunamadı — ayrıntılar günlüklerde (GitPanel etiketi)</string>
+
+    <string name="git_panel_status_read_failed">Çalışma ağacı durumu okunamadı — ayrıntılar günlükte (GitPanel etiketi)</string>
 </resources>

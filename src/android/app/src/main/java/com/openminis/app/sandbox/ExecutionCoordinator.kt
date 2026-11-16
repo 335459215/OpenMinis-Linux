@@ -38,7 +38,16 @@ object ExecutionCoordinator {
     data class CommandResult(
         val output: String,
         val exitCode: Int,
-        val durationMs: Long
+        val durationMs: Long,
+        /**
+         * [GH#358] True only when the command itself timed out — THIS shell's
+         * watchdog fired, or a native-offload handler reported its own timeout.
+         *
+         * 中文：exitCode=124 是 timeout 工具的通用退出码，用户命令可以合法返回
+         * 124；工具超时必须读这个内部判定，不能裸判 124。默认 false 让不关心
+         * 超时的调用方保持原语义。
+         */
+        val timedOut: Boolean = false,
     )
 
     private var appContextRef: Context? = null
@@ -165,7 +174,7 @@ object ExecutionCoordinator {
         // partition. Block-device writes stay refused in every mode.
         val yoyo = com.openminis.app.security.SecurityGateHolder
             .activeSessionMode(sessionId)
-            .isYoyo()
+            .isYolo() // [#31] tier isYolo; was PermissionMode.isYoyo
         val refused = GuestWorkloadPolicy.hostRefusal(command, allowRootDeletion = yoyo)
             ?: DiskPressure.refusal(appContext, command)
             ?: run {
@@ -240,13 +249,13 @@ object ExecutionCoordinator {
             val envVars = AppGraph.executionEnvVarRepositoryOrNull()?.allAsDict() ?: emptyMap()
             val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
             if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
-                shell.applyEnvironment(envVars, previousKeys = previousKeys)
+                ShellEnvWriter.applyEnvironment(shell, envVars, previousKeys = previousKeys)
                 lastInjectedKeys[sessionId] = envVars.keys.toSet()
             }
             // Plugin installers add command links to the guest PATH while this
             // persistent shell remains alive. Refresh both PATH and bash's
             // command hash before every command so the next command sees it.
-            shell.refreshPath()
+            ShellEnvWriter.refreshPath(shell, appContext)
 
             // [port-upstream-1.16 / FIX-261025-05] Last checkpoint before the
             // command is written to the shell's stdin. Past this point the
@@ -262,24 +271,61 @@ object ExecutionCoordinator {
                 // text alone silently dropped `resourceClass`.
                 callerBudget = budget,
             )
+            // [GH#358] A timed-out command leaves the shell object in a state
+            // a later command must never reuse (cancelled pending callback,
+            // possibly blocked stdin writer). Drop THIS instance from the
+            // per-session registry so getOrCreateShell() builds a fresh one
+            // on the next call; the per-session mutex itself stays (queued
+            // callers already reference it and withLock releases it normally).
+            // The verdict comes from the shell's internal flag ONLY — never the
+            // bare exit code (a user command may legitimately exit 124) and
+            // never the output text (a user command can echo the timeout
+            // marker itself; see ShellChannelRecovery).
+            val timedOut = shell.consumeTimedOut()
+            if (ShellChannelRecovery.shouldDiscardChannel(exitCode, rawOutput, timedOut)) {
+                discardTimedOutChannel(sessionId, shell)
+            }
 
             val durationMs = System.currentTimeMillis() - startTime
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
             val (stripped, loggedExit) = TerminalSanitizer.dropOffloadTrace(sanitized)
             var effectiveExit = exitCode
             if (effectiveExit == 0 && loggedExit != null && loggedExit != 0) effectiveExit = loggedExit
+            // [GH#358] A native-offload handler timeout is a REAL command
+            // timeout (the guest watchdog fired), even though the persistent
+            // shell itself is healthy. Keep the tool result's TIMEOUT status for
+            // it, but do NOT use it to discard the channel (see above). The
+            // offload trace carries the handler's own 124, distinct from a user
+            // command that exits 124.
+            val handlerTimedOut = (effectiveExit == 0 && stripped.contains("handler_timeout")) ||
+                loggedExit == 124
             if (effectiveExit == 0 && stripped.contains("handler_timeout")) effectiveExit = 124
-            val truncated = TerminalSanitizer.truncateIfNeeded(stripped)
-            val output = if (effectiveExit != 0 && effectiveExit != 124) {
-                "$truncated\n(exit code: $effectiveExit)"
+            // [pi-port §4.7] Structured truncation: keep the legacy content
+            // shape, and when the cut actually happened append ONE structured
+            // annotation line (derived from ToolOutputTruncator.TruncationResult,
+            // GrepStreamScan report style) so both the model and the tool card
+            // see how much output was dropped. Sits before the exit-code line,
+            // i.e. at the tail of the tool card's output preview.
+            val (truncated, truncation) = TerminalSanitizer.truncateStructured(stripped)
+            val truncatedWithNote = if (truncation != null) {
+                "$truncated\n${TerminalSanitizer.formatTruncationNote(truncation)}"
             } else {
                 truncated
+            }
+            val output = if (effectiveExit != 0 && effectiveExit != 124) {
+                "$truncatedWithNote\n(exit code: $effectiveExit)"
+            } else {
+                truncatedWithNote
             }
 
             CommandResult(
                 output = MCPToolPolicy.filterToolsOutput(appContext, command, output),
                 exitCode = effectiveExit,
                 durationMs = durationMs,
+                // [GH#358] Only the shell's own watchdog verdict counts for the
+                // CHANNEL (see shouldDiscardChannel above). For the tool's
+                // TIMEOUT status, an offload handler timeout also qualifies.
+                timedOut = timedOut || handlerTimedOut,
             )
         }
         } finally {
@@ -362,6 +408,25 @@ object ExecutionCoordinator {
     }
 
     fun sessionBindMounts(sessionId: String): Map<String, String> = buildSessionBindMounts(sessionId)
+
+    /**
+     * [GH#358] Explicit channel teardown after a timeout: reset the shell
+     * object and unregister only THIS instance (`remove(key, value)`), so a
+     * concurrently rebuilt shell is never thrown away. The session mutex is
+     * deliberately kept — waiters are already parked on it and `withLock`
+     * releases it when this command returns.
+     */
+    private fun discardTimedOutChannel(sessionId: String, shell: PersistentShell) {
+        shell.resetAfterTimeout()
+        val removed = shells.remove(sessionId, shell)
+        lastInjectedKeys.remove(sessionId)
+        lastIdle.remove(sessionId)
+        Log.w(
+            TAG,
+            "[GH#358] discarded timed-out shell for session=$sessionId removed=$removed " +
+                "reset=[${ShellChannelRecovery.RESET_FIELDS}] — next command builds a fresh channel",
+        )
+    }
 
     internal fun hasLiveShell(sessionId: String): Boolean = shells[sessionId]?.isAlive == true
 
@@ -501,8 +566,10 @@ object ExecutionCoordinator {
     }
 
     /**
-     * Stop the shell for a specific session (e.g. user tapped cancel).
-     * The shell process is killed; next command will recreate it.
+     * Stop the running command for a specific session (e.g. user tapped cancel).
+     * [stop=kill] The running command's process tree is killed; the persistent
+     * shell itself stays alive with its cwd/env/packages, and the stop epoch
+     * keeps queued commands from starting.
      */
     fun stopCurrentCommand(sessionId: String? = null) {
         if (sessionId != null) {
@@ -551,7 +618,7 @@ object ExecutionCoordinator {
             .onFailure { Log.w(TAG, "syncHostTimezoneFiles failed: ${it.message}") }
         val tzMap = mapOf("TZ" to tz)
         for ((_, shell) in shells) {
-            if (shell.isAlive) shell.applyEnvironment(tzMap)
+            if (shell.isAlive) ShellEnvWriter.applyEnvironment(shell, tzMap)
         }
         TerminalSession.broadcastTimezone(tz)
     }
@@ -584,16 +651,29 @@ object ExecutionCoordinator {
             PRootKernel.updateProxy(appContext) +
             com.openminis.app.network.NetworkShellEnvironment.proxyVariables()
         for ((_, shell) in shells) {
-            if (shell.isAlive) shell.applyEnvironment(env)
+            if (shell.isAlive) ShellEnvWriter.applyEnvironment(shell, env)
         }
         TerminalSession.broadcastProxy(env)
     }
 
+    /**
+     * [stop=kill] User Stop for one session: kill the RUNNING command's
+     * process tree but KEEP the shell. The old path removed the shell and
+     * called [PersistentShell.stop], which took the whole persistent shell
+     * down — cwd, env and installed packages gone, next command paying a
+     * full rebuild — while the UI had already shown CANCELLED. The epoch
+     * bump in [stopCurrentCommand] already keeps queued commands from
+     * starting; the interrupt makes the pending command's DONE marker fire
+     * (signal exit 137), so the session mutex opens at once and the shell
+     * continues serving the session with its state intact.
+     */
     private fun stopOne(sessionId: String) {
-        val shell = shells.remove(sessionId)
-        lastInjectedKeys.remove(sessionId)
-        shell?.stop()
-        Log.i(TAG, "[$sessionId] Shell stopped by user")
+        val shell = shells[sessionId] ?: return
+        val interrupted = shell.interruptRunningCommand()
+        Log.i(
+            TAG,
+            "[$sessionId] Stop: ${if (interrupted) "running command killed by user, shell kept" else "nothing running, shell kept"}",
+        )
     }
 
     fun ownerSessionId(sessionId: String): String {

@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">最近のログにエントリが見つかりません。</string>
     <string name="memory_revoke_result_io_error">ファイル書き込みエラー: %1$s</string>
     <string name="memory_save_toast">保存済み</string>
+
+    <string name="memory_save_failed_toast">保存に失敗しました——ストレージを確認して再試行してください</string>
     <string name="memory_global_footer">すべてのセッションで Agent に表示される永続的な指示と設定です。Agent はこのファイルを変更できません。</string>
     <string name="check_update_section_header">アプリ更新</string>
     <string name="check_update_current_version">現在のバージョン: %1$s</string>
@@ -181,8 +183,8 @@
     <string name="zen_deleted_models_title">削除した無料モデルを復元（%1$d）</string>
     <string name="zen_deleted_models_subtitle">このプロバイダーで記録された削除を取り消します</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">接続失敗</string>
+    <string name="provider_sync_mark_invalid">無効な応答</string>
     <string name="add_provider_voice_templates_footer">音声認識と音声合成のプロバイダーです。プロバイダーの種類とベース URL は入力済みなので、API キーを追加するだけで使えます。</string>
     <string name="add_provider_voice_capability_tts">音声合成（TTS）</string>
     <string name="add_provider_voice_capability_asr">音声認識（ASR）</string>
@@ -257,8 +259,8 @@
     <string name="soul_icon_choose_image">画像を選択</string>
     <string name="soul_icon_image_hint">正方形に切り抜かれ、角が丸められます</string>
     <string name="soul_icon_use_default">デフォルトを使用</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">モデルアイコンを使用</string>
+    <string name="soul_icon_use_model_hint">実行中モデルのベンダーアイコンに追従</string>
     <string name="soul_icon_emoji_title">アイデンティティのアイコン</string>
     <string name="soul_icon_emoji_field">または絵文字を入力</string>
     <string name="soul_icon_set">設定</string>
@@ -325,6 +327,8 @@
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">レベル</string>
+    <string name="token_usage_thinking_requested">要求レベル</string>
+    <string name="token_usage_thinking_effective">実効レベル</string>
     <string name="token_usage_thinking_supported">サポート済み</string>
     <string name="token_usage_section_tokens">トークン（セッション合計）</string>
     <string name="token_usage_input_with_cache">入力（キャッシュ含む）</string>
@@ -334,6 +338,20 @@
     <string name="token_usage_cache_write">キャッシュ書き込み</string>
     <string name="token_usage_section_agent_loop">Agent ループ</string>
     <string name="token_usage_total_loops">合計ループ数</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">システムプロンプトとツール</string>
+    <string name="context_block_skills_mcps">スキルとMCP</string>
+    <string name="context_block_memory">メモリ注入</string>
+    <string name="context_block_runtime">このターンの臨時コンテキスト</string>
+    <string name="context_block_goal_plan">ゴールとプランの注入</string>
+    <string name="context_block_history">履歴ウィンドウ</string>
+    <string name="context_block_attachments">添付と画像</string>
+    <string name="context_usage_note_estimate">概算値（±10%）。シートを開いたときに更新されます</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">インタラクティブカード</string>
+    <string name="gen_ui_view_source">ソースを表示</string>
+    <string name="gen_ui_view_render">レンダリングを表示</string>
+    <string name="gen_ui_view_fullscreen">フルスクリーン</string>
     <string name="common_on">オン</string>
     <string name="common_off">オフ</string>
     <string name="common_yes">はい</string>
@@ -441,6 +459,11 @@
     <string name="sessionlist_regenerate_title">タイトルを再生成</string>
     <string name="sessionlist_regenerating_title">タイトルを再生成中…</string>
     <string name="sessionlist_duplicate">複製</string>
+    <string name="sessionlist_branch_tree">ブランチツリー</string>
+    <string name="sessionlist_branch_from_here">最新メッセージから分岐</string>
+    <string name="sessionlist_branch_empty">このセッションにはまだブランチがありません。最新メッセージから分岐すれば、再実行しても元の会話は影響を受けません。</string>
+    <string name="sessionlist_branch_source">ソース</string>
+    <string name="sessionlist_branch_children">ブランチ</string>
     <string name="sessionlist_search_action">検索</string>
     <string name="sessionlist_dismiss">閉じる</string>
     <string name="sessionlist_delete_one_title">この会話を削除しますか？</string>
@@ -461,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s が考えています</string>
     <string name="read_aloud_unavailable">読み上げに失敗しました：利用可能な音声エンジンがありません。音声出力設定を確認するか、システムの音声合成エンジンをインストールしてください。</string>
     <string name="chat_error_stream_dropped_partial">接続が切断されました。この返信は不完全な可能性があります。再試行してください。</string>
+    <string name="chat_composer_queued_hint">入力はキューに入り、現在のタスク終了後に送信されます</string>
     <string name="chat_input_placeholder">%1$s にメッセージ（@ でファイルを参照）</string>
     <string name="chat_input_placeholder_hint_1">@ でファイルを指定すると %1$s が読み取れます</string>
     <string name="chat_input_placeholder_hint_2">/ を入力すると SKILL とクイックコマンドを使えます</string>
@@ -609,6 +633,14 @@
     <string name="env_var_privacy_header">プライバシー</string>
     <string name="env_var_privacy_toggle">プライバシーモード</string>
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
+    <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
+    <string name="outbound_mask_footer">オプトインの形状マスキング：鍵型の文字列（コード内を含む）、メール、電話番号型の数字をプレースホルダーに置換。下の embedding API キーはアプリ非公開 prefs に平文保存。端末内履歴は変更なし。</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
+    <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
+    <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>
+    <string name="chat_menu_perm_off">オフ · すべてのツールを拒否</string>
+    <string name="gate_approval_allow_all">このセッションで常に許可（現在の対象）</string>
+    <string name="approval_action_allow_all_session">このセッションでは常に許可</string>
     <string name="env_var_section_header">変数</string>
     <string name="env_var_section_footer">環境変数はセッション開始時にサンドボックスシェルに注入されます。名前は大文字に変換され、POSIX シェル変数のルールに従う必要があります。</string>
     <string name="env_var_empty_title">環境変数なし</string>
@@ -723,8 +755,8 @@
     <string name="shizuku_state_need_permission">認可が必要です</string>
     <string name="shizuku_state_need_permission_subtitle">サービスは実行中ですが、Minis Ultra はまだ認可されていません。</string>
     <string name="shizuku_state_ready">準備完了</string>
-    <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
-    <string name="shizuku_ready_subtitle_sui">Sui (root) · version=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle">バージョン=%1$d、uid=%2$d</string>
+    <string name="shizuku_ready_subtitle_sui">Sui（root）· バージョン=%1$d、uid=%2$d</string>
     <string name="shizuku_badge_not_installed">未インストール</string>
     <string name="shizuku_badge_not_running">停止中</string>
     <string name="shizuku_badge_need_permission">要認可</string>
@@ -880,7 +912,7 @@
     <string name="provider_list_add_provider">AIプロバイダーを追加</string>
     <string name="provider_list_no_providers_configured">AIプロバイダーが設定されていません</string>
     <string name="provider_list_add_a_provider_to_get_started">開始するにはAIプロバイダーを追加してください。</string>
-    <string name="provider_list_import_provider">Import Provider</string>
+    <string name="provider_list_import_provider">プロバイダーをインポート</string>
     <string name="share_provider_json_title">プロバイダー設定を検出しました</string>
     <string name="share_expired_toast">共有内容の有効期限が切れました。もう一度共有してください。</string>
     <string name="share_provider_json_message">この JSON ファイルはエクスポートされたプロバイダーのようです。どうしますか？</string>
@@ -921,7 +953,7 @@
     <string name="provider_detail_refresh_models">モデルを更新</string>
     <string name="provider_detail_add_custom_model">カスタムモデルを追加</string>
     <string name="provider_detail_delete_provider">AIプロバイダーを削除</string>
-    <string name="provider_detail_delete_model">Delete Model</string>
+    <string name="provider_detail_delete_model">モデルを削除</string>
     <string name="provider_detail_hide_model">モデルを非表示</string>
     <string name="provider_detail_show_model">モデルを表示</string>
     <string name="provider_detail_sign_out">サインアウト</string>
@@ -955,7 +987,7 @@
     <string name="add_provider_signing_in">サインイン中…</string>
     <string name="add_provider_oauth_network_unreachable">サインインサーバーに接続できませんでした。ネットワークまたはプロキシの設定を確認して、もう一度お試しください。</string>
     <string name="add_provider_or_configure_manually">または手動で設定</string>
-    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">For third-party Coding Plans (e.g. MiniMax, Kimi) or compatible proxy endpoints, enter the API base URL and bearer token manually.</string>
+    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">サードパーティ Coding Plans（MiniMax、Kimi など）や互換プロキシエンドポイントでは、API base URL と Bearer トークンを手動入力してください。</string>
     <string name="add_provider_bearer_token">Bearer Token</string>
     <string name="add_custom_model_model_id">モデルID</string>
     <string name="add_custom_model_display_name_optional">表示名（省略可）</string>
@@ -973,6 +1005,12 @@
     <string name="modeldetail_section_capabilities">機能</string>
     <string name="modeldetail_context_window">コンテキスト ウィンドウ</string>
     <string name="modeldetail_thinking">思考</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">思考レベルの上限</string>
+    <string name="modeldetail_thinking_level_auto">自動</string>
+    <string name="modeldetail_thinking_level_effective_auto">現在の設定：%1$s（カタログ既定）</string>
+    <string name="modeldetail_thinking_level_effective_override">現在の設定：%1$s（手動）</string>
+    <string name="modeldetail_thinking_level_footer">このモデルでチャットの選択肢に表示される思考レベルの上限を設定します。自動はカタログの宣言に従います。Ultra はプロバイダーが宣言している場合、またはこの上限を手動で Ultra に設定した場合にそのまま送信され、それ以外は max に変換されます。</string>
     <string name="modeldetail_capabilities_footer">コンテキスト ウィンドウと最大出力トークン数（トークン単位）。空白の場合はプロバイダーのデフォルトを使用します。拡張推論をサポートするモデルでは思考を有効にしてください。</string>
     <string name="modeldetail_provider_default">プロバイダーのデフォルト</string>
     <string name="modeldetail_max_tokens_exceeds_warning">プロバイダーが報告した上限（%1$d）を超えています。値は保存されますが、エラーが発生する可能性があります。</string>
@@ -1759,7 +1797,7 @@
     <string name="dev_suite_installing">インストール中…</string>
     <string name="dev_suite_failed">失敗</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">インストール失敗の詳細</string>
     <string name="dev_suite_ready">準備完了</string>
     <string name="dev_suite_not_installed">未導入</string>
     <string name="dev_suite_required">必須</string>
@@ -1836,6 +1874,8 @@
     <string name="ma_add_role_sub">カスタムの名前/説明/プロンプト/ツール許可リスト。同名の内蔵ロールは上書きされます</string>
     <string name="ma_team_lead_suffix"> ・チームリーダー</string>
     <string name="ma_thinking_depth">今回の思考深度</string>
+
+    <string name="ma_thinking_follows_main">メインセッションに従う</string>
     <string name="ma_role_dialog_title_builtin">内蔵ロール（カスタムコピーとして保存）</string>
     <string name="ma_role_dialog_title_new">新しい協業ロール</string>
     <string name="ma_role_dialog_title_edit">ロールを編集</string>
@@ -1853,6 +1893,7 @@
     <string name="usage_label_output_short">出力</string>
     <string name="plan_board_all_done">すべてのステップが完了しました</string>
     <string name="cd_plan_board_toggle">プランボードの展開／折りたたみ</string>
+    <string name="cd_plan_step_retry">失敗したこのステップを再試行</string>
     <string name="cd_goal_header">目標の詳細を開く</string>
     <string name="cd_goal_status_active">目標が進行中</string>
     <string name="cd_goal_status_paused">目標が一時停止中</string>
@@ -2025,6 +2066,9 @@
     <string name="mcp_approval_restart_notice">再起動により承認待ち %1$d 件が失効しました</string>
     <string name="context_saver_title">コンテキスト節約</string>
     <string name="context_saver_footer">リクエストが大きくなると、直近の数件を除く古いツール出力を1行のプレースホルダーに畳みます。削除は行いません。畳んだ結果は保存先パスを保持するか、ツールの再実行を促します。</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">プロンプトキャッシュのウォームアップ</string>
+    <string name="cache_warming_footer">有効にすると、アイドル状態の後、アプリが最後に成功したリクエストを 1 トークンの出力上限で再生し、プロバイダーのプロンプトキャッシュが失効する前に更新することがあります。追加の課金リクエストが発生します。デフォルトはオフです。</string>
     <string name="context_saver_off">オフ</string>
     <string name="context_saver_balanced">バランス</string>
     <string name="context_saver_aggressive">積極的</string>
@@ -2032,6 +2076,12 @@
     <string name="token_usage_saver_folded">畳んだツール結果</string>
     <string name="token_usage_saver_saved">今回の節約</string>
     <string name="memory_center_overview">概要</string>
+    <string name="memory_embedding_header">セマンティック検索</string>
+    <string name="memory_embedding_toggle">埋め込みによるセマンティックリコール</string>
+    <string name="memory_embedding_base_url">Embeddings のベース URL</string>
+    <string name="memory_embedding_api_key">Embeddings の API キー</string>
+    <string name="memory_embedding_model">Embedding モデル</string>
+    <string name="memory_embedding_footer">デフォルトはオフです。オンにすると、キーワード検索に加えて、OpenAI 互換の embeddings エンドポイントによるベクトル類似度検索が記憶の呼び出しに追加されます。変更はアプリプロセスの再起動後に有効になります。</string>
     <string name="memory_center_stat_memory">メモリファイル</string>
     <string name="memory_center_stat_recalls">呼び出された項目</string>
     <string name="memory_center_stat_failures">ブロックされた繰り返し</string>
@@ -2107,4 +2157,177 @@
     <string name="pool_mode_random">ランダム</string>
     <string name="pool_mode_round_robin">順番に使用</string>
     <string name="pool_mode_title">キー使用モード</string>
+
+    <string name="git_panel_branch_search">ブランチを検索</string>
+
+
+    <string name="git_panel_branches_section">ブランチ</string>
+
+    <string name="git_panel_uncommitted_count">未コミットの変更：%1$d ファイル</string>
+
+    <string name="git_panel_detached_head">detached HEAD</string>
+
+    <string name="git_panel_create_branch">新しいブランチを作成してチェックアウト…</string>
+
+    <string name="git_panel_branch_name_hint">ブランチ名</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">すべて表示</string>
+    <string name="check_update_notes_collapse">折りたたむ</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">アーカイブ</string>
+    <string name="sessionlist_unarchive">アーカイブ解除</string>
+    <string name="sessionlist_section_archived">アーカイブ済み (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">ベンダープリセット</string>
+    <string name="add_provider_vendor_presets_pick_hint">ベンダーをタップするとエンドポイントと名前が自動入力されます。</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">platform.deepseek.com で API キーを作成</string>
+    <string name="add_provider_vendor_hint_zhipu">Zhipu オープンプラットフォーム open.bigmodel.cn のコンソールで API キーを取得</string>
+    <string name="add_provider_vendor_hint_kimi">platform.moonshot.cn で API キーを作成</string>
+    <string name="add_provider_vendor_hint_qwen">Alibaba Cloud Model Studio（百炼）コンソールで API キーを作成</string>
+    <string name="add_provider_vendor_hint_ark">Volcano Ark コンソールで API キーを作成。モデル名にはエンドポイント ID またはモデル ID を指定します</string>
+    <string name="add_provider_vendor_hint_minimax">MiniMax オープンプラットフォームで API キーを取得</string>
+    <string name="add_provider_vendor_hint_siliconflow">cloud.siliconflow.cn で API キーを作成</string>
+    <string name="add_provider_vendor_hint_groq">console.groq.com で API キーを作成</string>
+    <string name="add_provider_vendor_hint_together">Together コンソール api.together.ai で API キーを取得</string>
+    <string name="add_provider_vendor_hint_mistral">console.mistral.ai で API キーを作成</string>
+    <string name="add_provider_vendor_hint_ollama">ローカルサーバー — API キー不要</string>
+    <string name="add_provider_vendor_hint_lmstudio">ローカルサーバー — API キー不要。先に LM Studio の Developer サーバーを起動してください</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">キュー内のメッセージを編集</string>
+    <string name="git_panel_diff_truncated">Diff は 200,000 文字で切り詰められました — 全文はリポジトリ内のファイル自体にあります。</string>
+    <string name="voice_service_no_audio_models">このプロバイダーには音声モデルが登録されていません。一部プロバイダー（Bailian、SiliconFlow）のモデルリストは音声対応を宣言しないため、ASR/TTS モデルを音声モダリティ付きのカスタムモデルとして追加するか、別の音声サービスを選んでください。</string>
+    <string name="voice_error_network">音声認識失敗: ネットワークエラー。接続を確認するか、オンデバイスエンジンまたは別のプロバイダーに切り替えてください。</string>
+    <string name="voice_error_transcription">音声認識がテキストを返しませんでした。もう一度話すか、書き起こしプロバイダーのモデルと API キーを確認してください。</string>
+    <string name="voice_error_busy">音声認識エンジンがビジー状態です。しばらく待って再試行してください。</string>
+    <string name="voice_error_audio">音声キャプチャに失敗しました。マイク権限を確認し、他のアプリがマイクを使用していないか確認してください。</string>
+    <string name="voice_error_language">選択した言語はこのエンジンでサポートされていません。別の言語を選んでください。</string>
+    <string name="voice_error_unknown">音声認識に失敗しました: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">カスタムルールはまだ有効化されていません（%1$s）。現在のリクエストは内蔵デフォルトを使用中です。キャッシュ読込後の次のメッセージからルールが適用されます。</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">拡張思考を強制</string>
+    <string name="provider_detail_force_thinking_footer">Anthropic 互換リレー専用。モデルカタログが推論非対応と示していても thinking:{type:"enabled",budget_tokens:N} を送信します。モデルが思考をサポートしているのにカタログ情報が欠落・誤りの場合に使用してください。</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">プロバイダーをエクスポート</string>
+    <string name="provider_transfer_export_title">プロバイダーをエクスポート</string>
+    <string name="provider_transfer_export_body">%1$d 件のプロバイダーを JSON ファイルにエクスポートします。</string>
+    <string name="provider_transfer_include_keys">API キーを含める</string>
+    <string name="provider_transfer_include_keys_risk">API キーは平文でファイルに書き込まれます。このファイルを入手した誰もがキーを利用できます — 安全に保管し、インポート後は削除してください。</string>
+    <string name="provider_transfer_export">エクスポート</string>
+    <string name="provider_transfer_export_success">%1$d 件のプロバイダーをエクスポートしました</string>
+    <string name="provider_transfer_export_failed">エクスポートに失敗しました</string>
+    <string name="provider_transfer_import_ok">%1$d 件のプロバイダーをインポートしました</string>
+    <string name="provider_transfer_import_partial">%1$d 件をインポート、%2$d 件失敗</string>
+    <string name="provider_transfer_import_partial_detail">%1$d 個のプロバイダーをインポートし、%2$d 件が失敗：%3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSHワークスペース</string>
+    <string name="ssh_workspace_binding_title">SSHワークスペース</string>
+    <string name="ssh_workspace_bound_to">%1$s（%2$s）に接続中</string>
+    <string name="ssh_workspace_bound_local">ローカルサンドボックスで動作中</string>
+    <string name="ssh_workspace_option_local">ローカルサンドボックス</string>
+    <string name="ssh_workspace_option_local_subtitle">この端末の Linux サンドボックスでシェルを実行します</string>
+    <string name="ssh_workspace_no_hosts">SSH ホストがまだありません。設定 → SSHワークスペースから追加してください。</string>
+    <string name="ssh_workspace_shell_only_note">SSHワークスペースはシェルコマンドのみをサポートします。ホスト接続中はファイルツールを利用できません。</string>
+    <string name="ssh_workspace_shell_only">SSHワークスペースはシェルコマンドのみ対応 — \'%1$s\' は拒否されました。</string>
+    <string name="ssh_workspace_shell_only_hint">リモートコマンドは shell_execute で実行するか、チャットメニュー → SSHワークスペースからこのセッションの接続を解除するとローカルのファイルツールが戻ります。</string>
+    <string name="ssh_hosts_title">SSH ホスト</string>
+    <string name="ssh_hosts_subtitle">エージェントが SSH で接続できるリモートホスト。認証情報は暗号化して保存され、表示されません。</string>
+    <string name="ssh_hosts_row_subtitle">ホストの追加・接続テスト・ホスト鍵の管理</string>
+    <string name="ssh_hosts_empty">ホストはまだありません。</string>
+    <string name="ssh_hosts_add">ホストを追加</string>
+    <string name="ssh_hosts_add_cancel">キャンセル</string>
+    <string name="ssh_hosts_test">接続テスト</string>
+    <string name="ssh_hosts_testing">テスト中…</string>
+    <string name="ssh_hosts_test_ok">接続OK</string>
+    <string name="ssh_hosts_test_failed">接続失敗</string>
+    <string name="ssh_hosts_forget_key">ホスト鍵を忘れる</string>
+    <string name="ssh_hosts_remove">削除</string>
+    <string name="ssh_hosts_pinned">ホスト鍵をピン留め済み: %1$s…</string>
+    <string name="ssh_field_name">名前（英数字/._-）</string>
+    <string name="ssh_field_hostname">ホスト名または IP</string>
+    <string name="ssh_field_port">ポート</string>
+    <string name="ssh_field_username">ユーザー名</string>
+    <string name="ssh_auth_password">パスワード</string>
+    <string name="ssh_auth_key">秘密鍵</string>
+    <string name="ssh_field_password">パスワード</string>
+    <string name="ssh_field_private_key">PEM 秘密鍵</string>
+    <string name="ssh_field_passphrase">鍵のパスフレーズ（任意）</string>
+    <string name="ssh_save">保存</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">ハンズフリー</string>
+    <string name="handsfree_state_starting">開始中…</string>
+    <string name="handsfree_state_listening">聴取中…</string>
+    <string name="handsfree_state_thinking">考え中…</string>
+    <string name="handsfree_state_speaking">読み上げ中…</string>
+    <string name="handsfree_exit_recognition">ハンズフリーを停止しました：音声認識が繰り返し失敗しました。ハンズフリーをタップして再試行してください。</string>
+    <string name="handsfree_exit_tts">ハンズフリーを停止しました：返答を読み上げできませんでした。ハンズフリーをタップして再試行してください。</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">1行に1つの Android パッケージ名（例: com.tencent.mm）</string>
+    <string name="a11y_app_policy_blocklist">リストをブロックリストとして使用</string>
+    <string name="a11y_app_policy_blocklist_sub">オフ = リスト内のアプリのみ許可。オン = リスト内のアプリをブロック。</string>
+    <string name="a11y_app_policy_enabled">アプリごとに制限</string>
+    <string name="a11y_app_policy_enabled_sub">画面読み取りやタップの前に、前面アプリのパッケージ名を確認</string>
+    <string name="a11y_app_policy_footer">有効にすると、ui_read と ui_action は実行前に現在の前面アプリと照合されます。リスト外（許可モード）またはリスト内（ブロックモード）のアプリは可視メッセージ付きで拒否されます。Minis アプリ自体は常に許可されます。</string>
+    <string name="a11y_app_policy_section">ユーザー補助アプリのアクセス範囲</string>
+    <string name="boot_hook_enable">起動時に /var/minis/boot.sh を実行</string>
+    <string name="boot_hook_enable_sub">Linux rootfs 起動完了後、サンドボックス内で実行</string>
+    <string name="boot_hook_footer">デフォルトでオフ。このパスは書き込み可能なサンドボックス内にあるため、shell を実行できるエージェントなら誰でもスクリプトを差し替えられます——有効にすると、このファイルが毎回の起動時にサイレント実行されます。実行直前にスイッチが再チェックされ、スクリプトの初回検出時刻とサイズ/mtime 変化はアプリログに記録されます。次回起動時に有効になります。</string>
+    <string name="boot_hook_last_status">前回の実行</string>
+    <string name="boot_hook_section">起動フック</string>
+    <string name="lifecycle_hooks_command_hint">コマンド1行。通常はスクリプトパスが最適です（例: bash /var/minis/hooks/on-response.sh）。空欄でフックを削除。</string>
+    <string name="lifecycle_hooks_enable">ライフサイクルフックを有効化</string>
+    <string name="lifecycle_hooks_enable_sub">下記スクリプトを各イベントで実行</string>
+    <string name="lifecycle_hooks_events_footer">スクリプトはサンドボックス内で直列実行され（専用レーン）、タイムアウトは20秒です。失敗はログに記録されるだけで、チャットはブロックされません。</string>
+    <string name="lifecycle_hooks_help_body">各スクリプトは MINIS_HOOK_EVENT、MINIS_HOOK_SESSION_ID、MINIS_HOOK_DETAIL を受け取ります。スクリプトは使い捨ての PRoot プロセスです：呼び出しをまたいで他コマンドの /proc は見えず、flock も信頼できません。実行をまたぐ状態はファイルで保存してください。OnResponse はエージェントの応答完了ごとに1回、OnSessionEnd はチャット削除時に発火します。</string>
+    <string name="lifecycle_hooks_help_header">環境と注意点</string>
+    <string name="lifecycle_hooks_master_footer">デフォルトでオフ。オフの間は設定済みスクリプトが保持されますが、実行されません。</string>
+    <string name="lifecycle_hooks_not_set">未設定</string>
+    <string name="lifecycle_hooks_section_events">イベント</string>
+    <string name="lifecycle_hooks_section_master">マスタースイッチ</string>
+    <string name="lifecycle_hooks_title">ライフサイクルフック</string>
+    <string name="network_trusted_ca_count">%1$d 件の証明書をインポート済み</string>
+    <string name="network_trusted_ca_duplicate">その証明書は既にインポートされています。</string>
+    <string name="network_trusted_ca_failed">そのファイルを PEM/X.509 証明書として読み込めませんでした。</string>
+    <string name="network_trusted_ca_footer">HTTPS エンドポイントが自己署名またはプライベート CA を使うプロバイダー向け。証明書は Minis 内部にのみ保存され、このアプリ用の Android トラストアンカーに追加されます。通常の証明書・ホスト名検証は有効のままです。次回のプロバイダーリクエストから有効になり、再起動は不要です。</string>
+    <string name="network_trusted_ca_import">PEM 証明書をインポート</string>
+    <string name="network_trusted_ca_imported">%1$d 件の証明書をインポートしました。リクエストを再試行してください。</string>
+    <string name="network_trusted_ca_none">証明書はインポートされていません</string>
+    <string name="network_trusted_ca_remove_all">すべて削除</string>
+    <string name="network_trusted_ca_removed">インポート済み証明書を削除しました。</string>
+    <string name="network_trusted_ca_title">信頼する証明書</string>
+    <string name="provider_detail_custom_headers">カスタムリクエストヘッダー</string>
+    <string name="provider_detail_custom_headers_footer">1行に1つの「名前: 値」。このプロバイダーの chat、/models、Responses リクエストにのみ適用されます。Host、Content-Length、Connection は HTTP クライアントが管理するため上書きできません。</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">デフォルトでオフ。オンにすると、このカスタムエンドポイントへのチャットリクエストごとに安定した会話単位の ID（x-opencode-session）が付与され、OpenCode 互換リレーのルーティングとキャッシュに役立ちます。信頼するゲートウェイでのみ有効にしてください：この ID は複数ターンの会話をまたいで同一会話を識別します。</string>
+    <string name="provider_detail_opencode_session_header">OpenCode セッションヘッダー</string>
+    <string name="provider_detail_opencode_session_toggle">x-opencode-session を送信</string>
+    <string name="provider_detail_save_headers">ヘッダーを保存</string>
+    <string name="scheduled_task_prompt_template_hint">現在の日付/時刻と前回実行は自動で付加されます。{{date}}、{{time}}、{{datetime}}、{{weekday}}、{{last_fired}}、{{last_fired_ago}}、{{task_label}} も使用できます。</string>
+    <string name="settings_lifecycle_hooks">ライフサイクルフック</string>
+    <string name="settings_lifecycle_hooks_subtitle">セッション開始 / 応答完了 / セッション終了時にサンドボックススクリプトを実行</string>
+    <string name="web_search_tool_enabled">web_search を有効化</string>
+    <string name="web_search_tool_enabled_sub">チャット内でエージェントによるウェブ検索を許可。オフ → このツールは提供されません。</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">ツールをオフにしても下のエンジン設定は削除されません。再度オンにすれば同じ動作に戻ります。</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+<string name="git_panel_history_read_failed">コミット履歴の読み取りに失敗しました——詳細はログ（GitPanel タグ）を参照</string>
+
+    <string name="git_panel_status_read_failed">ワークツリーの状態を読み取れませんでした — 詳細はログへ（GitPanel タグ）</string>
 </resources>

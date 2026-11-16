@@ -23,6 +23,10 @@ data class ProviderInstanceEntity(
     // MIGRATION_1_2's ALTER TABLE backfills existing rows to off, matching the
     // entity default and the JSON model's `azureMode = false`.
     @ColumnInfo(name = "azure_mode") val azureMode: Int = 0,
+    // [OpenMinis#311] Anthropic-compatible relays: force extended thinking on
+    // even when the catalog declares the model non-reasoning. NOT NULL
+    // DEFAULT 0 so MIGRATION_6_7 backfills existing rows to off.
+    @ColumnInfo(name = "force_thinking") val forceThinking: Int = 0,
     // [GH#68 T-android-image-endpoint-persist] Kotlin enum .name of
     // ImageEndpointMode ("auto"/"imagesGenerations"/"chatCompletions"). These
     // two were on the JSON model but never given Room columns, so every save
@@ -31,6 +35,9 @@ data class ProviderInstanceEntity(
     @ColumnInfo(name = "image_endpoint_mode") val imageEndpointMode: String? = null,
     @ColumnInfo(name = "image_endpoint_resolved") val imageEndpointResolved: String? = null,
     @ColumnInfo(name = "custom_user_agent") val customUserAgent: String? = null,
+    // [T-codex-client-fingerprint] 0/1：让这个实例以官方 Codex 客户端身份出站。
+    // NOT NULL DEFAULT 0，MIGRATION_8_9 把存量行回填为关。
+    @ColumnInfo(name = "codex_client_fingerprint") val codexClientFingerprint: Int = 0,
     @ColumnInfo(name = "is_enabled") val isEnabled: Int = 1,
     @ColumnInfo(name = "pinned") val pinned: Int = 0,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,

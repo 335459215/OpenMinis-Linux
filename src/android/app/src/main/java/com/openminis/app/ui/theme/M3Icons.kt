@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AltRoute
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -49,10 +50,12 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
@@ -71,6 +74,7 @@ import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -123,6 +127,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
@@ -144,6 +149,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.TravelExplore
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -157,6 +163,7 @@ import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AltRoute
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.ArrowDownward
@@ -183,10 +190,12 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Construction
+import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Description
@@ -205,6 +214,7 @@ import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -257,6 +267,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Schedule
@@ -278,6 +289,7 @@ import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.TrackChanges
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.TravelExplore
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material.icons.outlined.ViewAgenda
@@ -323,6 +335,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.AdminPanelSettings to Icons.Outlined.AdminPanelSettings,
     Icons.Filled.AltRoute to Icons.Outlined.AltRoute,
     Icons.Filled.Apps to Icons.Outlined.Apps,
+    Icons.Filled.Archive to Icons.Outlined.Archive,
     Icons.Filled.ArrowDownward to Icons.Outlined.ArrowDownward,
     Icons.Filled.ArrowDropDown to Icons.Outlined.ArrowDropDown,
     Icons.Filled.ArrowUpward to Icons.Outlined.ArrowUpward,
@@ -347,12 +360,15 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.CloudUpload to Icons.Outlined.CloudUpload,
     Icons.Filled.Code to Icons.Outlined.Code,
     Icons.Filled.Construction to Icons.Outlined.Construction,
+    Icons.Filled.AccountTree to Icons.Outlined.AccountTree,
     Icons.Filled.ContentCopy to Icons.Outlined.ContentCopy,
     Icons.Filled.CreateNewFolder to Icons.Outlined.CreateNewFolder,
     Icons.Filled.DarkMode to Icons.Outlined.DarkMode,
     Icons.Filled.Dashboard to Icons.Outlined.Dashboard,
+    Icons.Filled.DataUsage to Icons.Outlined.DataUsage,
     Icons.Filled.Delete to Icons.Outlined.Delete,
     Icons.Filled.DeleteSweep to Icons.Outlined.DeleteSweep,
+    Icons.Filled.FileUpload to Icons.Outlined.FileUpload,
     Icons.Filled.Description to Icons.Outlined.Description,
     Icons.Filled.Diamond to Icons.Outlined.Diamond,
     Icons.Filled.Dns to Icons.Outlined.Dns,
@@ -421,6 +437,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.RecordVoiceOver to Icons.Outlined.RecordVoiceOver,
     Icons.Filled.Refresh to Icons.Outlined.Refresh,
     Icons.Filled.Remove to Icons.Outlined.Remove,
+    Icons.Filled.RemoveRedEye to Icons.Outlined.RemoveRedEye,
     Icons.Filled.Replay to Icons.Outlined.Replay,
     Icons.Filled.RestartAlt to Icons.Outlined.RestartAlt,
     Icons.Filled.Schedule to Icons.Outlined.Schedule,
@@ -442,6 +459,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.TrackChanges to Icons.Outlined.TrackChanges,
     Icons.Filled.Translate to Icons.Outlined.Translate,
     Icons.Filled.TravelExplore to Icons.Outlined.TravelExplore,
+    Icons.Filled.Unarchive to Icons.Outlined.Unarchive,
     Icons.Filled.UnfoldMore to Icons.Outlined.UnfoldMore,
     Icons.Filled.Videocam to Icons.Outlined.Videocam,
     Icons.Filled.ViewAgenda to Icons.Outlined.ViewAgenda,

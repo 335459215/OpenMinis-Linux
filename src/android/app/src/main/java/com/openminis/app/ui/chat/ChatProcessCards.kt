@@ -246,16 +246,29 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (isThinking) stringResource(R.string.chat_thinking_header)
-                    else block.toolTitle.ifEmpty { block.toolName },
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isFailed) ToolErrorColor else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (isThinking) {
+                Text(
+                    text = stringResource(R.string.chat_thinking_header),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                // [T-tool-card-row-single-line v338] The collapsed row shows
+                // the semantic headline only — the argument line moved to the
+                // detail sheet (user: the path under the headline hurt the
+                // list's visual rhythm). Single settlement point:
+                // collapsedRowLabel / showDetail=false.
+                ToolCardLabel(
+                    presentation = presentToolCard(block.toolName, block.toolArgs, block.toolTitle),
+                    modifier = Modifier.weight(1f),
+                    failed = isFailed,
+                    showDetail = false,
+                )
+            }
             if (isThinking) {
                 val charCount = block.content.length
                 if (charCount > 0) {

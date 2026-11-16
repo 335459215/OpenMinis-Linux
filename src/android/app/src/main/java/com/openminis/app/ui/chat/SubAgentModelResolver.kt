@@ -43,6 +43,14 @@ internal object SubAgentModelResolver {
          * exists to prevent.
          */
         val pinnedSlots: List<String>,
+        /**
+         * Index into [pinnedSlots] whose depth setting belongs to this lane, or
+         * -1 when the lane runs the chat's own model. [ChatViewModel] reads
+         * `slotThinkingLevel(index)` with it: -1 keeps the "slot unset → reuse
+         * the main session's live level" rule intact instead of silently
+         * borrowing slot 0's depth for a main-model lane.
+         */
+        val slotIndex: Int,
     )
 
     fun resolve(
@@ -86,10 +94,19 @@ internal object SubAgentModelResolver {
             ?: pickFromSlots(slots, roundRobinIndex, config)
             ?: mainEntry
             ?: return null
+        // Depth pairing: a lane on the chat's own model has no slot, and
+        // `slotThinkingLevel(-1)` must stay "unset" so the lane reuses the main
+        // session's live level rather than borrowing slot 0's.
+        val slotIndex = if (requestedEntry != null) {
+            slots.indexOfFirst { it.equals(requestedEntry.id, ignoreCase = true) }
+        } else {
+            slots.indexOfFirst { it.equals(picked.id, ignoreCase = true) }
+        }
         return Resolution(
             entry = picked,
             pinnedToMain = requestedEntry == null && picked.id == mainEntry?.id,
             pinnedSlots = slots,
+            slotIndex = slotIndex,
         )
     }
 

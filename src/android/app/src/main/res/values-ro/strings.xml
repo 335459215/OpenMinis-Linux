@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Intrarea nu a fost găsită în jurnalele zilnice recente.</string>
     <string name="memory_revoke_result_io_error">Scrierea fișierului a eșuat: %1$s</string>
     <string name="memory_save_toast">Salvat</string>
+
+    <string name="memory_save_failed_toast">Salvare eșuată — verificați stocarea și reîncercați</string>
     <string name="memory_global_footer">Instrucțiuni și preferințe permanente, vizibile pentru Agent în fiecare sesiune. Agentul nu poate modifica acest fișier.</string>
     <string name="check_update_section_header">Actualizarea aplicației</string>
     <string name="check_update_current_version">Versiunea curentă: %1$s</string>
@@ -119,13 +121,13 @@
     <string name="settings_mcp">Integrări MCP</string>
     <string name="settings_mcp_subtitle">Conectează servere Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Stack complet Android și mobil</string>
     <string name="dev_suite_android_summary">JDK17 · Lanț de instrumente aarch64 SDK · NDK r29 · Flutter/RE/Rust opțional</string>
     <string name="dev_suite_code_search_name">Căutare cod și eficiență terminal</string>
     <string name="dev_suite_code_search_summary">cvartet rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suită dezvoltatori Python &amp; AI</string>
     <string name="dev_suite_python_summary">Runtime Python 3 · pip/venv · Dependențe de compilare calcul științific AI</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Stack complet Node.js și web</string>
     <string name="dev_suite_nodejs_summary">Runtime Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suită de dezvoltare Go</string>
     <string name="dev_suite_go_summary">Lanț de instrumente golang-go (suită exclusivă OpenMinis)</string>
@@ -182,8 +184,8 @@
     <string name="zen_deleted_models_title">Restaurează modelele gratuite șterse (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Anulează ștergerile înregistrate pentru acest furnizor</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Conexiune eșuată</string>
+    <string name="provider_sync_mark_invalid">Răspuns invalid</string>
     <string name="add_provider_voice_templates_footer">Furnizori de transcriere și de sinteză vocală. Tipul furnizorului și adresa de bază sunt deja completate — mai trebuie doar cheia ta API.</string>
     <string name="add_provider_voice_capability_tts">Sinteză vocală (TTS)</string>
     <string name="add_provider_voice_capability_asr">Recunoaștere vocală (ASR)</string>
@@ -258,8 +260,8 @@
     <string name="soul_icon_choose_image">Alege o imagine</string>
     <string name="soul_icon_image_hint">Decupată pătrat și cu colțuri rotunjite</string>
     <string name="soul_icon_use_default">Folosește imaginea implicită</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Folosește iconița modelului</string>
+    <string name="soul_icon_use_model_hint">Urmează iconița furnizorului modelului activ</string>
     <string name="soul_icon_emoji_title">Pictograma identității</string>
     <string name="soul_icon_emoji_field">Sau scrie un emoji</string>
     <string name="soul_icon_set">Setează</string>
@@ -326,6 +328,8 @@
     <string name="token_usage_section_thinking">Gândire</string>
     <string name="token_usage_thinking_label">Gândire</string>
     <string name="token_usage_thinking_level">Nivel</string>
+    <string name="token_usage_thinking_requested">Cerut</string>
+    <string name="token_usage_thinking_effective">Efectiv</string>
     <string name="token_usage_thinking_supported">Acceptat</string>
     <string name="token_usage_section_tokens">Tokenuri (total pe sesiune)</string>
     <string name="token_usage_input_with_cache">Intrare (inclusiv cache)</string>
@@ -335,6 +339,20 @@
     <string name="token_usage_cache_write">Scrieri în cache</string>
     <string name="token_usage_section_agent_loop">Bucla Agentului</string>
     <string name="token_usage_total_loops">Total bucle</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="context_block_system">Prompt de sistem și instrumente</string>
+    <string name="context_block_skills_mcps">Abilități și MCP</string>
+    <string name="context_block_memory">Injecție de memorie</string>
+    <string name="context_block_runtime">Contextul temporar al acestei ture</string>
+    <string name="context_block_goal_plan">Injecție de obiectiv și plan</string>
+    <string name="context_block_history">Fereastra istoricului</string>
+    <string name="context_block_attachments">Atașamente și imagini</string>
+    <string name="context_usage_note_estimate">Estimări aproximative (±10%); reîmprospătate la deschiderea acestei foi</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Card interactiv</string>
+    <string name="gen_ui_view_source">Vezi sursa</string>
+    <string name="gen_ui_view_render">Afișează randarea</string>
+    <string name="gen_ui_view_fullscreen">Ecran complet</string>
     <string name="common_on">Activat</string>
     <string name="common_off">Dezactivat</string>
     <string name="common_yes">Da</string>
@@ -442,6 +460,11 @@
     <string name="sessionlist_regenerate_title">Generează titlul din nou</string>
     <string name="sessionlist_regenerating_title">Se generează titlul…</string>
     <string name="sessionlist_duplicate">Duplică</string>
+    <string name="sessionlist_branch_tree">Arbore de ramuri</string>
+    <string name="sessionlist_branch_from_here">Ramifică de la ultimul mesaj</string>
+    <string name="sessionlist_branch_empty">Această sesiune nu are încă ramuri. Ramifică de la ultimul mesaj ca rerulările să nu atingă conversația originală.</string>
+    <string name="sessionlist_branch_source">Sursă</string>
+    <string name="sessionlist_branch_children">Ramuri</string>
     <string name="sessionlist_search_action">Caută</string>
     <string name="sessionlist_dismiss">Închide</string>
     <string name="sessionlist_delete_one_title">Ștergi conversația?</string>
@@ -462,6 +485,7 @@
     <string name="chat_typing_indicator">%1$s se gândește</string>
     <string name="read_aloud_unavailable">Citirea cu voce tare a eșuat: niciun motor vocal utilizabil. Verifică setările de ieșire vocală sau instalează un motor de sinteză al sistemului.</string>
     <string name="chat_error_stream_dropped_partial">Conexiunea s-a întrerupt — acest răspuns poate fi incomplet. Atinge Reîncearcă pentru a continua.</string>
+    <string name="chat_composer_queued_hint">Intrarea va fi pusă în coadă și trimisă după terminarea sarcinii curente</string>
     <string name="chat_input_placeholder">Mesaj pentru %1$s (@ = fișiere)</string>
     <string name="chat_input_placeholder_hint_1">Folosește @ pentru fișierele lui %1$s</string>
     <string name="chat_input_placeholder_hint_2">Scrie / pentru SKILL și comenzi</string>
@@ -610,6 +634,14 @@
     <string name="env_var_privacy_header">Confidențialitate</string>
     <string name="env_var_privacy_toggle">Mod confidențial</string>
     <string name="env_var_privacy_footer">Când este activat, orice valoare a unei variabile de mediu care apare în ieșirea shell-execute este înlocuită cu o formă mascată (ex. `sk-1********ajhks`) înainte de a ajunge la model. Valorile mai scurte de 8 caractere devin integral `*`. Ieșirea vizibilă utilizatorului în conversație rămâne neschimbată.</string>
+    <string name="outbound_mask_toggle">Mascare confidențialitate la ieșire</string>
+    <string name="outbound_mask_footer">Mascares opt-in după formă: șiruri tip cheie (inclusiv în cod), e-mailuri și numere de telefon devin substituenți. Cheia API de embedding de mai jos e stocată în clar în prefs private. Istoricul dispozitivului neschimbat.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · complet automat</string>
+    <string name="chat_menu_perm_safe_auto">Auto sigur · uneltele de citire rulează liber</string>
+    <string name="chat_menu_perm_ask">Întreabă · confirmă fiecare apel</string>
+    <string name="chat_menu_perm_off">Dezactivat · refuză toate uneltele</string>
+    <string name="gate_approval_allow_all">Permite întotdeauna în această sesiune (ținta curentă)</string>
+    <string name="approval_action_allow_all_session">Permite întotdeauna în această sesiune</string>
     <string name="env_var_section_header">Variabile</string>
     <string name="env_var_section_footer">Variabilele de mediu sunt injectate în shell-ul mediului izolat la începutul sesiunii. Numele sunt transformate în majuscule și trebuie să respecte regulile variabilelor de shell POSIX.</string>
     <string name="env_var_empty_title">Nicio variabilă de mediu</string>
@@ -974,6 +1006,12 @@
     <string name="modeldetail_section_capabilities">Capabilități</string>
     <string name="modeldetail_context_window">Fereastră de context</string>
     <string name="modeldetail_thinking">Gândire</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Limita nivelului de gândire</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Activ: %1$s (implicit din catalog)</string>
+    <string name="modeldetail_thinking_level_effective_override">Activ: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Limitează nivelurile de gândire oferite de selectorul de chat pentru acest model. Auto urmează declarația catalogului. Ultra este trimis literal dacă furnizorul îl declară sau dacă setezi manual acest plafon pe Ultra; altfel este transformat în max.</string>
     <string name="modeldetail_capabilities_footer">Fereastra de context și numărul maxim de tokenuri de ieșire (în tokenuri). Lasă gol pentru valorile implicite ale furnizorului. Activează Gândirea pentru modelele care acceptă raționament extins.</string>
     <string name="modeldetail_provider_default">Valoarea implicită a furnizorului</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Depășește limita raportată de furnizor (%1$d). Valoarea se salvează, dar poate provoca erori.</string>
@@ -1115,7 +1153,7 @@
     <string name="settings_bg_overlay">Suprapunere pentru sarcina din fundal</string>
     <string name="settings_bg_overlay_footer">Afișează o mică pastilă plutitoare cu instrumentul curent cât timp Minis Ultra este în fundal. Necesită permisiunea de afișare peste alte aplicații. Atinge pastila pentru a aduce Minis Ultra în prim-plan; trage de ea pentru a o muta.</string>
     <string name="settings_bg_overlay_permission_needed">Pentru activare, permite afișarea peste alte aplicații</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (actualizări live)</string>
     <string name="settings_dynamic_island_footer">Afișează starea Agentului în timp real pe indicatorul de stare din Android 16. Când este activată, înlocuiește suprapunerea plutitoare, ca să nu vezi doi indicatori deodată.</string>
     <string name="settings_dynamic_island_unsupported">Versiunea actuală a sistemului tău nu acceptă încă Live Updates (necesită Android 16+ cu funcția activată).</string>
     <string name="agent_loop_section_title">Modelele pe care Minis Ultra le poate apela în timpul execuției</string>
@@ -1766,7 +1804,7 @@
     <string name="dev_suite_installing">Se instalează…</string>
     <string name="dev_suite_failed">eșec</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Detalii despre eșecul instalării</string>
     <string name="dev_suite_ready">Gata</string>
     <string name="dev_suite_not_installed">Neinstalat</string>
     <string name="dev_suite_required">obligatoriu</string>
@@ -1843,6 +1881,8 @@
     <string name="ma_add_role_sub">Nume/descriere/prompt/listă de instrumente personalizate; un rol integrat cu același nume este suprascris</string>
     <string name="ma_team_lead_suffix"> · lider de echipă</string>
     <string name="ma_thinking_depth">Adâncimea de gândire pentru această rulare</string>
+
+    <string name="ma_thinking_follows_main">Urmărește sesiunea principală</string>
     <string name="ma_role_dialog_title_builtin">Rol integrat (salvat ca copie personalizată)</string>
     <string name="ma_role_dialog_title_new">Rol de colaborare nou</string>
     <string name="ma_role_dialog_title_edit">Editează rolul</string>
@@ -1860,6 +1900,7 @@
     <string name="usage_label_output_short">Ieșire</string>
     <string name="plan_board_all_done">Toți pașii finalizați</string>
     <string name="cd_plan_board_toggle">Extinde sau restrânge tabla planului</string>
+    <string name="cd_plan_step_retry">Reîncearcă acest pas eșuat</string>
     <string name="cd_goal_header">Deschide detaliile obiectivului</string>
     <string name="cd_goal_status_active">Obiectiv în desfășurare</string>
     <string name="cd_goal_status_paused">Obiectiv pus în pauză</string>
@@ -2032,6 +2073,9 @@
     <string name="mcp_approval_restart_notice">Repornirea a anulat %1$d aprobări în așteptare</string>
     <string name="context_saver_title">Economie de context</string>
     <string name="context_saver_footer">Pliază ieșirile vechi ale uneltelor dincolo de ultimele rezultate în substituenți de o linie când cererea crește. Nimic nu este șters - rezultatul pliat păstrează calea fișierului sau indică rerularea uneltei.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Încălzirea cache-ului de prompturi</string>
+    <string name="cache_warming_footer">Când este activat, după o pauză de inactivitate aplicația poate reda ultima cerere reușită cu o limită de ieșire de un token, pentru a reîmprospăta cache-ul de prompturi al furnizorului înainte de expirare. Trimite cereri suplimentare facturabile; dezactivat implicit.</string>
     <string name="context_saver_off">Oprit</string>
     <string name="context_saver_balanced">Echilibrat</string>
     <string name="context_saver_aggressive">Agresiv</string>
@@ -2039,6 +2083,12 @@
     <string name="token_usage_saver_folded">Rezultate pliate</string>
     <string name="token_usage_saver_saved">Economisit în acest tur</string>
     <string name="memory_center_overview">Dintr-o privire</string>
+    <string name="memory_embedding_header">Reamintire semantică</string>
+    <string name="memory_embedding_toggle">Reamintire semantică a memoriei cu embeddings</string>
+    <string name="memory_embedding_base_url">URL de bază pentru embeddings</string>
+    <string name="memory_embedding_api_key">Cheie API pentru embeddings</string>
+    <string name="memory_embedding_model">Model de embeddings</string>
+    <string name="memory_embedding_footer">Dezactivat în mod implicit. Când este activat, reamintirea memoriei adaugă căutarea prin similaritate vectorială printr-un endpoint de embeddings compatibil OpenAI, pe lângă căutarea după cuvinte cheie. Modificările intră în vigoare doar după repornirea procesului aplicației.</string>
     <string name="memory_center_stat_memory">Fișiere de memorie</string>
     <string name="memory_center_stat_recalls">Intrări rechemate</string>
     <string name="memory_center_stat_failures">Repetări blocate</string>
@@ -2114,4 +2164,179 @@
     <string name="pool_mode_random">Aleatoriu</string>
     <string name="pool_mode_round_robin">Pe rând</string>
     <string name="pool_mode_title">Mod de utilizare a cheilor</string>
+
+    <string name="git_panel_branch_search">Caută ramuri</string>
+
+
+    <string name="git_panel_branches_section">Ramuri</string>
+
+    <string name="git_panel_uncommitted_count">Modificări necomitate: %1$d fișiere</string>
+
+    <string name="git_panel_detached_head">HEAD detașat</string>
+
+    <string name="git_panel_create_branch">Creează și fă checkout pe un ramură nouă…</string>
+
+    <string name="git_panel_branch_name_hint">Numele ramurii</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Afișează tot</string>
+    <string name="check_update_notes_collapse">Afișează mai puțin</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Arhivează</string>
+    <string name="sessionlist_unarchive">Scoate din arhivă</string>
+    <string name="sessionlist_section_archived">Arhivate (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Presetări furnizor</string>
+    <string name="add_provider_vendor_presets_pick_hint">Atinge un furnizor pentru a completa automat endpoint-ul și numele.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Creează o cheie API pe platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Obține o cheie API din consola platformei deschise Zhipu, open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Creează o cheie API pe platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Creează o cheie API în consola Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Creează o cheie API în consola Volcano Ark; numele modelului este un ID de endpoint sau de model</string>
+    <string name="add_provider_vendor_hint_minimax">Obține o cheie API de la platforma deschisă MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Creează o cheie API pe cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Creează o cheie API pe console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Obține o cheie API din consola Together, api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Creează o cheie API pe console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Server local — fără cheie API</string>
+    <string name="add_provider_vendor_hint_lmstudio">Server local — fără cheie API. Pornește mai întâi serverul Developer din LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Editează mesajul din coadă</string>
+    <string name="git_panel_diff_truncated">Diff trunchiat la 200.000 de caractere — textul complet se află în fișierul din depozit.</string>
+    <string name="voice_service_no_audio_models">Niciun model audio listat pentru acest furnizor. Listele de modele ale unor furnizori (Bailian, SiliconFlow) nu declară suport audio — adaugă modelul ASR/TTS ca model personalizat cu modalitatea audio sau alege alt serviciu vocal.</string>
+    <string name="voice_error_network">Recunoașterea vocală a eșuat: eroare de rețea. Verifică conexiunea sau treci pe motorul de pe dispozitiv ori la alt furnizor.</string>
+    <string name="voice_error_transcription">Recunoașterea vocală nu a returnat text. Vorbește din nou sau verifică modelul și cheia API a furnizorului de transcriere.</string>
+    <string name="voice_error_busy">Motorul de recunoaștere vocală e ocupat. Așteaptă puțin și încearcă din nou.</string>
+    <string name="voice_error_audio">Captura audio a eșuat. Verifică permisiunea microfonului și că nicio altă aplicație nu folosește microfonul.</string>
+    <string name="voice_error_language">Limba selectată nu e suportată de acest motor. Alege altă limbă.</string>
+    <string name="voice_error_unknown">Recunoașterea vocală a eșuat: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Regulile personalizate nu sunt încă active (%1$s). Cererile folosesc acum valorile implicite integrate; următorul mesaj după încărcarea cache-ului va aplica regulile tale.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Forțează raționamentul extins</string>
+    <string name="provider_detail_force_thinking_footer">Doar pentru relee compatibile Anthropic. Trimite thinking:{type:"enabled",budget_tokens:N} chiar și când catalogul spune că modelul nu poate raționa. Folosește-l când modelul suportă raționament, dar intrarea din catalog lipsește sau e greșită.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Exportare furnizori</string>
+    <string name="provider_transfer_export_title">Exportare furnizori</string>
+    <string name="provider_transfer_export_body">%1$d furnizori vor fi exportați într-un fișier JSON.</string>
+    <string name="provider_transfer_include_keys">Includeți cheile API</string>
+    <string name="provider_transfer_include_keys_risk">Cheile API sunt scrise în fișier ca text simplu. Oricine obține acest fișier vă poate folosi cheile — păstrați fișierul în siguranță și ștergeți-l după import.</string>
+    <string name="provider_transfer_export">Exportare</string>
+    <string name="provider_transfer_export_success">%1$d furnizori exportați</string>
+    <string name="provider_transfer_export_failed">Exportul a eșuat</string>
+    <string name="provider_transfer_import_ok">%1$d furnizori importați</string>
+    <string name="provider_transfer_import_partial">%1$d furnizori importați, %2$d eșuați</string>
+    <string name="provider_transfer_import_partial_detail">%1$d furnizori importați, %2$d eșuate: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Spațiul de lucru SSH</string>
+    <string name="ssh_workspace_binding_title">Spațiul de lucru SSH</string>
+    <string name="ssh_workspace_bound_to">Legat la %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Lucrează în sandbox-ul local</string>
+    <string name="ssh_workspace_option_local">Sandbox local</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell-ul rulează în sandbox-ul Linux al acestui dispozitiv</string>
+    <string name="ssh_workspace_no_hosts">Nu există încă gazde SSH — adaugă una în Setări → Spațiul de lucru SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Spațiile de lucru SSH acceptă doar comenzi shell; instrumentele de fișiere sunt refuzate cât timp o gazdă este legată.</string>
+    <string name="ssh_workspace_shell_only">Spațiul de lucru SSH acceptă doar comenzi shell — \'%1$s\' a fost refuzat.</string>
+    <string name="ssh_workspace_shell_only_hint">Rulează comenzile la distanță cu shell_execute sau dezleagă această sesiune din meniul de chat → Spațiul de lucru SSH pentru a restaura instrumentele locale de fișiere.</string>
+    <string name="ssh_hosts_title">Gazde SSH</string>
+    <string name="ssh_hosts_subtitle">Gazde la distanță pe care agentul le poate accesa prin SSH. Acreditările sunt stocate criptat și nu sunt afișate niciodată.</string>
+    <string name="ssh_hosts_row_subtitle">Adaugă gazde, testează conexiunile, gestionează cheile de gazdă</string>
+    <string name="ssh_hosts_empty">Nu există încă gazde.</string>
+    <string name="ssh_hosts_add">Adaugă gazdă</string>
+    <string name="ssh_hosts_add_cancel">Anulează</string>
+    <string name="ssh_hosts_test">Testează conexiunea</string>
+    <string name="ssh_hosts_testing">Se testează…</string>
+    <string name="ssh_hosts_test_ok">Conexiune reușită</string>
+    <string name="ssh_hosts_test_failed">Conexiunea a eșuat</string>
+    <string name="ssh_hosts_forget_key">Uită cheia gazdei</string>
+    <string name="ssh_hosts_remove">Elimină</string>
+    <string name="ssh_hosts_pinned">Cheia gazdei este fixată: %1$s…</string>
+    <string name="ssh_field_name">Nume (litere/cifre/._-)</string>
+    <string name="ssh_field_hostname">Gazdă sau IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nume de utilizator</string>
+    <string name="ssh_auth_password">Parolă</string>
+    <string name="ssh_auth_key">Cheie privată</string>
+    <string name="ssh_field_password">Parolă</string>
+    <string name="ssh_field_private_key">Cheie privată PEM</string>
+    <string name="ssh_field_passphrase">Fraza-cheie (opțional)</string>
+    <string name="ssh_save">Salvează</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Mâini libere</string>
+    <string name="handsfree_state_starting">Se pornește…</string>
+    <string name="handsfree_state_listening">Ascult…</string>
+    <string name="handsfree_state_thinking">Gândește…</string>
+    <string name="handsfree_state_speaking">Vorbește…</string>
+    <string name="handsfree_exit_recognition">Mâini libere oprit: recunoașterea vocală a eșuat repetat. Atinge Mâini libere pentru a reîncerca.</string>
+    <string name="handsfree_exit_tts">Mâini libere oprit: răspunsurile nu au putut fi citite cu voce tare. Atinge Mâini libere pentru a reîncerca.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Un nume de pachet Android pe linie, ex. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Folosește lista ca listă de blocare</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = doar aplicațiile listate sunt permise. On = aplicațiile listate sunt blocate.</string>
+    <string name="a11y_app_policy_enabled">Restricționează per aplicație</string>
+    <string name="a11y_app_policy_enabled_sub">Verifică pachetul aplicației din prim-plan înainte de fiecare citire de ecran sau atingere</string>
+    <string name="a11y_app_policy_footer">Când e activat, ui_read și ui_action sunt verificate împotriva aplicației curente din prim-plan înainte de rulare. Aplicațiile în afara listei (mod allow) sau din listă (mod blocare) sunt refuzate cu un mesaj vizibil. Aplicația Minis în sine e mereu permisă.</string>
+    <string name="a11y_app_policy_section">Domeniul aplicațiilor de accesibilitate</string>
+    <string name="boot_hook_enable">Rulează /var/minis/boot.sh la pornire</string>
+    <string name="boot_hook_enable_sub">Se execută în sandbox după boot-ul rootfs-ului Linux</string>
+    <string name="boot_hook_footer">Implicit oprit. Această cale e în interiorul sandbox-ului inscriptibil, deci orice agent capabil de shell poate înlocui scriptul — activat, un astfel de fișier rulează silențios la fiecare lansare. Întrerupătorul e verificat din nou chiar înainte de execuție, iar prima detecție a scriptului plus schimbările de dimensiune/mtime sunt scrise în jurnalul aplicației. Intră în vigoare la următoarea lansare.</string>
+    <string name="boot_hook_last_status">Ultima rulare</string>
+    <string name="boot_hook_section">Cârlig de boot</string>
+    <string name="lifecycle_hooks_command_hint">O singură linie de comandă. De obicei cea mai bună e calea unui script, ex. bash /var/minis/hooks/on-response.sh. Lasă gol pentru a elimina cârligul.</string>
+    <string name="lifecycle_hooks_enable">Activează cârligele de ciclu de viață</string>
+    <string name="lifecycle_hooks_enable_sub">Execută scripturile de mai jos la evenimentele lor</string>
+    <string name="lifecycle_hooks_events_footer">Scripturile rulează în sandbox, serializate pe propriul fir, cu timeout de 20 de secunde. Eșecurile sunt doar logate și nu blochează niciodată chat-ul.</string>
+    <string name="lifecycle_hooks_help_body">Fiecare script primește MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID și MINIS_HOOK_DETAIL. Scripturile sunt procese PRoot de unică folosință: /proc al altor comenzi nu e vizibil între invocări și flock nu e fiabil — folosește fișiere pentru starea între rulări. OnResponse se declanșează o dată per răspuns finalizat al agentului; OnSessionEnd la ștergerea chat-ului.</string>
+    <string name="lifecycle_hooks_help_header">Mediu și avertismente</string>
+    <string name="lifecycle_hooks_master_footer">Implicit oprit. Cât timp e oprit, scripturile configurate sunt păstrate, dar nu se execută niciodată.</string>
+    <string name="lifecycle_hooks_not_set">Nesetat</string>
+    <string name="lifecycle_hooks_section_events">Evenimente</string>
+    <string name="lifecycle_hooks_section_master">Întrerupător principal</string>
+    <string name="lifecycle_hooks_title">Cârlige de ciclu de viață</string>
+    <string name="network_trusted_ca_count">%1$d certificat(e) importat(e)</string>
+    <string name="network_trusted_ca_duplicate">Acel certificat este deja importat.</string>
+    <string name="network_trusted_ca_failed">Nu s-a putut citi fișierul ca certificat PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Pentru un furnizor al cărui endpoint HTTPS folosește o CA auto-semnată sau privată. Certificatul este stocat doar în interiorul Minis și adăugat la ancorele de încredere Android pentru această aplicație; verificările normale de certificat și hostname rămân active. Intră în vigoare la următoarea cerere către furnizor — fără repornire.</string>
+    <string name="network_trusted_ca_import">Importă certificat PEM</string>
+    <string name="network_trusted_ca_imported">S-au importat %1$d certificat(e). Reîncearcă cererea.</string>
+    <string name="network_trusted_ca_none">Niciun certificat importat</string>
+    <string name="network_trusted_ca_remove_all">Elimină toate</string>
+    <string name="network_trusted_ca_removed">Certificatetele importate au fost eliminate.</string>
+    <string name="network_trusted_ca_title">Certificate de încredere</string>
+    <string name="provider_detail_custom_headers">Antete de cerere personalizate</string>
+    <string name="provider_detail_custom_headers_footer">Un „Nume: valoare” pe linie. Se aplică doar cererilor de chat, /models și Responses ale acestui furnizor. Host, Content-Length și Connection sunt gestionate de clientul HTTP și nu pot fi suprascrise.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Implicit oprit. Când e pornit, fiecare cerere de chat către acest endpoint personalizat poartă un ID stabil per conversație (x-opencode-session), ca releele compatibile OpenCode să-l poată ruta și cache-ui. Activează-l doar pentru un gateway de încredere: ID-ul identifică conversația între ture.</string>
+    <string name="provider_detail_opencode_session_header">Antet de sesiune OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Trimite x-opencode-session</string>
+    <string name="provider_detail_save_headers">Salvează antetele</string>
+    <string name="scheduled_task_prompt_template_hint">Data/ora curentă și ultima rulare se adaugă automat. Poți folosi și {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} și {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Cârlige de ciclu de viață</string>
+    <string name="settings_lifecycle_hooks_subtitle">Rulează scripturi sandbox la începutul sesiunii / după răspunsuri / la finalul sesiunii</string>
+    <string name="web_search_tool_enabled">Activează web_search</string>
+    <string name="web_search_tool_enabled_sub">Permite agentului să caute pe web din chat. Off → instrumentul nu mai e oferit deloc.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Oprirea instrumentului nu șterge configurația motorului de mai jos; reactiveaz-o pentru a restaura același comportament.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Nicio aplicație disponibilă pentru a deschide acest atașament.</string>
+    <string name="chat_move_to_capsule">Mută în…</string>
+<string name="git_panel_history_read_failed">Citirea istoricului de commit-uri a eșuat — detalii în loguri (eticheta GitPanel)</string>
+
+    <string name="git_panel_status_read_failed">Nu s-a putut citi starea arborelui de lucru — detalii în jurnal (eticheta GitPanel)</string>
 </resources>

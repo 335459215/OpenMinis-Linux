@@ -35,6 +35,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +61,7 @@ import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosGreen
+
 private enum class AddProviderStep {
     CHOOSE_TYPE,
     CHOOSE_CREDENTIAL,
@@ -334,35 +337,10 @@ private fun ChooseCredentialScreen(
     }
 }
 
-// [T-hardcoded-strings] These descriptions were English-only string
-// literals; now resolved through stringResource so they follow the device
-// locale. @Composable — the call sites already run inside composition.
-@Composable
-private fun apiKeyDescription(type: ProviderType): String = when (type) {
-    ProviderType.openAI -> stringResource(R.string.add_provider_api_key_desc_openai)
-    ProviderType.anthropic -> stringResource(R.string.add_provider_api_key_desc_anthropic)
-    ProviderType.gemini -> stringResource(R.string.add_provider_api_key_desc_gemini)
-    ProviderType.openRouter -> stringResource(R.string.add_provider_api_key_desc_openrouter)
-    ProviderType.xAI -> stringResource(R.string.add_provider_api_key_desc_xai)
-    ProviderType.kimiCode -> stringResource(R.string.add_provider_api_key_desc_kimicode)
-    ProviderType.openAIResponses -> stringResource(R.string.add_provider_api_key_desc_openai_responses)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
-}
-
-@Composable
-private fun oauthDescription(type: ProviderType): String = when (type) {
-    ProviderType.anthropic -> stringResource(R.string.add_provider_oauth_desc_anthropic)
-    ProviderType.gemini -> stringResource(R.string.add_provider_oauth_desc_gemini)
-    ProviderType.openAI -> stringResource(R.string.add_provider_oauth_desc_openai)
-    ProviderType.xAI -> stringResource(R.string.add_provider_oauth_desc_xai)
-    ProviderType.openRouter -> stringResource(R.string.add_provider_oauth_desc_openrouter)
-    ProviderType.kimiCode -> stringResource(R.string.add_provider_oauth_desc_kimicode)
-    ProviderType.openAIResponses -> stringResource(R.string.add_provider_oauth_desc_openai)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
-}
-
+// [T-hardcoded-strings] These descriptions resolve through stringResource so
+// they follow the device locale; the per-type copy tables live in
+// AddProviderPresets.kt beside providerDisplayOrder because this file is
+// pinned at its architecture ceiling.
 // -- Step 3: Configure & Save --
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -379,14 +357,7 @@ private fun ConfigureProviderScreen(
     // A voice template preseeds its vendor name instead of the protocol name.
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val defaultLabel = remember(config) {
-        val baseName = voiceTemplate?.name ?: providerType.displayName
-        val existingLabels = config.instances.map { it.label }.toSet()
-        if (baseName !in existingLabels) baseName
-        else {
-            var n = 2
-            while ("$baseName $n" in existingLabels) n++
-            "$baseName $n"
-        }
+        uniqueInstanceLabel(config.instances.map { it.label }.toSet(), voiceTemplate?.name ?: providerType.displayName)
     }
 
     var label by remember { mutableStateOf(defaultLabel) }
@@ -394,6 +365,11 @@ private fun ConfigureProviderScreen(
     var labelEdited by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(defaultLabel, labelEdited) {
         if (!labelEdited) label = defaultLabel
+    }
+    // [T-android-vendor-presets] Chip pick = deliberate vendor-name label edit (auto-incremented like the default).
+    val onVendorLabelPicked: (String) -> Unit = { vendorName ->
+        label = uniqueInstanceLabel(config.instances.map { it.label }.toSet(), vendorName)
+        labelEdited = true
     }
     var apiKey by remember { mutableStateOf("") }
     var customBaseURL by remember { mutableStateOf(voiceTemplate?.baseURL ?: "") }
@@ -432,6 +408,7 @@ private fun ConfigureProviderScreen(
                 onCustomBaseURLChange = { customBaseURL = it },
                 providerRepository = providerRepository,
                 initialAppendV1 = voiceTemplate?.appendV1,
+                onVendorLabelPicked = onVendorLabelPicked,
                 onSaved = onSaved,
             )
             ProviderCredential.oauth -> OAuthConfigSection(
@@ -458,15 +435,20 @@ private fun ColumnScope.ApiKeyConfigSection(
     // [T-android-provider-voice] Voice templates carry their own v1-suffix
     // policy (e.g. MiMo appends /v1, ElevenLabs must not). null = type default.
     initialAppendV1: Boolean? = null,
+    onVendorLabelPicked: (String) -> Unit = {},
     onSaved: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var showApiKeyPlaintext by remember { mutableStateOf(false) }
+    // [OpenMinis#306] Non-null when addInstance refused (config not loaded);
+    // surfaced instead of silently navigating away.
+    var saveError by remember { mutableStateOf<String?>(null) }
     var appendV1Suffix by remember {
         mutableStateOf(initialAppendV1 ?: (providerType != ProviderType.gemini))
     }
     // OpenAI API Format: false = Chat Completions, true = Responses API
     var useResponsesAPI by remember { mutableStateOf(false) }
+    val keyFocusRequester = remember { FocusRequester() }  // [T-android-vendor-presets] vendor-chip focus target
 
     // ── Credential ──────────────────────────────────────────────────────
     val keyPlaceholder = when (providerType) {
@@ -491,6 +473,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                 onValueChange = onApiKeyChange,
                 placeholder = keyPlaceholder,
                 singleLine = true,
+                fieldModifier = Modifier.focusRequester(keyFocusRequester),  // [T-android-vendor-presets] vendor-chip focus target
                 visualTransformation = if (showApiKeyPlaintext) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
@@ -535,6 +518,17 @@ private fun ColumnScope.ApiKeyConfigSection(
             footer = baseUrlFooter,
         ) {
             SettingsCardBlock {
+                // [T-android-vendor-presets] Vendor chips: pick one to prefill endpoint + /v1 policy + name, then focus the key.
+                VendorPresetChipSection(
+                    providerType = providerType,
+                    currentBaseUrl = customBaseURL,
+                    onPick = { preset, presetLabel ->
+                        onCustomBaseURLChange(preset.baseUrl ?: "")
+                        appendV1Suffix = preset.appendV1
+                        onVendorLabelPicked(presetLabel)
+                        keyFocusRequester.requestFocus()
+                    },
+                )
                 RowLabel(text = stringResource(R.string.add_provider_custom_api_base_optional))
                 SectionTextField(
                     value = customBaseURL,
@@ -597,15 +591,11 @@ private fun ColumnScope.ApiKeyConfigSection(
                 // Only OpenAI-family providers expose the Responses API toggle.
                 useResponsesAPI = providerType == ProviderType.openAI && useResponsesAPI,
             )
-            providerRepository.addInstance(instance)
-            // [T-empty-key-compat-endpoints] Never persist an empty string as
-            // the key — usableApiKey() treats absent as the keyless-valid case.
-            if (apiKey.isNotBlank()) {
-                providerRepository.saveApiKey(instance.id, apiKey.trim())
-            }
-            // Auto-refresh models in background (fetches from API or falls back to models.dev)
-            scope.launch { providerRepository.refreshModels(instance) }
-            onSaved()
+            // [OpenMinis#306] False = cold-start placeholder; key/refresh/nav must not run.
+            // The helper saves the key only on success and refreshes on IO.
+            saveError = providerRepository.addInstanceFromUi(
+                instance, { if (apiKey.isNotBlank()) providerRepository.saveApiKey(instance.id, apiKey.trim()) }, scope, onSaved,
+            )
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -622,6 +612,7 @@ private fun ColumnScope.ApiKeyConfigSection(
     ) {
         Text(stringResource(R.string.provider_list_add_provider))
     }
+    SaveFailureMessage(saveError)
 }
 
 @Composable
@@ -636,6 +627,8 @@ private fun ColumnScope.OAuthConfigSection(
     val pendingInstanceId = remember { UUID.randomUUID().toString() }
     var isAuthenticating by remember { mutableStateOf(false) }
     var isAuthenticated by remember { mutableStateOf(false) }
+    // [OpenMinis#306] addInstance refusal surface for both save buttons here.
+    var saveError by remember { mutableStateOf<String?>(null) }
     var maskedToken by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -712,10 +705,9 @@ private fun ColumnScope.OAuthConfigSection(
                     providerType = providerType,
                     credentialType = ProviderCredential.oauth,
                 )
-                providerRepository.addInstance(instance)
-                // Auto-refresh models (fetches from API or falls back to models.dev)
-                scope.launch { providerRepository.refreshModels(instance) }
-                onSaved()
+                // [OpenMinis#306] Token already stored; only add/refresh when loaded.
+                // A refusal renders below the button instead of navigating away.
+                saveError = providerRepository.addInstanceFromUi(instance, {}, scope, onSaved)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -723,6 +715,7 @@ private fun ColumnScope.OAuthConfigSection(
         ) {
             Text(stringResource(R.string.add_provider_save_provider))
         }
+        SaveFailureMessage(saveError)
     } else {
         // ── Sign In ────────────────────────────────────────────────────
         SettingsSection(
@@ -877,11 +870,13 @@ private fun ColumnScope.OAuthConfigSection(
                     customBaseURL = trimmedBase.ifEmpty { null },
                     appendV1Suffix = appendV1Suffix,
                 )
-                providerRepository.addInstance(instance)
-                // Store the manual token as API key — ProviderFactory uses loadApiKey() for all credential types
-                providerRepository.saveApiKey(instance.id, manualToken.trim())
-                scope.launch { providerRepository.refreshModels(instance) }
-                onSaved()
+                // [OpenMinis#306] Never write bearer/refresh on a refused add.
+                saveError = providerRepository.addInstanceFromUi(
+                    instance = instance,
+                    credential = { providerRepository.saveApiKey(instance.id, manualToken.trim()) },
+                    scope = scope,
+                    onAdded = onSaved,
+                )
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -890,11 +885,6 @@ private fun ColumnScope.OAuthConfigSection(
         ) {
             Text(stringResource(R.string.provider_list_add_provider))
         }
+        SaveFailureMessage(saveError)
     }
-}
-
-private fun maskOAuthToken(token: String): String {
-    if (token.length <= 4) return "*".repeat(token.length)
-    val edge = minOf(10, token.length / 3)
-    return token.take(edge) + "*".repeat(10) + token.takeLast(edge)
 }

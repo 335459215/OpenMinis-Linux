@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -134,10 +135,22 @@ internal fun ChatSheetsHost(
                     onConfirm = { viewModel.approvePendingTool(approval.id) },
                     dismissText = stringResource(R.string.approval_action_deny),
                     onDismiss = { viewModel.denyPendingTool(approval.id) },
-                    // [T-session-allow-all] Third action: approve this request
-                    // and auto-approve every remaining request this session.
-                    neutralText = stringResource(R.string.approval_action_allow_all_session),
-                    onNeutral = { viewModel.approveAllForSession(approval.id) },
+                    // [#36] Third action of the three-state approval: approve
+                    // this request AND allowlist its (tool, args-gist) key for
+                    // the rest of the session. Same-target re-calls skip the
+                    // dialog; different targets still ask. Hidden for fatal
+                    // confirmations — the allowlist can never skip those, so
+                    // the button would only store a key that never matches.
+                    neutralText = if (approval.fatalConfirm) {
+                        null
+                    } else {
+                        stringResource(R.string.approval_action_allow_all_session)
+                    },
+                    onNeutral = if (approval.fatalConfirm) {
+                        null
+                    } else {
+                        { viewModel.approveToolAlwaysForSession(approval.id) }
+                    },
                 )
             }
 
@@ -239,11 +252,28 @@ internal fun ChatSheetsHost(
         )
     }
 
-    // Session Token Usage bottom sheet
+    // Session Token Usage bottom sheet. [#25] The context breakdown now
+    // renders inside this sheet's Context section (progress bar + per-block
+    // composition), so the former standalone ContextUsageSheet host block
+    // and its process-level ContextUsageSheetState are gone.
     if (showTokenUsageSheet.value) {
         TokenUsageSheet(
             viewModel = viewModel,
             onDismiss = { showTokenUsageSheet.value = false },
+        )
+    }
+
+    // [T-ssh-workspace] (#32) Session → SSH host binding sheet. Visibility
+    // rides the process-level SshWorkspaceSheetState (ceiling-pinned
+    // ChatScreen must not grow) — same pattern as ContextUsageSheetState.
+    val showSshWorkspaceSheet by SshWorkspaceSheetState.visible.collectAsStateWithLifecycle()
+    if (showSshWorkspaceSheet) {
+        DisposableEffect(Unit) {
+            onDispose { SshWorkspaceSheetState.hide() }
+        }
+        SshWorkspaceBindingSheet(
+            sessionId = sessionId,
+            onDismiss = { SshWorkspaceSheetState.hide() },
         )
     }
 
@@ -293,7 +323,7 @@ internal fun ChatSheetsHost(
         val currentThinkingLevel by viewModel.thinkingLevel.collectAsStateWithLifecycle()
         ThinkingLevelSheet(
             currentLevel = currentThinkingLevel,
-            availableLevels = viewModel.availableThinkingLevels,
+            availableLevels = viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value,
             onSelect = { level ->
                 viewModel.setThinkingLevel(level)
                 showThinkingLevelSheet.value = false
