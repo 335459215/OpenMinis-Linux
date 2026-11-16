@@ -156,10 +156,27 @@ class ThinkingStableExpandTest {
         val guardSrc = ProductionSources.read("ui/chat/ChatViewModelQueueInjectExt.kt")
         // The guard itself is a shared pure predicate (single definition in
         // QueueInjectExt); both thinking branches in the collector call it.
+        //
+        // [T-send-mode-semantics] The predicate's queue half is no longer
+        // "is the queue non-empty" — a plain queued (排队) prompt must NOT cut a
+        // running model, only a STEER one may. Pinning the old one-line literal
+        // `... && _promptQueue.value.isNotEmpty()` therefore matched nothing
+        // (0 occurrences) and failed the whole suite, even though the production
+        // code was correct and stricter. Assert the two halves separately so a
+        // reformat cannot break it again and so the strength is pinned too.
         assertEquals(
             "the shared guard must be defined exactly once",
             1,
-            Regex(Regex.escape("toolCalls.isEmpty() && turnTextSb.isEmpty() && _promptQueue.value.isNotEmpty()")).findAll(guardSrc).count(),
+            Regex(Regex.escape("toolCalls.isEmpty() && turnTextSb.isEmpty()")).findAll(guardSrc).count(),
+        )
+        assertEquals(
+            "only a STEER prompt may cut a running model",
+            1,
+            Regex(Regex.escape("_promptQueue.value.any { it.steer }")).findAll(guardSrc).count(),
+        )
+        assertTrue(
+            "a plain queued prompt must not cut the stream (old isNotEmpty guard is gone)",
+            "_promptQueue.value.isNotEmpty()" !in guardSrc,
         )
         assertEquals(
             "the cut must sit in exactly the ThinkingDelta and ReasoningContent branches",
