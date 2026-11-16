@@ -268,6 +268,15 @@ jobs:
             || cp src/android/app/provider-customization.properties.example \
                   src/android/app/provider-customization.properties
 
+      # [T-release-baseline] Refuse to build from a branch that cannot ship.
+      # Measured: every APK built from `main` weighed 108,175,488 B and was
+      # missing liba2a_*.so, assets/a2a/a2a-ui.zip and the kotlin-memory jars
+      # (54.8 MB across 90 files) — the Agent2API gateway, panel UI and in-guest
+      # memory engine were dead on arrival, and nothing failed. Check before the
+      # 30-minute build, not after.
+      - name: Release baseline gate (assets + branch)
+        run: python3 scripts/ci/check_release_baseline.py --assets
+
       - name: Upload keystore
         env:
           B64: ${{ secrets.MINIS_UPLOAD_KEYSTORE_BASE64 }}
@@ -363,6 +372,15 @@ jobs:
             echo "libunwind not in NDK sysroot — native-deps stages dist/libunwind.a"
           fi
           ls -lh dist/
+
+      # [T-release-baseline] Second gate: the artifacts actually inside the
+      # built APK. The pre-build check proves the payloads were on disk; this
+      # proves AGP packaged them. 147,940,417 B is the verified complete build;
+      # 108,175,488 B is the crippled class this gate exists to stop.
+      - name: Release baseline gate (APK contents + size floor)
+        run: |
+          python3 scripts/ci/check_release_baseline.py \
+            --apk dist/minis-ultra-com.openminis.linux.apk --skip-branch
 
       - name: Stage mapping.txt and native symbols
         run: |

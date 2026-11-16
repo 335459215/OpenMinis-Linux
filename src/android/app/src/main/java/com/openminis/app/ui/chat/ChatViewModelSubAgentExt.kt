@@ -614,33 +614,27 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
             }
         }
         val config = providerRepository.config.value
-        val pool = MultiAgentSettings.retainLive(
-            multiAgentSettings.selectedModelEntryIds.value,
-            config.modelEntries.map { it.id }.toSet(),
-            multiAgentSettings.maxConcurrent.value,
-        )
-        // Resolve exact IDs first, then fuzzy-match dirty provider/model labels
-        // only within the user's configured pool. Retries may rotate afterwards.
-        val selectedEntries = if (pool.isEmpty()) config.modelEntries else
-            pool.mapNotNull { id -> config.modelEntries.find { it.id == id } }
-        val requestedEntry = requested?.let { modelId ->
-            selectedEntries.firstOrNull { it.id.equals(modelId, ignoreCase = true) }
-                ?: com.openminis.app.provider.ModelAliasMatcher.resolveBest(
-                    modelId,
-                    selectedEntries,
-                    idOf = { it.model.id },
-                    nameOf = { it.model.displayName },
-                )
-        }
-        val pickedId = requestedEntry?.id
-            ?: MultiAgentSettings.pickModelId(pool, requested, subAgentRoundRobin.getAndIncrement())
-        val baseEntry = requestedEntry ?: pickedId?.let { id ->
-            config.modelEntries.find { it.id == id }
-        } ?: _activeEntryId.value?.let { id -> config.modelEntries.find { it.id == id } }
-            ?: return ToolExecutionResult(
+        // [T-subagent-pin-main-provider] A lane runs on the chat's own provider.
+        // The old code fell back to `config.modelEntries` (every provider) when
+        // the slot pool was empty and round-robined across whatever the slots
+        // held, so a gcmod chat could dispatch to newapi and die on
+        // model_not_found. See SubAgentModelResolver for the full root cause.
+        val resolved = SubAgentModelResolver.resolve(
+            config = config,
+            mainEntryId = _activeEntryId.value,
+            storedSlots = multiAgentSettings.selectedModelEntryIds.value,
+            maxConcurrent = multiAgentSettings.maxConcurrent.value,
+            requested = requested,
+            roundRobinIndex = subAgentRoundRobin.getAndIncrement(),
+        ) ?: return ToolExecutionResult(
             "No model available for sub-agent. Select models under Settings → Multi-agent, or keep the main session model selected.",
             false,
         )
+        val baseEntry = resolved.entry
+        // Retry rotation stays on the pinned provider. Passing the raw stored
+        // slots here would let a 429 retry hop channels — the very leak the
+        // resolver above closes.
+        val pool = resolved.pinnedSlots
         val requestedThinking = spawn.thinkingLevel ?: parseThinkingLevel(
             multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0)),
             baseEntry.effectiveMaxThinkingLevel,
