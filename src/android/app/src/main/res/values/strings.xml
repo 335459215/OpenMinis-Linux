@@ -1343,6 +1343,8 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats.</string>
+    <string name="provider_detail_codex_fingerprint">Codex client fingerprint</string>
+    <string name="provider_detail_codex_fingerprint_footer">Send Codex-official client identity (originator, User-Agent, session-id, x-codex-app-version, x-codex-turn-metadata) so relays that only admit official Codex clients accept this provider. Turn this on for sub2api / codex2api / new-api relays that answer 403 “This account only allows Codex official clients”. Off by default; requests are byte-identical to before until you enable it.</string>
     <string name="provider_detail_status">Status</string>
     <string name="provider_detail_enabled">Enabled</string>
     <string name="provider_detail_refresh_models">Refresh Models</string>
