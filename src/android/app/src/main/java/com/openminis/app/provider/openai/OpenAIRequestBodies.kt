@@ -12,6 +12,8 @@ import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
+// [T-client-disguise-app-level] 伪装客户端画像表（App 级 + 单渠道开关共用）。
+import com.openminis.app.provider.disguise.DisguiseClients
 import com.openminis.app.provider.applyUserAgentOverride
 import com.openminis.app.provider.compat.MaxTokensField
 import com.openminis.app.provider.thinking.ThinkingEffort
@@ -1436,7 +1438,9 @@ internal class OpenAIRequestBodies(
                 return "minis-${hex.take(32)}"
             }
         }
-
-        return body
+        // [T-merge-residue] The upstream fallback is a random UUID; a stray
+        // `return body` here was merge residue from buildResponsesAPIBody (no
+        // `body` in scope → "Unresolved reference 'body'").
+        return "minis-${java.util.UUID.randomUUID().toString().lowercase()}"
     }
 }

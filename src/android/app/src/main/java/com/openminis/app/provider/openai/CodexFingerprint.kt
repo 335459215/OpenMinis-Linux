@@ -239,12 +239,32 @@ object CodexFingerprint {
      * CLI 每轮都是新的 now_v7 与当前毫秒，一个 turn 持续数小时在服务端看来
      * 就是异常时序 —— 那本身就是特征，比不做伪装更容易被挑出来。
      */
-    fun Identity.nextTurn(nowMs: Long = System.currentTimeMillis()): Identity = copy(
-        turnId = UUID.randomUUID().toString(),
-        turnStartedAtUnixMs = nowMs,
-    )
+    // [T-client-disguise-app-level] NOTE: this must NOT be a member extension.
+    // As `fun Identity.nextTurn` inside the object it is only callable while the
+    // object itself is the dispatch receiver — callers in OpenAIRequestBodies
+    // (header injection + body client_metadata) got "Unresolved reference
+    // 'nextTurn'". It lives below as a file-level extension instead.
 
     /** 由 provider 实例 id 派生稳定 seed：同一实例每次启动得到同一组身份。 */
     fun seedFor(instanceId: String?, modelId: String?): String =
         "minis-codex:" + (instanceId ?: "default") + ":" + (modelId ?: "model")
 }
+
+/**
+ * [T-client-disguise-app-level] 派生「下一轮」身份（文件级扩展，任何包内调用点可用）。
+ *
+ * 稳定字段（installation / session / thread / window / contextWindow）原样
+ * 保留 —— 真实客户端在会话内它们不变；轮次级字段（turn_id /
+ * turn_started_at_unix_ms）重算。
+ *
+ * 为什么必须重算：身份对象被按 clientId 缓存后，如果连 turn 字段一起缓存，
+ * 同一渠道连续请求会发出**完全相同**的 turn_id 和永不前进的时间戳。真实
+ * CLI 每轮都是新的 now_v7 与当前毫秒，一个 turn 持续数小时在服务端看来
+ * 就是异常时序 —— 那本身就是特征，比不做伪装更容易被挑出来。
+ */
+internal fun CodexFingerprint.Identity.nextTurn(
+    nowMs: Long = System.currentTimeMillis(),
+): CodexFingerprint.Identity = copy(
+    turnId = UUID.randomUUID().toString(),
+    turnStartedAtUnixMs = nowMs,
+)

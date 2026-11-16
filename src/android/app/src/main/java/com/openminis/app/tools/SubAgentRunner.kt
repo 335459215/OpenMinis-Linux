@@ -187,11 +187,17 @@ object SubAgentRunner {
                 } else {
                     0
                 }
-                while (true) {
-                try {
+                // [T-subagent-preflight-parity] Declared OUTSIDE the retry loop:
+                // the catch below resets them and the post-stream
+                // ToolCallPreflight.finalize reads them — both live outside the
+                // try's scope. Declaring them inside try made every reference
+                // after the loop an unresolved reference (merge residue from the
+                // GH#61/#83/#146 preflight port).
                 val toolRawArgs = mutableMapOf<String, String>()
                 val toolDeltaTails = mutableMapOf<String, String>()
                 var turnFinishReason: String? = null
+                while (true) {
+                try {
                 provider.streamMessage(
                     messages = sendHistory,
                     systemPrompt = system,

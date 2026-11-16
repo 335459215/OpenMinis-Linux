@@ -2,6 +2,8 @@ package com.openminis.app.goal
 
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
+import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.LLMMessage
 
 private fun quoteObjective(value: String): String = buildString {
     append('"')
