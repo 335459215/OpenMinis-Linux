@@ -80,7 +80,11 @@ fun SubAgentLiveBar(
             // [T-android-chat-strings-resource] "子代理 N/M" is pure display —
             // the phase literals below it stay data sentinels (the tracker
             // service emits them and both sides compare on them).
-            val indexLabel = stringResource(R.string.subagent_index_of_total, m.index, m.total)
+            // [T-subagent-badge-count] The chip badge is the bare "N/M": the
+            // agent word is already implied by the card and, when the title was
+            // the fallback, "子代理 1/1 · 子代理 1/1" rendered the same text
+            // twice on one line. The detail sheet keeps the full label.
+            val indexLabel = stringResource(R.string.subagent_badge_count, m.index, m.total)
             // [T-wave-e-subagent-card] The chip now carries the task
             // description (the spawn prompt's title) alongside the N/M label,
             // the tool-call count and the latest output line, so the user can

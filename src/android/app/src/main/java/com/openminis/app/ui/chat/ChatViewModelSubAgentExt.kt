@@ -577,7 +577,8 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         val kind = spawn.kind
         val writePaths = spawn.writePaths
         val maxTurns = spawn.maxTurns
-        val title = spawn.title.ifEmpty { "子代理 $index/$total" }
+        // [T-subagent-badge-count] i/N belongs to the chip badge; a title carrying it rendered twice.
+        val title = spawn.title.ifBlank { context.getString(com.openminis.app.R.string.subagent_fallback_label) }
         // A present-but-all-invalid `write_paths` parses to the poison marker,
         // which WritePathGuard resolves to "deny every write" — correct, but
         // useless to the model, which would see a worker that cannot write
@@ -614,11 +615,8 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
             }
         }
         val config = providerRepository.config.value
-        // [T-subagent-pin-main-provider] A lane runs on the chat's own provider.
-        // The old code fell back to `config.modelEntries` (every provider) when
-        // the slot pool was empty and round-robined across whatever the slots
-        // held, so a gcmod chat could dispatch to newapi and die on
-        // model_not_found. See SubAgentModelResolver for the full root cause.
+        // [T-subagent-pin-main-provider] A lane runs on the chat's own provider: the old
+        // code fell back to every entry and round-robined across channels. See SubAgentModelResolver.
         val resolved = SubAgentModelResolver.resolve(
             config = config,
             mainEntryId = _activeEntryId.value,
@@ -631,9 +629,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
             false,
         )
         val baseEntry = resolved.entry
-        // Retry rotation stays on the pinned provider. Passing the raw stored
-        // slots here would let a 429 retry hop channels — the very leak the
-        // resolver above closes.
+        // Retry rotation stays on the pinned provider; raw slots here would let a 429 hop channels.
         val pool = resolved.pinnedSlots
         val requestedThinking = spawn.thinkingLevel ?: parseThinkingLevel(
             multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0)),
