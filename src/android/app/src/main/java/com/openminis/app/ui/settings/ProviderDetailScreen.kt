@@ -424,6 +424,32 @@ fun ProviderDetailScreen(
         }
         // [OpenMinis#311] Force extended thinking for Anthropic-compatible relays.
         if (instance.providerType == ProviderType.anthropic) ForceThinkingSection(instance, providerRepository)
+
+        // ─── Codex Client Fingerprint ───────────────────────────────
+        // [T-codex-client-fingerprint] Third-party OpenAI-compatible relays
+        // (sub2api codex_cli_only / codex2api / new-api / one-api) gate on the
+        // official Codex client identity. Turning this on makes every outbound
+        // request from this instance carry originator / User-Agent /
+        // session-id / x-codex-app-version / x-codex-turn-metadata. Hidden for
+        // the official endpoint and for OAuth instances, which need no disguise.
+        if (instance.supportsCodexClientFingerprint) {
+            SettingsSection(
+                header = stringResource(R.string.provider_detail_codex_fingerprint),
+                footer = stringResource(R.string.provider_detail_codex_fingerprint_footer),
+            ) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.provider_detail_codex_fingerprint),
+                    checked = instance.codexClientFingerprint,
+                    onCheckedChange = { on ->
+                        providerRepository.updateInstance(instance.copy(codexClientFingerprint = on))
+                        AppLogger.info(TAG, "Set codexClientFingerprint=$on for ${instance.id}")
+                    },
+                    showDivider = false,
+                )
+            }
+        }
+
+        // ─── Image Generation Endpoint ──────────────────────────────
         // [T-android-image-endpoint-mode] OpenAI-compatible providers only.
         // Picks how minis-model-use routes image-output models:
         // auto-probe / forced Images API / forced Chat Completions. Mirrors

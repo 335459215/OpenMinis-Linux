@@ -53,6 +53,8 @@ object Routes {
     const val SESSION_LIST = "sessions"
     const val CHAT = "chat/{sessionId}"
     const val SETTINGS = "settings"
+    /** [T-client-disguise-app-level] App 级「客户端伪装」板块。 */
+    const val CLIENT_DISGUISE = "client_disguise"
     const val PROVIDER_LIST = "providers"
     const val ADD_PROVIDER = "add_provider"
     const val PROVIDER_DETAIL = "provider/{instanceId}"

@@ -1395,6 +1395,45 @@
     <string name="provider_detail_azure_openai_footer">Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats.</string>
     <string name="provider_detail_force_thinking">Force extended thinking</string>
     <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
+    <string name="provider_detail_codex_fingerprint">Codex client fingerprint</string>
+    <string name="provider_detail_codex_fingerprint_footer">Send Codex-official client identity (originator, User-Agent, session-id, x-codex-app-version, x-codex-turn-metadata) so relays that only admit official Codex clients accept this provider. Turn this on for sub2api / codex2api / new-api relays that answer 403 “This account only allows Codex official clients”. Off by default; requests are byte-identical to before until you enable it.</string>
+    <!-- [T-client-disguise-app-level] App-level client disguise (Settings row + screen). -->
+    <string name="client_disguise_title">客户端伪装</string>
+    <string name="client_disguise_subtitle">让渠道以官方客户端身份出站</string>
+    <string name="client_disguise_master">启用客户端伪装</string>
+    <string name="client_disguise_master_footer">总开关。关闭时下面的客户端与渠道绑定全部保留但不生效。</string>
+    <string name="client_disguise_clients_header">可伪装客户端</string>
+    <string name="client_disguise_clients_footer">勾选的客户端才会出现在下方的客户端抽屉里。</string>
+    <string name="client_disguise_clients_count">已选 %1$d 个客户端</string>
+    <string name="client_disguise_bind_header">渠道绑定</string>
+    <string name="client_disguise_bind_footer">每个渠道只能伪装一种客户端。切换左侧客户端，右侧列表随之变化。</string>
+    <string name="client_disguise_pick_client">选择客户端</string>
+    <string name="client_disguise_pick_channel">选择渠道</string>
+    <string name="client_disguise_no_client_selected">先选择客户端</string>
+    <string name="client_disguise_no_channels">暂无可用渠道</string>
+    <string name="client_disguise_taken_by">已被 %1$s 占用</string>
+    <string name="client_disguise_unbound">未绑定</string>
+    <!-- [T-client-disguise-app-level] Keys consumed by ui/settings/ClientDisguiseScreen.kt
+         (teammate B's screen). Kept next to the block above so the screen and the
+         Settings row stay in sync; remove the unused aliases once the screen's
+         final key set is settled. -->
+    <string name="client_disguise_section_master">客户端伪装</string>
+    <string name="client_disguise_master_title">启用客户端伪装</string>
+    <string name="client_disguise_master_subtitle">关闭后保留所有客户端与渠道绑定，但不生效</string>
+    <string name="client_disguise_section_clients">可伪装客户端</string>
+    <string name="client_disguise_section_binding">渠道绑定</string>
+    <string name="client_disguise_clients_selected_count">已选 %1$d 个客户端</string>
+    <string name="client_disguise_clients_row_hint">点按展开或收起客户端列表</string>
+    <string name="client_disguise_clients_none">还没有可选客户端</string>
+    <string name="client_disguise_picker_client">客户端</string>
+    <string name="client_disguise_picker_client_placeholder">先选择客户端</string>
+    <string name="client_disguise_picker_channel">渠道</string>
+    <string name="client_disguise_picker_channel_placeholder">先选择客户端</string>
+    <string name="client_disguise_channel_empty">暂无可用渠道</string>
+    <string name="client_disguise_channel_none_bound">未绑定</string>
+    <string name="client_disguise_channel_bound_count">已绑定 %1$d 个渠道</string>
+    <string name="client_disguise_binding_footer">每个渠道只能伪装一种客户端。切换左侧客户端，右侧列表随之变化。</string>
+    <string name="client_disguise_channel_taken">已被 %1$s 占用</string>
     <string name="provider_detail_status">Status</string>
     <string name="provider_detail_enabled">Enabled</string>
     <string name="provider_detail_refresh_models">Refresh Models</string>

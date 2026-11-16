@@ -390,6 +390,22 @@ data class ProviderInstance(
     val supportsAzureMode: Boolean
         get() = providerType == ProviderType.openAI && credentialType == ProviderCredential.apiKey
 
+    /**
+     * [T-codex-client-fingerprint] Whether the Codex-client fingerprint toggle
+     * applies to this instance.
+     *
+     * Only meaningful for an API-key OpenAI-compatible instance pointed at a
+     * THIRD-PARTY base URL — that is exactly the relay shape (sub2api
+     * `codex_cli_only`, codex2api, new-api, one-api) that gates on
+     * `originator` / `User-Agent` / `x-codex-*`. Official api.openai.com needs
+     * no disguise, and a Codex OAuth instance already rides the real client
+     * identity chain, so both are excluded.
+     */
+    val supportsCodexClientFingerprint: Boolean
+        get() = providerType == ProviderType.openAI &&
+            credentialType == ProviderCredential.apiKey &&
+            !customBaseURL.isNullOrBlank()
+
 
     /**
      * [T-android-thinking-rules-phase2 / parity with iOS 93eb4090] Whether custom
