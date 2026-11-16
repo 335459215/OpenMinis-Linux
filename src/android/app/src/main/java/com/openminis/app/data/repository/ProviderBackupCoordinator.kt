@@ -214,6 +214,10 @@ internal class ProviderBackupCoordinator(
             // when set; old/new readers without the key decode to null →
             // default UA. Field name matches iOS for cross-platform interop.
             instance.customUserAgent?.takeIf { it.isNotBlank() }?.let { put("customUserAgent", it) }
+            // [T-codex-client-fingerprint] Optional: only written when on, so old
+            // exports stay byte-identical and an importer without the key keeps
+            // the safe default (off).
+            if (instance.codexClientFingerprint) put("codexClientFingerprint", true)
         }
         return obj.toString(2)
     }
@@ -538,6 +542,8 @@ internal class ProviderBackupCoordinator(
         // [T-provider-custom-user-agent] Additive: old exports lack the key →
         // empty → null → default UA. Field name matches iOS.
         val customUserAgent = dict.optString("customUserAgent", "").ifEmpty { null }
+        // [T-codex-client-fingerprint] Missing in old exports → false.
+        val codexClientFingerprint = dict.optBoolean("codexClientFingerprint", false)
 
         val instance = ProviderInstance(
             id = java.util.UUID.randomUUID().toString(),
@@ -548,6 +554,7 @@ internal class ProviderBackupCoordinator(
             appendV1Suffix = appendV1,
             useResponsesAPI = useResponsesAPI,
             customUserAgent = customUserAgent,
+            codexClientFingerprint = codexClientFingerprint,
         )
         host.addInstance(instance)
 

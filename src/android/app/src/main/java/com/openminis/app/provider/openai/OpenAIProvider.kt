@@ -99,6 +99,18 @@ class OpenAIProvider private constructor(
     var thinkingRuleInstanceId: String? = null
 
     /**
+     * [T-codex-client-fingerprint] 由 ProviderFactory 在构造后写入，与
+     * [thinkingRuleInstanceId] 同一套注入方式（API-key 与 OAuth 两条构造路径
+     * 都存在，用构造参数会在两处重复）。
+     *
+     * 打开后，自定义 base URL 的 /chat/completions 与 /responses 请求都会带上
+     * 官方 Codex 客户端身份头（originator / session-id / thread-id /
+     * x-codex-app-version / x-codex-turn-metadata）与 body client_metadata，
+     * 用来过 sub2api 的 codex_cli_only 之类准入校验。默认关闭。
+     */
+    var codexClientFingerprintEnabled: Boolean = false
+
+    /**
      * [port-upstream-1.16][T-quota-codex-subscription] Instance tag set by
      * ProviderFactory for Codex OAuth instances, so replies' x-codex-* headers
      * reach the quota store. Null = not quota-tracked.
@@ -1579,6 +1591,7 @@ class OpenAIProvider private constructor(
         override fun explicitOffEffort() = this@OpenAIProvider.explicitOffEffort()
         override fun applyKeyAuth(builder: Request.Builder, token: String) = builder.applyKeyAuth(token)
         override val codexClientVersion get() = CODEX_CLIENT_VERSION
+        override val codexClientFingerprintEnabled get() = this@OpenAIProvider.codexClientFingerprintEnabled
         override fun clampThinkingLevel(level: ThinkingLevel) = this@OpenAIProvider.clampThinkingLevel(level)
         override val provider get() = this@OpenAIProvider
     }

@@ -320,6 +320,11 @@ object ProviderFactory {
         // custom-rule path (Gemini/Anthropic use their own emitters), so this is the
         // only type that needs it.
         (provider as? OpenAIProvider)?.thinkingRuleInstanceId = instance.id
+        // [T-codex-client-fingerprint] Opt-in per-instance switch: make this
+        // provider send Codex-official client identity headers. Set here (not
+        // as a ctor param) for the same reason as thinkingRuleInstanceId —
+        // both the API-key and the OAuth construction paths exist.
+        (provider as? OpenAIProvider)?.codexClientFingerprintEnabled = instance.codexClientFingerprint
         SamplingIdentity.bind(provider, instance.id)
         // [T-llm-connection-warmup] This constructor path only runs on a
         // provider-cache miss (cold start, provider/model switch) — exactly

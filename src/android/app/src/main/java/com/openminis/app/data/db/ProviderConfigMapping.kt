@@ -106,6 +106,9 @@ fun ProviderConfig.toSnapshot(
             imageEndpointMode = inst.imageEndpointMode.name,
             imageEndpointResolved = inst.imageEndpointResolved?.name,
             customUserAgent = inst.customUserAgent,
+            // [T-codex-client-fingerprint] Round-trip the Codex-client
+            // fingerprint switch through Room, not just the JSON mirror.
+            codexClientFingerprint = if (inst.codexClientFingerprint) 1 else 0,
             isEnabled = if (inst.isEnabled) 1 else 0,
             pinned = if (inst.pinned) 1 else 0,
             sortOrder = idx,
@@ -247,6 +250,7 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             customBaseURL = row.customBaseURL,
             appendV1Suffix = row.appendV1Suffix != 0,
             customUserAgent = row.customUserAgent,
+            codexClientFingerprint = row.codexClientFingerprint != 0,
             useResponsesAPI = row.useResponsesAPI != 0,
             azureMode = row.azureMode != 0,
             // [GH#68] Safe parse: null (pre-migration rows) or an unknown

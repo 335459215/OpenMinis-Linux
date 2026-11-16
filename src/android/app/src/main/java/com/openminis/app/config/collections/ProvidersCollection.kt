@@ -60,6 +60,8 @@ class ProvidersCollection(
             useResponsesAPI(forId),
             azureMode(forId),
             customUserAgent(forId),
+            // [T-codex-client-fingerprint] 让该实例以官方 Codex 客户端身份出站。
+            codexClientFingerprint(forId),
             apiKeyField(forId),
             // OAuth token stays fully hidden — the flow is browser-driven
             // and can't be expressed as a single value.
@@ -120,6 +122,8 @@ class ProvidersCollection(
         val appendV1Suffix = (obj["appendV1Suffix"] as? ConfigValue.Bool)?.value ?: true
         val useResponsesAPI = (obj["useResponsesAPI"] as? ConfigValue.Bool)?.value ?: false
         val azureMode = (obj["azureMode"] as? ConfigValue.Bool)?.value ?: false
+        // [T-codex-client-fingerprint] 可选：以官方 Codex 客户端身份出站。
+        val codexClientFingerprint = (obj["codexClientFingerprint"] as? ConfigValue.Bool)?.value ?: false
 
         // Resolve apiKey BEFORE addInstance, so a bad $$ENV ref aborts
         // the whole operation without leaving a half-created instance.
@@ -135,6 +139,7 @@ class ProvidersCollection(
             appendV1Suffix = appendV1Suffix,
             useResponsesAPI = useResponsesAPI,
             azureMode = azureMode,
+            codexClientFingerprint = codexClientFingerprint,
         )
         repo.addInstance(instance)
         if (apiKeyValue != null) repo.saveApiKey(instance.id, apiKeyValue)
@@ -354,6 +359,35 @@ class ProvidersCollection(
                     throw ConfigError.InvalidValue("Custom User-Agent is only supported for third-party API-key providers. OAuth providers (Anthropic/Codex) use their own authentication UA and cannot be overridden.")
                 }
                 mutate(id) { it.copy(customUserAgent = s.ifEmpty { null }) }
+            },
+        )
+
+    /**
+     * [T-codex-client-fingerprint] 让该实例以「官方 Codex 客户端」身份出站。
+     *
+     * 中转站（sub2api 的 codex_cli_only、codex2api、new-api、one-api 系）会校验
+     * originator / User-Agent / x-codex-* 头，缺任一项回 403 forbidden_error
+     * 「This account only allows Codex official clients」。打开这个开关后，该实例
+     * 的 /chat/completions 与 /responses 请求都会带上完整指纹。
+     *
+     * 只对 apiKey 凭据的自定义 base URL 实例有意义：OAuth 的 Codex 实例本身
+     * 就走官方身份链，不需要这层。默认关闭，所以未开启的实例出站字节不变。
+     */
+    private fun codexClientFingerprint(id: String): ConfigField =
+        ClosureField(
+            path = "providers.$id.codexClientFingerprint",
+            displayName = "Codex client fingerprint",
+            description = "Send Codex-official client identity headers (originator / session-id / x-codex-app-version / x-codex-turn-metadata) so codex_cli_only relays accept the request.",
+            valueSchema = ConfigSchema.Bool,
+            risk = ConfigRisk.NORMAL,
+            revertable = true,
+            reader = {
+                val inst = repo.instance(id) ?: return@ClosureField ConfigValue.Null
+                ConfigValue.Bool(inst.codexClientFingerprint)
+            },
+            writer = { v ->
+                val b = (v as? ConfigValue.Bool)?.value ?: throw ConfigError.TypeMismatch("bool")
+                mutate(id) { it.copy(codexClientFingerprint = b) }
             },
         )
 

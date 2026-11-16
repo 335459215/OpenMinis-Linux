@@ -48,6 +48,8 @@ internal class OpenAIRequestBodies(
         fun explicitOffEffort(): String?
         fun applyKeyAuth(builder: Request.Builder, token: String): Request.Builder
         val codexClientVersion: String
+        /** [T-codex-client-fingerprint] Opt-in Codex-official identity headers. */
+        val codexClientFingerprintEnabled: Boolean
         fun clampThinkingLevel(level: ThinkingLevel): ThinkingLevel
         val provider: com.openminis.app.provider.LLMProvider
     }
@@ -574,6 +576,10 @@ internal class OpenAIRequestBodies(
             // Minis UA here: the ChatGPT OAuth backend validates the
             // client identity against this header.
             builder.applyUserAgentOverride(host.customUserAgent, defaultUserAgent = null)
+            // [T-codex-client-fingerprint] 可选：把上面那组 hand-rolled 头补齐
+            // （session-id / thread-id / x-codex-window-id / x-codex-app-version /
+            // x-codex-turn-metadata）。默认关闭时上面那段字节不变。
+            applyCodexFingerprintHeaders(builder)
             return builder.build()
         }
 
@@ -621,7 +627,49 @@ internal class OpenAIRequestBodies(
         // /responses (this builder serves both). Applied after extraHeaders
         // so the per-provider override wins. null/blank → default UA.
         builder.applyUserAgentOverride(host.customUserAgent)
+        // [T-codex-client-fingerprint] Opt-in: send Codex-official client
+        // identity so codex_cli_only relays accept the request. Runs AFTER
+        // applyUserAgentOverride so the Codex UA wins over the branded default
+        // (a user-supplied customUserAgent still takes precedence inside).
+        applyCodexFingerprintHeaders(builder)
         return builder.build()
+    }
+
+    /**
+     * [T-codex-client-fingerprint] 给 builder 打上官方 Codex 客户端身份头。
+     *
+     * 只在 `host.codexClientFingerprintEnabled` 打开时生效，所以未开启的实例
+     * 出站字节与之前完全一致。身份按 provider 实例 id 确定性派生：同一实例重启
+     * 后得到同一组 installation/session ID，不会因重启就换一个“新客户端”。
+     *
+     * 头顺序按 [CodexFingerprint.headers] 的顺序逐个 header() 写入，因为顺序
+     * 本身在严格风控侧可观测。
+     */
+    private fun applyCodexFingerprintHeaders(builder: Request.Builder) {
+        if (!host.codexClientFingerprintEnabled) return
+        val identity = cachedCodexIdentity
+        val profile = CodexFingerprint.DEFAULT_PROFILE
+        for ((name, value) in CodexFingerprint.headers(
+            identity = identity,
+            version = host.codexClientVersion,
+            profile = profile,
+            // 官方 CLI 直连用 text/event-stream；中转的兼容层两者都要，否则被当非法
+            accept = if (host.isOAuth) "text/event-stream" else "application/json, text/event-stream",
+        )) {
+            builder.header(name, value)
+        }
+        // Codex 客户端 UA 与 originator 恒等：若用户没设自定义 UA，这里再压一次，
+        // 保它不被上游的 applyUserAgentOverride 默认值覆盖。
+        if (host.customUserAgent.isNullOrBlank()) {
+            builder.header("User-Agent", profile.userAgent(host.codexClientVersion))
+        }
+    }
+
+    /** 每个 provider 实例一份稳定身份；lazy 保证一次进程只算一次。 */
+    private val cachedCodexIdentity: CodexFingerprint.Identity by lazy {
+        CodexFingerprint.newIdentity(
+            CodexFingerprint.seedFor(host.thinkingRuleInstanceId, host.model.id),
+        )
     }
 
     /**
@@ -1201,6 +1249,14 @@ internal class OpenAIRequestBodies(
         // [T-android-model-use-passthrough-mode GH#72] Same verbatim merge as the
         // chat-completions builder. Skipped for Codex OAuth inside mergeChatExtraBody.
         mergeChatExtraBody(body)
+
+        // [T-codex-client-fingerprint] client_metadata 是 Responses API 的合法
+        // 字段，中转站的引擎指纹校验会读 client_metadata.x-codex-window-id /
+        // x-codex-installation-id。只在这一条路径注入：chat/completions 带未知
+        // 顶层字段会被严格后端 400，而那边的身份已经由请求头承担。
+        if (host.codexClientFingerprintEnabled) {
+            CodexFingerprint.applyToBody(body, cachedCodexIdentity)
+        }
 
         return body
     }

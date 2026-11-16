@@ -289,6 +289,12 @@ data class ProviderInstance(
     // so existing OpenAI instances are completely unaffected. Field name
     // matches iOS for cross-platform export/import interop.
     var azureMode: Boolean = false,
+    // [T-codex-client-fingerprint] 让自定义 OpenAI 兼容中转站上的请求以「官方
+    // Codex 客户端」身份出站：补 originator / session-id / thread-id /
+    // x-codex-app-version / x-codex-turn-metadata 等头，并在 body 里写
+    // client_metadata。只有中转站开了 codex_cli_only 之类准入校验时才需要。
+    // 默认 false，所以已有实例的出站字节完全不变。
+    var codexClientFingerprint: Boolean = false,
     // Favorites: pinned instances render in a dedicated section at the top of
     // the provider list. Default false so older JSON still deserializes.
     var pinned: Boolean = false,

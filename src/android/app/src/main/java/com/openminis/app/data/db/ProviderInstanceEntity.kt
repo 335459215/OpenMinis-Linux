@@ -31,6 +31,9 @@ data class ProviderInstanceEntity(
     @ColumnInfo(name = "image_endpoint_mode") val imageEndpointMode: String? = null,
     @ColumnInfo(name = "image_endpoint_resolved") val imageEndpointResolved: String? = null,
     @ColumnInfo(name = "custom_user_agent") val customUserAgent: String? = null,
+    // [T-codex-client-fingerprint] 0/1：让这个实例以官方 Codex 客户端身份出站。
+    // NOT NULL DEFAULT 0，MIGRATION_6_7 把存量行回填为关。
+    @ColumnInfo(name = "codex_client_fingerprint") val codexClientFingerprint: Int = 0,
     @ColumnInfo(name = "is_enabled") val isEnabled: Int = 1,
     @ColumnInfo(name = "pinned") val pinned: Int = 0,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
