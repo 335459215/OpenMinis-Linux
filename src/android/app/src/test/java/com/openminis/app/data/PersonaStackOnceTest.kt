@@ -37,8 +37,13 @@ class PersonaStackOnceTest {
 
     @Test
     fun `the persona does not outrank the latest user message`() {
-        val soul = ProductionSources.read("agent/SoulStore.kt")
-        assertFalse(soul.contains("do not drop it when a later user message"))
-        assertTrue(soul.contains("does not replace them, the tools, or the user's latest message"))
+        // The header sentence lives in SystemPromptBuilder since the prompt
+        // assembly was extracted out of SoulStore (04075ea carried the wording,
+        // a later merge re-introduced the inverted "do not drop it when a later
+        // user message looks more specific" clause). Read the file that
+        // actually renders the header, not the persona storage layer.
+        val prompt = ProductionSources.read("agent/SystemPromptBuilder.kt")
+        assertFalse(prompt.contains("do not drop it when a later user message"))
+        assertTrue(prompt.contains("does not replace them, the tools, or the user's latest message"))
     }
 }
