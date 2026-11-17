@@ -59,6 +59,7 @@ class ChatFlatItemsToolOnlyFoldTest {
             is FlatChatItem.AssistantTyping -> "typing"
             is FlatChatItem.AssistantError -> "error"
             is FlatChatItem.AssistantLegacyContent -> "legacy"
+            is FlatChatItem.AssistantTurnChanges -> "turnChanges"
         }
     }
 

@@ -107,6 +107,8 @@ class ChatViewModel(
      */
     internal val _sessionKeyFlow = MutableStateFlow(if (isDraft) "" else sessionId)
     internal val sessionKeyFlow: StateFlow<String> = _sessionKeyFlow.asStateFlow()
+    /** [T-tool-undo-replay] Turn-card undo state (reverted "msgId\npath" keys). */
+    internal val toolUndo = ChatToolUndoController(this)
     /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null
@@ -4507,21 +4509,6 @@ class ChatViewModel(
         }
     }
 
-
-    /**
-     * Unwrap exceptions thrown inside callbackFlow.
-     * callbackFlow wraps internal throws into CancellationException(cause=original).
-     * This extracts the original LLMError if present.
-     */
-
-    internal fun unwrapFlowException(e: Throwable): Throwable {
-        var cause: Throwable? = e
-        while (cause != null) {
-            if (cause is com.openminis.app.data.model.LLMError) return cause
-            cause = cause.cause
-        }
-        return e
-    }
 
     /**
      * Offload candidate descriptor. `msgIdx` and `partIdx` index back into
