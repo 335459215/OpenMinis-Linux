@@ -56,63 +56,54 @@ class A2aKeepAliveService : Service() {
      */
     private val watchdog = Handler(Looper.getMainLooper())
 
-    /** [T-a2a-probe-backoff] Consecutive probe failures (0 = healthy). */
-    @Volatile
-    private var consecutiveFailures: Int = 0
-
-    /** [T-a2a-probe-backoff] Delay before the next watchdog tick. */
-    @Volatile
-    private var nextDelayMs: Long = WATCHDOG_INTERVAL_MS
+    private val probePolicy = A2aWatchdogPolicy()
+    private val probeInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val watchdogTick = object : Runnable {
         override fun run() {
-            if (A2aGateway.stopRequested) return
+            if (A2aGateway.stopRequested || !A2aPrefs.gatewayWanted(this@A2aKeepAliveService)) return
             if (!A2aPrefs.keepAlive(this@A2aKeepAliveService)) return
-            // 探活放到后台线程：ensureStarted 内部要 synchronized + 最多 20s
-            // 等待，放主线程会卡住 UI（悬浮球都能被拖住）。
+            if (!probeInFlight.compareAndSet(false, true)) return
             Thread {
-                // 用户点过停止后绝不能拉起——否则网关会被 watchdog 在下个周期复活。
-                if (A2aGateway.stopRequested) return@Thread
-                // [T-a2a-probe-backoff] 连续失败计数改为带指数退避：
-                // 原实现每 15s 无条件重探，网关在批量刷新（9 个账号）时
-                // 每次探活都撞超时，watchdog 反复判定 offline 并重复
-                // ensureStarted()，而 ensureStarted 又拿锁 + 等 20s，
-                // 结果是「网关明明在跑，面板一直 Failed to fetch」。
-                // 现在：失败一次 → 30s 后再试；失败两次 → 60s；上限 5min。
-                // 连续三次失败才视为真的挂了并触发重启。
-                val alive = A2aGateway.isRunning() || run {
-                    Thread.sleep(1200)
-                    A2aGateway.isRunning()
-                }
-                if (A2aGateway.stopRequested) return@Thread
-                if (alive) {
-                    consecutiveFailures = 0
-                    nextDelayMs = WATCHDOG_INTERVAL_MS
-                } else {
-                    consecutiveFailures++
-                    // [T-a2a-dead-handle] The handle outlives the process. Clearing it
-                    // here is what lets the NEXT ensureStarted build a real process and
-                    // what lets isRunningFast() stop reporting a corpse as alive.
-                    A2aGateway.dropDeadHandle()
-                    nextDelayMs = (WATCHDOG_INTERVAL_MS * (1L shl (consecutiveFailures - 1).coerceIn(0, 3)))
-                        .coerceAtMost(MAX_BACKOFF_MS)
-                    log("watchdog: probe failed x$consecutiveFailures, next attempt in ${nextDelayMs}ms")
-                    // [T-a2a-respawn-gate] `canRespawn()` (dead process + not already
-                    // starting) instead of `!isStartingNow()`: the latter was true
-                    // forever after the first successful start, so this branch NEVER
-                    // respawned — the device log shows five consecutive failures with
-                    // no respawning line at all.
-                    if (consecutiveFailures >= 2 && A2aGateway.canRespawn()) {
-                        log("watchdog: gateway offline after $consecutiveFailures probes, respawning")
-                        val result = runCatching { A2aGateway.ensureStarted(applicationContext) }
-                        result.onSuccess { log("watchdog: respawn ok") }
-                            .onFailure { log("watchdog: respawn failed: ${it.message}") }
-                        consecutiveFailures = 0
-                        nextDelayMs = WATCHDOG_INTERVAL_MS
+                try {
+                    if (A2aGateway.stopRequested) return@Thread
+                    val alive = A2aGateway.isRunning() || run {
+                        Thread.sleep(1200)
+                        A2aGateway.isRunning()
+                    }
+                    if (A2aGateway.stopRequested || !A2aPrefs.gatewayWanted(applicationContext)) return@Thread
+                    if (alive) {
+                        probePolicy.healthy()
+                    } else {
+                        probePolicy.failed()
+                        A2aGateway.dropDeadHandle()
+                        log("watchdog: probe failed x${probePolicy.failures}, next attempt in ${probePolicy.delayMs}ms")
+                        if (probePolicy.shouldRespawn(A2aGateway.canRespawn())) {
+                            // Unwrap the inner Result: runCatching alone used to turn
+                            // Result.failure into a logged success and reset backoff.
+                            val result = runCatching { A2aGateway.ensureStarted(applicationContext).getOrThrow() }
+                            result.onSuccess {
+                                log("watchdog: respawn ok")
+                                probePolicy.healthy()
+                            }.onFailure { log("watchdog: respawn failed: ${it.message}") }
+                        }
+                    }
+                } finally {
+                    // Schedule only AFTER the completed probe chose its delay. This
+                    // also prevents overlapping probes when startup takes >15s.
+                    watchdog.post {
+                        probeInFlight.set(false)
+                        if (instance === this@A2aKeepAliveService &&
+                            !A2aGateway.stopRequested &&
+                            A2aPrefs.keepAlive(applicationContext) &&
+                            A2aPrefs.gatewayWanted(applicationContext)
+                        ) {
+                            watchdog.removeCallbacks(this)
+                            watchdog.postDelayed(this, probePolicy.delayMs)
+                        }
                     }
                 }
             }.start()
-            watchdog.postDelayed(this, nextDelayMs)
         }
     }
 
@@ -125,6 +116,11 @@ class A2aKeepAliveService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action != ACTION_STOP && !A2aPrefs.gatewayWanted(this)) {
+            cancelWatchdog(this)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_WATCHDOG -> {
                 // AlarmManager 兜底唤醒：厂商省电（MagicOS 的「应用启动管理」/
@@ -184,6 +180,7 @@ class A2aKeepAliveService : Service() {
      */
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
+        if (!A2aPrefs.keepAlive(this) || !A2aPrefs.gatewayWanted(this)) return
         runCatching {
             scheduleWatchdog(applicationContext)
             val restart = Intent(this, A2aKeepAliveService::class.java)
@@ -424,7 +421,7 @@ class A2aKeepAliveService : Service() {
         watchdog.removeCallbacks(watchdogTick)
         // 只在「用户已关掉保活」时撤闹钟；被系统回收时闹钟必须留着 ——
         // 它是服务被清掉之后唯一还能把自己叫醒的东西。
-        if (!A2aPrefs.keepAlive(this)) cancelWatchdog(this)
+        if (!A2aPrefs.keepAlive(this) || !A2aPrefs.gatewayWanted(this)) cancelWatchdog(this)
         hideBubble()
         if (instance === this) instance = null
         super.onDestroy()
@@ -436,8 +433,6 @@ class A2aKeepAliveService : Service() {
         /** 网关探活间隔。15s：掉线能及时发现，又不至于把电池拖垮。 */
         private const val WATCHDOG_INTERVAL_MS = 15_000L
 
-        /** [T-a2a-probe-backoff] Ceiling for the exponential retry ladder. */
-        private const val MAX_BACKOFF_MS = 300_000L
         @Suppress("DEPRECATION")
         private const val LEGACY_PHONE_TYPE = WindowManager.LayoutParams.TYPE_PHONE
 
@@ -472,7 +467,7 @@ class A2aKeepAliveService : Service() {
          */
         fun scheduleWatchdog(context: Context) = runCatching {
             val app = context.applicationContext
-            if (!A2aPrefs.keepAlive(app)) return@runCatching
+            if (!A2aPrefs.keepAlive(app) || !A2aPrefs.gatewayWanted(app)) return@runCatching
             val alarm = app.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
                 ?: return@runCatching
             val intent = Intent(app, A2aKeepAliveService::class.java)

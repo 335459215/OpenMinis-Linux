@@ -96,9 +96,10 @@ class A2aSettingsActivity : Activity() {
             startActivity(Intent(this, A2aPanelActivity::class.java))
         }
         gridChip(getString(R.string.a2a_action_start)) {
-            action { A2aGateway.ensureStarted(applicationContext) }
+            action { A2aGateway.start(applicationContext) }
         }
         gridChip(getString(R.string.a2a_action_stop)) {
+            A2aPrefs.setGatewayWanted(this, false)
             A2aGateway.stop()
             A2aKeepAliveService.stop(this)
             Toast.makeText(this, getString(R.string.a2a_toast_stopped), Toast.LENGTH_SHORT).show()

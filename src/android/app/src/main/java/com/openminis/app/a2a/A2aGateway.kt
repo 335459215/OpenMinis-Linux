@@ -66,14 +66,12 @@ object A2aGateway {
      * [T-a2a-dead-handle] 把已死的句柄清掉，让下一次 ensureStarted 能重新建进程。
      * 不清的话 isRunningFast() 会一直读这个死句柄，悬浮球与面板都判死。
      */
-    fun dropDeadHandle(): Boolean {
+    fun dropDeadHandle(): Boolean = synchronized(lock) {
         val handle = process ?: return false
         if (handle.isAlive) return false
-        synchronized(lock) {
-            if (process === handle) process = null
-        }
+        process = null
         probeOk = false
-        return true
+        true
     }
 
     private val lock = Any()
@@ -112,23 +110,7 @@ object A2aGateway {
 
     /** 同步探活。会联网，**只能在后台线程调用**。 */
     fun isRunning(): Boolean {
-        val ok = try {
-            val connection = URL("http://$HOST:$PORT/health").openConnection() as HttpURLConnection
-            // [T-a2a-probe-timeout] 800ms was too tight for a gateway doing
-            // account refresh / model sync: a healthy server under load routinely
-            // needs longer to answer /health, the watchdog read the timeout as
-            // "gateway offline", and the panel (which judges liveness from this
-            // same probe cache) rendered "无法连接网关: Failed to fetch" while the
-            // gateway was in fact up and serving. 3s still bounds a dead socket —
-            // connecting to 127.0.0.1 either succeeds immediately or fails fast.
-            connection.connectTimeout = 3_000
-            connection.readTimeout = 3_000
-            val code = connection.responseCode
-            connection.disconnect()
-            code in 200..299
-        } catch (_: Throwable) {
-            false
-        }
+        val ok = A2aHealthProbe.check("http://$HOST:$PORT/health")
         probeOk = ok
         return ok
     }
@@ -169,14 +151,29 @@ object A2aGateway {
         }, "a2a-probe").start()
     }
 
-    fun ensureStarted(context: Context): Result<Unit> = synchronized(lock) {
-        if (stopRequested) {
+    /** Explicit user action; automatic recovery must never reset stop intent. */
+    fun start(context: Context): Result<Unit> = synchronized(lock) {
+        A2aPrefs.setGatewayWanted(context, true)
+        stopRequested = false
+        ensureStarted(context)
+    }
+
+    fun ensureStarted(context: Context): Result<Unit> = ensureStarted(context, ::isRunning)
+
+    internal fun ensureStarted(context: Context, healthCheck: () -> Boolean): Result<Unit> = synchronized(lock) {
+        if (stopRequested || !A2aPrefs.gatewayWanted(context)) {
             return Result.failure(IllegalStateException("stopRequested"))
         }
-        if (isRunning()) return Result.success(Unit)
+        if (healthCheck()) return Result.success(Unit)
+        // A slow /health is not proof of process death. Do not touch its database,
+        // replace its handle, or spawn a second process against the same port.
+        if (process?.isAlive == true) {
+            return Result.failure(IllegalStateException("gateway process is alive but health is unavailable"))
+        }
+        process = null
         isStarting = true
         try {
-            if (stopRequested) {
+            if (stopRequested || !A2aPrefs.gatewayWanted(context)) {
                 return Result.failure(IllegalStateException("stopRequested"))
             }
             migrateLegacyData(context)
@@ -259,7 +256,7 @@ object A2aGateway {
 
             val deadline = System.currentTimeMillis() + 20_000
             while (System.currentTimeMillis() < deadline) {
-                if (stopRequested) {
+                if (stopRequested || !A2aPrefs.gatewayWanted(context)) {
                     started.destroy()
                     process = null
                     return Result.failure(IllegalStateException("stopRequested"))
@@ -277,7 +274,6 @@ object A2aGateway {
                             }
                         }
                     }
-                    stopRequested = false
                     return Result.success(Unit)
                 }
                 if (!started.isAlive) break
@@ -329,17 +325,18 @@ object A2aGateway {
     }
 
     fun restart(context: Context): Result<Unit> {
+        A2aPrefs.setGatewayWanted(context, true)
         stop()
         Thread.sleep(400)
-        // stop() 置 stopRequested=true；重启意图明确，先清位否则 ensureStarted
-        // 开头的 stopRequested 守卫会直接拒绝，导致重启自锁。
+        if (!A2aPrefs.gatewayWanted(context)) return Result.failure(IllegalStateException("stopRequested"))
         stopRequested = false
         return ensureStarted(context)
     }
 
     fun stop() {
         stopRequested = true
-        A2aBubble.hide()
+        probeOk = false
+        android.os.Handler(android.os.Looper.getMainLooper()).post { A2aBubble.hide() }
         synchronized(lock) {
             process?.destroy()
             process = null

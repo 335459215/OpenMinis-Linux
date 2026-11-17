@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -58,68 +59,53 @@ object A2aProviderBridge {
      * 网关没起来时不要注册：否则用户会看到一个连不上的服务商，
      * 模型列表空着，刷新报 connection refused，比没有更糟。
      */
-    private fun gatewayReady(): Boolean = try {
-        val connection = URL("${baseUrl()}/health").openConnection() as HttpURLConnection
-        connection.connectTimeout = 2000
-        connection.readTimeout = 2000
-        connection.requestMethod = "GET"
-        val code = connection.responseCode
-        connection.disconnect()
-        code in 200..299
-    } catch (error: Throwable) {
-        false
+    private fun gatewayReady(): Boolean = A2aHealthProbe.check("${baseUrl()}/health")
+
+    data class SyncResult(val outcome: com.openminis.app.data.repository.ModelRefreshResult, val modelCount: Int)
+    private val syncMutex = kotlinx.coroutines.sync.Mutex()
+
+    /** Existing fire-and-forget callers keep their API; interactive callers can await the outcome. */
+    fun sync(repository: ProviderRepository, context: Context) {
+        scope.launch { syncAwait(repository, context.applicationContext) }
     }
 
-    /**
-     * 网关就绪后调用。幂等：已注册就只补刷新，不重复建实例。
-     *
-     * 必须在后台线程跑（内部已切 IO），调用方直接调用即可。
-     */
-    fun sync(repository: ProviderRepository, context: Context) {
-        scope.launch {
+    /** Serializes automatic and manual refreshes and records only a real API success. */
+    suspend fun syncAwait(repository: ProviderRepository, context: Context): SyncResult =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            syncMutex.lock()
             try {
-                if (!gatewayReady()) {
-                    Log.i(TAG, "gateway not ready, skipping provider registration")
-                    return@launch
-                }
-                val existing = synchronized(lock) {
-                    repository.instances.find { it.id == INSTANCE_ID }
-                }
-                if (existing == null) {
-                    val instance = ProviderInstance(
+                repository.awaitConfigLoaded()
+                val ready = gatewayReady()
+                kotlin.coroutines.coroutineContext.ensureActive()
+                if (!ready) return@withContext SyncResult(
+                    com.openminis.app.data.repository.ModelRefreshResult.CONNECTION_FAILED, 0,
+                )
+                val instance = synchronized(lock) {
+                    repository.instances.find { it.id == INSTANCE_ID } ?: ProviderInstance(
                         id = INSTANCE_ID,
                         label = LABEL,
                         providerType = ProviderType.openAI,
                         credentialType = ProviderCredential.apiKey,
                         customBaseURL = baseUrl(),
-                        // 网关的 OpenAI 面在 /v1 下，必须让 Minis 补后缀
                         appendV1Suffix = true,
                         isEnabled = true,
-                    )
-                    synchronized(lock) { repository.addInstance(instance) }
-                    Log.i(TAG, "registered builtin provider '$LABEL' -> ${baseUrl()}")
+                    ).also { repository.addInstance(it) }
                 }
-                // 无论新建还是已存在，都**强制**拉一次模型。
-                //
-                // 之前这里是 `refreshModels(instance)`（forceRefresh 默认 false）：
-                // 网关侧下线的模型会一直留在 Minis 的模型清单里，直到
-                // `MODEL_CACHE_TTL_MS`（24 小时）过期才被替换掉 —— 用户看到的是
-                // 「Agent2API 里已经没有这个模型了，Minis 里还在」。
-                //
-                // 网关是自己进程里起的、每次启动都会重建模型目录，所以这里没有
-                // 「省一次网络请求」的价值：强制刷新才能让下线的模型立刻消失。
-                val instance = synchronized(lock) { repository.instances.find { it.id == INSTANCE_ID } }
-                if (instance != null) {
-                    val result = repository.refreshModels(instance, forceRefresh = true)
-                    Log.i(TAG, "model refresh result: $result")
+                val outcome = repository.refreshModels(instance, forceRefresh = true)
+                val count = repository.visibleEntries(INSTANCE_ID).size
+                if (outcome == com.openminis.app.data.repository.ModelRefreshResult.SUCCESS_API) {
+                    A2aPrefs.setProviderSynced(context, System.currentTimeMillis())
                 }
-                A2aPrefs.setProviderSynced(context, System.currentTimeMillis())
-            } catch (error: Throwable) {
-                // 注册失败绝不能影响网关本身 —— 用户还能手动添加
-                Log.w(TAG, "provider sync failed", error)
+                SyncResult(outcome, count)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "provider sync failed: ${error.javaClass.simpleName}")
+                SyncResult(com.openminis.app.data.repository.ModelRefreshResult.FAILURE, 0)
+            } finally {
+                syncMutex.unlock()
             }
         }
-    }
 
     /**
      * 从网关 `/v1/models` 读出当前模型 id，仅用于诊断/日志。
@@ -131,8 +117,11 @@ object A2aProviderBridge {
         val connection = URL("${baseUrl()}/v1/models").openConnection() as HttpURLConnection
         connection.connectTimeout = 3000
         connection.readTimeout = 5000
-        val body = connection.inputStream.bufferedReader().use { it.readText() }
-        connection.disconnect()
+        val body = try {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
         val data = JSONObject(body).optJSONArray("data") ?: JSONArray()
         val ids = ArrayList<String>(data.length())
         for (index in 0 until data.length()) {
