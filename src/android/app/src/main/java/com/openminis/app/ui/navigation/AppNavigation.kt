@@ -999,18 +999,6 @@ fun AppNavigation(
     NetworkOverlayHost(navController) // [port-upstream-1.16] NetworkNavEntries.kt
 }
 
-/**
- * [T-android-highfreq-read-isolation] Holder for the in-app HTML preview URL
- * (the old `htmlBrowserUrl` state). Producers (FILE_BROWSER / CHAT_FILES
- * closures) only WRITE `url` — a snapshot write from a callback does not
- * subscribe the writer to the state — and the single reader lives in
- * [HtmlBrowserHost], so a preview open/close invalidates exactly that child
- * composable instead of the whole AppNavigation body (which re-ran the
- * NavHost call and every destination lambda recreation before).
- */
-internal class HtmlBrowserState {
-    var url by androidx.compose.runtime.mutableStateOf<String?>(null)
-}
 
 /**
  * [T-android-highfreq-read-isolation] Host for the in-app HTML preview: reads

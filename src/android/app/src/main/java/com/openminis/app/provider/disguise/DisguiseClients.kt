@@ -35,35 +35,35 @@ object DisguiseClients {
     val CODEX_CLI = DisguiseClient(
         id = "codex-cli",
         displayName = "Codex CLI",
-        subtitle = "codex-tui · 官方命令行客户端",
+        subtitle = "codex-tui · official CLI",
         family = DisguiseClient.Family.OPENAI,
     )
 
     val CODEX_CLI_RS = DisguiseClient(
         id = "codex-cli-rs",
         displayName = "Codex CLI (codex_cli_rs)",
-        subtitle = "codex_cli_rs · 经典 UA 前缀",
+        subtitle = "codex_cli_rs · legacy UA prefix",
         family = DisguiseClient.Family.OPENAI,
     )
 
     val CODEX_DESKTOP = DisguiseClient(
         id = "codex-desktop",
         displayName = "Codex Desktop",
-        subtitle = "Codex Desktop · 桌面端",
+        subtitle = "Codex Desktop · desktop app",
         family = DisguiseClient.Family.OPENAI,
     )
 
     val CLAUDE_CODE = DisguiseClient(
         id = "claude-code",
         displayName = "Claude Code",
-        subtitle = "claude-cli · Anthropic 官方命令行",
+        subtitle = "claude-cli · Anthropic official CLI",
         family = DisguiseClient.Family.ANTHROPIC,
     )
 
     val OPENCODE = DisguiseClient(
         id = "opencode",
         displayName = "opencode",
-        subtitle = "opencode · 第三方开源客户端",
+        subtitle = "opencode · third-party OSS client",
         family = DisguiseClient.Family.OPENAI,
     )
 
