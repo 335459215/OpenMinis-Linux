@@ -198,7 +198,7 @@ object SubAgentRunner {
                 var turnFinishReason: String? = null
                 while (true) {
                     try {
-                        com.openminis.app.ui.chat.subAgentRequestFlow(
+                        subAgentRequestFlow(
                             gateKey = provider.callGateKey,
                             firstTimeoutMs = firstEventTimeoutMs,
                             idleTimeoutMs = streamIdleTimeoutMs,

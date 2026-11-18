@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.openminis.app.tools
 
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.provider.ProviderKeyGate
