@@ -3,8 +3,13 @@ name: Sync from upstream
 # 两分支模型：
 #   main —— 上游镜像。内容与 tall-1997/OpenMinis-Linux 的 main 完全一致（同一 SHA），
 #           不带任何本地改动。由本任务强制对齐，不做 rebase/merge。
-#   dev  —— 全部本地改动所在分支。本任务把 dev rebase 到新的 main 之上，本地提交
-#           永远在顶部，不会被上游覆盖。
+#   dev  —— 全部本地改动所在分支（334+ 提交）。**绝不自动 rebase/merge 上游**：
+#           上游与 dev 是孤儿历史（无共同祖先），自动 rebase 必然全树冲突，且会
+#           覆盖本地自定义。上游有更新时本任务只发 ::notice 提醒，等维护者
+#           逐个人工适配（cherry-pick / 手工比对）。
+#
+# 注意：上游自带 android-apk.yml 在 main 上触发时会覆盖 android-latest 资产，
+# 由 dev 侧 release-asset-guard.yml 负责恢复（guard 已在 dev，镜像 push 不影响）。
 #
 # 为什么默认分支是 dev：GitHub 的 schedule 只在**默认分支**上读取 workflow。
 # 同步脚本本身是本地新增文件，放进 main 就会让 main 不再是纯上游，所以脚本住在
@@ -75,22 +80,19 @@ jobs:
           git push --force origin "${SRC}:refs/heads/main"
           echo "main 已对齐上游：$(git rev-parse --short "$SRC")"
 
-      - name: Rebase dev onto main
+      - name: Report upstream changes (no auto-rebase)
+        # [T-017] dev 不自动跟上游：孤儿历史无共同祖先，自动 rebase 必然冲突并
+        # 覆盖本地自定义。这里只数上游新提交并提醒，由维护者逐个人工适配。
         run: |
           set -euo pipefail
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
 
           if git merge-base --is-ancestor origin/main HEAD; then
-            echo "dev 已包含 main，无需 rebase。"
+            echo "dev 已包含 main 全部提交。"
             exit 0
           fi
 
-          echo "dev 落后 main $(git rev-list --count HEAD..origin/main) 个提交，开始 rebase。"
-          if git rebase origin/main; then
-            git push --force-with-lease origin "HEAD:refs/heads/dev"
-            echo "dev 已跟到：$(git rev-parse --short HEAD)"
-          else
-            git rebase --abort || true
-            echo "::error::dev 与上游冲突，自动同步已中止。手动解一次冲突后恢复自动同步。"
-            exit 1
-          fi
+          COUNT=$(git rev-list --count HEAD..origin/main)
+          echo "::notice::上游 main 新增 ${COUNT} 个提交（$(git rev-parse --short origin/main)）。dev 不自动跟进，请维护者逐个人工适配（T-017）。"
+          echo "上游新提交："
+          git log --oneline "HEAD..origin/main" | head -20
