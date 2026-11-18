@@ -7,7 +7,6 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.streamStallWatchdog
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
@@ -105,6 +104,7 @@ object SubAgentRunner {
         // instead of being reinterpreted as "use some default".
         firstEventTimeoutMs: Long,
         streamIdleTimeoutMs: Long,
+        onRetry: suspend (attempt: Int, maxAttempts: Int, waitMs: Long, reason: String) -> Unit = { _, _, _, _ -> },
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -197,103 +197,105 @@ object SubAgentRunner {
                 val toolDeltaTails = mutableMapOf<String, String>()
                 var turnFinishReason: String? = null
                 while (true) {
-                try {
-                provider.streamMessage(
-                    messages = sendHistory,
-                    systemPrompt = system,
-                    // Output cap follows the model's own declared ceiling (the
-                    // coordinator already sized maxTokens per entry); 8192 was a
-                    // blanket cap that clipped long reports on capable models.
-                    maxTokens = maxTokens.coerceAtLeast(256),
-                    temperature = temperature,
-                    tools = dedupedTools,
-                    thinkingLevel = thinkingLevel,
-                    extraHeaders = extraHeaders,
-                ).streamStallWatchdog(
-                    // [T-stream-stall-watchdog][GH#521] Phase 1 (nothing yet),
-                    // phase 2 (mid-stream silence), plus the headers→first-token
-                    // phase the main loop uses. A sub-agent that goes quiet now
-                    // terminates at the watchdog budget instead of pinning the
-                    // lane on the transport's 600s read timeout; the failure is
-                    // reported through the normal lane-failure path.
-                    firstTimeoutMs = firstEventTimeoutMs,
-                    idleTimeoutMs = streamIdleTimeoutMs,
-                    firstContentTimeoutMs = firstEventTimeoutMs,
-                    firstContentReason = "sub-agent stream connected but no first token " +
-                        "within ${firstEventTimeoutMs / 1000}s",
-                ).collect { chunk ->
-                    when (chunk) {
-                        is LLMStreamChunk.Text -> {
-                            textSb.append(chunk.text)
-                            if (!announcedSpeak) {
-                                announcedSpeak = true
-                                runCatching { onUi(UiEvent.Phase("回复中")) }
+                    try {
+                        com.openminis.app.ui.chat.subAgentRequestFlow(
+                            gateKey = provider.callGateKey,
+                            firstTimeoutMs = firstEventTimeoutMs,
+                            idleTimeoutMs = streamIdleTimeoutMs,
+                            // [T-stream-stall-watchdog][GH#521] Phase 1 (nothing yet),
+                            // phase 2 (mid-stream silence), plus the headers→first-token
+                            // phase the main loop uses. A sub-agent that goes quiet now
+                            // terminates at the watchdog budget instead of pinning the
+                            // lane on the transport's 600s read timeout; the failure is
+                            // reported through the normal lane-failure path.
+                            firstContentTimeoutMs = firstEventTimeoutMs,
+                        ) {
+                            provider.streamMessage(
+                                messages = sendHistory,
+                                systemPrompt = system,
+                                // Output cap follows the model's own declared ceiling (the
+                                // coordinator already sized maxTokens per entry); 8192 was a
+                                // blanket cap that clipped long reports on capable models.
+                                maxTokens = maxTokens.coerceAtLeast(256),
+                                temperature = temperature,
+                                tools = dedupedTools,
+                                thinkingLevel = thinkingLevel,
+                                extraHeaders = extraHeaders,
+                            )
+                        }.collect { chunk ->
+                            when (chunk) {
+                                is LLMStreamChunk.Text -> {
+                                    textSb.append(chunk.text)
+                                    if (!announcedSpeak) {
+                                        announcedSpeak = true
+                                        runCatching { onUi(UiEvent.Phase("回复中")) }
+                                    }
+                                    runCatching { onUi(UiEvent.Text("t$turn-text-$textSeg", chunk.text)) }
+                                }
+                                is LLMStreamChunk.ThinkingDelta -> {
+                                    runCatching { onUi(UiEvent.Phase("思考中")) }
+                                    runCatching { onUi(UiEvent.Thinking("t$turn-think-$thinkSeg", chunk.text)) }
+                                }
+                                is LLMStreamChunk.ToolUseStart -> {
+                                    textSeg++
+                                    thinkSeg++
+                                    announcedSpeak = false
+                                    runCatching { onUi(UiEvent.Phase("调用工具", chunk.name)) }
+                                    runCatching { onUi(UiEvent.ToolStart(chunk.id, chunk.name)) }
+                                }
+                                is LLMStreamChunk.ToolInputDelta -> {
+                                    toolDeltaTails[chunk.id] = chunk.accumulated
+                                    runCatching { onUi(UiEvent.ToolArgs(chunk.id, "", chunk.accumulated)) }
+                                }
+                                is LLMStreamChunk.ToolCallComplete -> {
+                                    toolCalls.add(Triple(chunk.id, chunk.name, chunk.args))
+                                    // [GH#61/#83/#146] Non-null only when the provider
+                                    // failed to parse the argument stream; keep the bytes.
+                                    chunk.rawArgs?.let { toolRawArgs[chunk.id] = it }
+                                    runCatching { onUi(UiEvent.ToolArgs(chunk.id, chunk.name, chunk.args.toString())) }
+                                }
+                                is LLMStreamChunk.Finished -> turnFinishReason = chunk.stopReason
+                                is LLMStreamChunk.Usage -> {
+                                    // Shared token budget (Codex rollout_budget semantics,
+                                    // rewritten): usage is recorded even when it busts the
+                                    // budget, and the verdict is a HARD stop for this lane,
+                                    // not an advisory. Prefill weight <1 because cached
+                                    // context reads are cheap; output weight 1.
+                                    //
+                                    // `inputTokens` is already fresh-only by the parser
+                                    // convention (OpenAIProviderUsage.kt subtracts the
+                                    // cached portion; Anthropic reports it separately), so
+                                    // prefill is taken as-is — subtracting cacheRead here
+                                    // would double-subtract. Gate on any usage field, not
+                                    // latestContextTokens: Gemini never sets that field.
+                                    if (tokenBudget != null &&
+                                        (chunk.usage.outputTokens > 0 || chunk.usage.inputTokens > 0)
+                                    ) {
+                                        tokenBudget.recordUsage(
+                                            outputTokens = chunk.usage.outputTokens,
+                                            prefillTokens = chunk.usage.inputTokens,
+                                        )
+                                    }
+                                }
+                                else -> Unit
                             }
-                            runCatching { onUi(UiEvent.Text("t$turn-text-$textSeg", chunk.text)) }
-                        }
-                        is LLMStreamChunk.ThinkingDelta -> {
-                            runCatching { onUi(UiEvent.Phase("思考中")) }
-                            runCatching { onUi(UiEvent.Thinking("t$turn-think-$thinkSeg", chunk.text)) }
-                        }
-                        is LLMStreamChunk.ToolUseStart -> {
-                            textSeg++
-                            thinkSeg++
-                            announcedSpeak = false
-                            runCatching { onUi(UiEvent.Phase("调用工具", chunk.name)) }
-                            runCatching { onUi(UiEvent.ToolStart(chunk.id, chunk.name)) }
-                        }
-                        is LLMStreamChunk.ToolInputDelta -> {
-                            toolDeltaTails[chunk.id] = chunk.accumulated
-                            runCatching { onUi(UiEvent.ToolArgs(chunk.id, "", chunk.accumulated)) }
-                        }
-                        is LLMStreamChunk.ToolCallComplete -> {
-                            toolCalls.add(Triple(chunk.id, chunk.name, chunk.args))
-                            // [GH#61/#83/#146] Non-null only when the provider
-                            // failed to parse the argument stream; keep the bytes.
-                            chunk.rawArgs?.let { toolRawArgs[chunk.id] = it }
-                            runCatching { onUi(UiEvent.ToolArgs(chunk.id, chunk.name, chunk.args.toString())) }
-                        }
-                        is LLMStreamChunk.Finished -> turnFinishReason = chunk.stopReason
-                        is LLMStreamChunk.Usage -> {
-                            // Shared token budget (Codex rollout_budget semantics,
-                            // rewritten): usage is recorded even when it busts the
-                            // budget, and the verdict is a HARD stop for this lane,
-                            // not an advisory. Prefill weight <1 because cached
-                            // context reads are cheap; output weight 1.
-                            //
-                            // `inputTokens` is already fresh-only by the parser
-                            // convention (OpenAIProviderUsage.kt subtracts the
-                            // cached portion; Anthropic reports it separately), so
-                            // prefill is taken as-is — subtracting cacheRead here
-                            // would double-subtract. Gate on any usage field, not
-                            // latestContextTokens: Gemini never sets that field.
-                            if (tokenBudget != null &&
-                                (chunk.usage.outputTokens > 0 || chunk.usage.inputTokens > 0)
-                            ) {
-                                tokenBudget.recordUsage(
-                                    outputTokens = chunk.usage.outputTokens,
-                                    prefillTokens = chunk.usage.inputTokens,
-                                )
-                            }
-                        }
-                        else -> Unit
-                    }
                 }
                 break
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    val transient = e is java.io.IOException ||
-                        e is com.openminis.app.data.model.LLMError.NetworkError ||
-                        e.cause is java.io.IOException
-                    if (!transient || llmAttempt >= llmMaxAttempts) throw e
+                    if (!SubAgentStreamRetryPolicy.retryable(e) || llmAttempt >= llmMaxAttempts) throw e
                     llmAttempt++
+                    val waitMs = SubAgentStreamRetryPolicy.delayMs(
+                        error = e,
+                        baseMs = com.openminis.app.data.RetryPrefs.intervalSec() * 1000L,
+                        failedAttempt = llmAttempt,
+                    )
                     runCatching {
                         onUi(UiEvent.Phase("连接中断，重试 $llmAttempt/$llmMaxAttempts"))
                     }
-                    kotlinx.coroutines.delay(
-                        com.openminis.app.data.RetryPrefs.intervalSec() * 1000L,
-                    )
+                    runCatching { onRetry(llmAttempt, llmMaxAttempts, waitMs, e.message ?: e.javaClass.simpleName) }
+                    kotlinx.coroutines.delay(waitMs)
                     // Discard only the partial stream of the failed attempt; the
                     // conversation itself (sendHistory) is untouched.
                     textSb = StringBuilder()

@@ -259,29 +259,9 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // user experiences as lost work.
         val requestedCap = spawns.mapNotNull { it.tokenBudget }.minOrNull()
         val sharedBudget = requestedCap?.let { SubAgentTokenBudget(SubAgentTokenBudget.clamp(it)) }
-        // [T-subagent-plan-autolog] A wave used to leave no durable trace unless
-        // the model happened to call agent_plan first — so an interrupted
-        // dispatch lost both the task list and how far each lane got. File the
-        // board here instead of relying on the model to remember. A failed
-        // add() must not abort the dispatch: runCatching, board stays
-        // best-effort, the wave is the deliverable.
+        // Execution history lives in the batch registry / sub-agent drawer.
+        // The task board is authored explicitly by agent_plan, not by dispatch.
         val ownerSession = subAgentOwnerSid("", realSessionId, sessionId, activeSessionId)
-        val autoPlan = spawns.isNotEmpty() // [T-subagent-plan-always] 单任务也写板
-        val planIds: List<String?> = if (autoPlan) {
-            spawns.mapIndexed { i, s ->
-                runCatching {
-                    com.openminis.app.tools.AgentPlanStore.add(
-                        ownerSession,
-                        context,
-                        title = "子代理 ${i + 1}/${spawns.size} · ${s.title.ifBlank { s.kind }}",
-                        description = s.prompt.trim().take(200),
-                        status = "active",
-                    ).id
-                }.getOrNull()
-            }
-        } else {
-            spawns.map { null }
-        }
         val batch = com.openminis.app.tools.SubAgentBatchRegistry.begin(
             sessionId = ownerSession,
             context = context,
@@ -294,7 +274,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                     kind = s.kind,
                     title = s.title.ifBlank { s.kind },
                     prompt = s.prompt,
-                    planId = planIds[i],
+                    planId = null,
                 )
             },
         )
@@ -514,7 +494,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
     }
 
 /**
- * Mirror a finished lane onto the registry and its plan item. Best-effort by
+ * Persist a finished lane in the registry only. Best-effort by
  * design: bookkeeping must never turn a completed lane into a failed one.
  */
 private fun ChatViewModel.recordLaneOutcome(
@@ -538,18 +518,8 @@ private fun ChatViewModel.recordLaneOutcome(
                 attempts = lane.attempts, stopped = stopped, filesDir = context.filesDir,
             )
         }
-        val planId = lane.planId ?: return
-        val status = if (success) "done" else "failed"
-        runCatching {
-            com.openminis.app.tools.AgentPlanStore.update(
-                sessionId,
-                context,
-                planId,
-                null,
-                outcome?.output?.trim()?.take(200),
-                status,
-            )
-        }
+        // A lane result is not acceptance of the parent task. Only an explicit
+        // agent_plan update may change its completion checkbox.
     }
 
 internal fun isUpstreamTruncation(e: Exception): Boolean {
