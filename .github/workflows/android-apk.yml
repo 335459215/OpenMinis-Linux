@@ -457,6 +457,31 @@ jobs:
             - versionCode：${{ steps.appver.outputs.code }}
             - 签名说明见 BUILDING.md 的「Release 签名」一节
 
+      # [T-005] Protected copy. `main` is a pure upstream mirror whose own
+      # workflow also publishes `android-latest`, without the private A2A
+      # assets — so every sync can overwrite the complete APK with the crippled
+      # class. The guard (release-asset-guard.yml) restores android-latest from
+      # this tag, so it is only ever written from a dev build that just passed
+      # both baseline gates above.
+      - name: Publish protected keep copy
+        if: github.ref == 'refs/heads/dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          APK="dist/minis-ultra-com.openminis.linux.apk"
+          test -s "$APK"
+          if gh release view android-dev-latest >/dev/null 2>&1; then
+            gh release upload android-dev-latest "$APK" --clobber
+          else
+            gh release create android-dev-latest "$APK" \
+              --title "Minis Ultra · 完整包备份（android-latest 守卫用）" \
+              --prerelease \
+              --notes "由 dev 构建在通过资产+体积门禁后写入；release-asset-guard 用它恢复 android-latest。"
+          fi
+          gh release view android-dev-latest --json assets \
+            --jq '[.assets[] | select(.name=="minis-ultra-com.openminis.linux.apk") | {name,size}]'
+
       - name: Select versioned release notes
         if: startsWith(github.ref, 'refs/tags/')
         id: notes

@@ -1,0 +1,105 @@
+name: Release asset guard
+
+# [T-005] `main` is a pure mirror of upstream and gets force-pushed every 6
+# hours. Upstream's own android-apk.yml publishes `android-latest` too, but its
+# tree has none of the private A2A assets (they only exist on `dev`), so each
+# sync lands the ~104 MiB crippled class into the tag users download from and
+# wipes the ~141 MiB complete build.
+#
+# The build-side gate cannot prevent that (it proves OUR artifact, minutes
+# before somebody else overwrites the tag). This job is the repair half: after
+# every main build and on a timer, re-check the published asset with the same
+# policy and restore the verified copy from the protected keep tag.
+#
+# The keep tag `android-dev-latest` is written only by dev's own build, so it
+# always holds a complete APK.
+
+on:
+  workflow_run:
+    workflows: ["Android APK"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    # Offset from the sync cron ("23 */6") by two hours and from main's build.
+    - cron: "41 3,9,15,21 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-asset-guard
+  cancel-in-progress: false
+
+env:
+  ASSET: minis-ultra-com.openminis.linux.apk
+  TAG: android-latest
+  KEEP_TAG: android-dev-latest
+
+jobs:
+  guard:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      # Scripts live on dev: main is a byte-identical upstream mirror.
+      - name: Checkout dev (guard scripts)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 1
+
+      - name: Let the publishing build settle
+        run: sleep 20
+
+      - name: Inspect the published asset
+        id: inspect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          if ! gh release view "$TAG" --json assets > /tmp/rel.json 2>/dev/null; then
+            echo "::error::release $TAG is gone; nothing to guard"
+            exit 1
+          fi
+          set +e
+          python3 scripts/ci/guard_release_asset.py check \
+            --release-json /tmp/rel.json --asset "$ASSET"
+          code=$?
+          set -e
+          echo "verdict=$code" >> "$GITHUB_OUTPUT"
+          # A cheap size check is enough to decide; only a shippable-looking
+          # asset is worth downloading for the full contents gate.
+          exit 0
+
+      - name: Verify the protected keep copy is itself complete
+        if: steps.inspect.outputs.verdict != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$KEEP_TAG" >/dev/null 2>&1; then
+            echo "::error::protected tag $KEEP_TAG does not exist — nothing to restore from."
+            echo "Trigger a dev build; it republishes $TAG and seeds $KEEP_TAG."
+            exit 1
+          fi
+          mkdir -p /tmp/keep
+          gh release download "$KEEP_TAG" --pattern '*.apk' --dir /tmp/keep --clobber
+          python3 scripts/ci/check_release_baseline.py --apk "/tmp/keep/$ASSET" --skip-branch
+
+      - name: Restore the complete APK onto ${{ env.TAG }}
+        if: steps.inspect.outputs.verdict == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "/tmp/keep/$ASSET" --clobber
+          gh release view "$TAG" --json assets > /tmp/after.json
+          python3 scripts/ci/guard_release_asset.py check \
+            --release-json /tmp/after.json --asset "$ASSET"
+          echo "restored $TAG from $KEEP_TAG"
+
+      - name: Report a missing asset
+        if: steps.inspect.outputs.verdict == '2'
+        run: |
+          echo "::error::$ASSET is absent from $TAG — the keep copy is intact, publish it from a dev build."
+          exit 1
