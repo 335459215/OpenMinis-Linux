@@ -2435,4 +2435,7 @@
 <string name="git_panel_history_read_failed">提交歷史讀取失敗——詳情見日誌（GitPanel 標籤）</string>
 <string name="git_panel_status_read_failed">工作區狀態讀取失敗——詳情見日誌（GitPanel 標籤）</string>
 
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">本機摘要：摘要模型未回傳內容，以下是對被壓縮內容的機械式首尾摘錄。稍後可重新壓縮以取得模型撰寫的摘要。</string>
+    <string name="compact_fallback_used">摘要模型未回傳內容，已改用本機摘要作為備援，工作階段可繼續。若需要模型撰寫的摘要，請稍後重試壓縮。</string>
 </resources>

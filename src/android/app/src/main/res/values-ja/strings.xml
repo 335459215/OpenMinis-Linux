@@ -2349,4 +2349,7 @@
 <string name="git_panel_history_read_failed">コミット履歴の読み取りに失敗しました——詳細はログ（GitPanel タグ）を参照</string>
 
     <string name="git_panel_status_read_failed">ワークツリーの状態を読み取れませんでした — 詳細はログへ（GitPanel タグ）</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">ローカル要約 — 要約モデルが何も返さなかったため、圧縮対象の先頭と末尾を機械的に抜粋したものです。モデルによる要約が必要な場合は、後で再度圧縮してください。</string>
+    <string name="compact_fallback_used">要約モデルが内容を返しませんでした。セッションを継続できるよう、圧縮はローカル要約で処理しました。文章の要約が必要な場合は後で再試行してください。</string>
 </resources>

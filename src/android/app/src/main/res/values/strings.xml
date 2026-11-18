@@ -2743,6 +2743,10 @@
     <string name="vm_compact_in_progress_blocked">Cannot compact while a turn is in progress. Stop the current response first.</string>
     <string name="vm_compaction_timed_out">Compaction timed out after %1$ds (%2$d model call(s) attempted). The model may be slow or rate-limited — you can try compacting again.</string>
     <string name="vm_compaction_failed">Compaction failed: %1$s</string>
+    <!-- [T-009] Local digest floor: a compaction whose summary model returns
+         nothing still lands, so the session never wedges on context length. -->
+    <string name="compact_fallback_header">Local digest — the summary model returned nothing, so this is a mechanical head/tail excerpt of what was compacted. Retry compaction later for a model-written summary.</string>
+    <string name="compact_fallback_used">The summary model returned no content. Compaction used a local digest instead so the session keeps working — retry later if you want a written summary.</string>
     <!-- [T-compact-failure-taxonomy] The truncation path used to print the raw
          exception text ("empty compact summary from fallback") which told the
          user nothing and offered no next step. Each bucket now names the cause

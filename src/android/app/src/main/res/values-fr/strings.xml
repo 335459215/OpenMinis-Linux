@@ -2354,4 +2354,7 @@
 <string name="git_panel_history_read_failed">Échec de la lecture de l’historique des commits — détails dans les logs (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Échec de lecture de l\'état de l\'arbre de travail — détails dans les logs (tag GitPanel)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">Résumé local — le modèle de résumé n'a rien renvoyé : il s'agit d'un extrait mécanique (début/fin) de ce qui a été compacté. Relancez la compaction plus tard pour obtenir un résumé rédigé par le modèle.</string>
+    <string name="compact_fallback_used">Le modèle de résumé n'a renvoyé aucun contenu. La compaction a utilisé un résumé local pour que la session continue — réessayez plus tard si vous voulez un résumé rédigé.</string>
 </resources>

@@ -2340,4 +2340,7 @@
 <string name="git_panel_history_read_failed">Commit-Verlauf konnte nicht gelesen werden – Details in den Logs (Tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Arbeitsverzeichnis-Status konnte nicht gelesen werden – Details im Log (Tag GitPanel)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">Lokale Zusammenfassung – das Zusammenfassungsmodell hat nichts zurückgegeben; dies ist ein mechanischer Auszug (Anfang/Ende) des komprimierten Inhalts. Wiederhole die Komprimierung später für eine vom Modell geschriebene Zusammenfassung.</string>
+    <string name="compact_fallback_used">Das Zusammenfassungsmodell hat keinen Inhalt geliefert. Die Komprimierung hat stattdessen eine lokale Zusammenfassung verwendet, damit die Sitzung weiterläuft – versuche es später erneut, wenn du eine geschriebene Zusammenfassung möchtest.</string>
 </resources>

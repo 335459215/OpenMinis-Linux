@@ -2359,4 +2359,7 @@
 <string name="git_panel_history_read_failed">Gagal membaca riwayat commit — detailnya di log (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Gagal membaca status working tree — detail di log (tag GitPanel)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">Ringkasan lokal — model ringkasan tidak mengembalikan apa pun, jadi ini adalah kutipan mekanis (awal/akhir) dari yang dipadatkan. Coba padatkan lagi nanti untuk ringkasan yang ditulis model.</string>
+    <string name="compact_fallback_used">Model ringkasan tidak mengembalikan konten. Pemadatan memakai ringkasan lokal agar sesi tetap berjalan — coba lagi nanti jika Anda ingin ringkasan tertulis.</string>
 </resources>

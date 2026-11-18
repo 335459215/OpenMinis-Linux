@@ -2340,4 +2340,7 @@
 <string name="git_panel_history_read_failed">No se pudo leer el historial de commits: detalles en los registros (etiqueta GitPanel)</string>
 
     <string name="git_panel_status_read_failed">No se pudo leer el estado del árbol de trabajo — detalles en el registro (etiqueta GitPanel)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">Resumen local: el modelo de resumen no devolvió nada, así que esto es un extracto mecánico (inicio/fin) de lo compactado. Vuelve a compactar más tarde para obtener un resumen escrito por el modelo.</string>
+    <string name="compact_fallback_used">El modelo de resumen no devolvió contenido. La compactación usó un resumen local para que la sesión siga funcionando; vuelve a intentarlo más tarde si quieres un resumen escrito.</string>
 </resources>

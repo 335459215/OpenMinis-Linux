@@ -2354,4 +2354,7 @@
 <string name="git_panel_history_read_failed">Gagal membaca sejarah komit — butiran dalam log (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Gagal membaca status pokok kerja — butiran dalam log (tag GitPanel)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">Ringkasan setempat — model ringkasan tidak memulangkan apa-apa, jadi ini petikan mekanikal (awal/akhir) kandungan yang dipadatkan. Cuba padatkan semula kemudian untuk ringkasan yang ditulis model.</string>
+    <string name="compact_fallback_used">Model ringkasan tidak memulangkan kandungan. Pemadatan menggunakan ringkasan setempat supaya sesi terus berjalan — cuba lagi kemudian jika anda mahu ringkasan bertulis.</string>
 </resources>

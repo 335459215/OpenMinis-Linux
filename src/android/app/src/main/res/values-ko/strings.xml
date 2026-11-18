@@ -2349,4 +2349,7 @@
 <string name="git_panel_history_read_failed">커밋 기록을 읽지 못했습니다 — 자세한 내용은 로그(GitPanel 태그)를 확인하세요</string>
 
     <string name="git_panel_status_read_failed">작업 트리 상태를 읽지 못했습니다 — 자세한 내용은 로그 확인(GitPanel 태그)</string>
+    <!-- [T-009] 摘要模型空回时的本地兜底摘要 -->
+    <string name="compact_fallback_header">로컬 요약 — 요약 모델이 아무것도 반환하지 않아 압축된 내용의 앞부분과 끝부분을 기계적으로 발췌했습니다. 모델이 작성한 요약이 필요하면 나중에 다시 압축하세요.</string>
+    <string name="compact_fallback_used">요약 모델이 내용을 반환하지 않았습니다. 세션이 계속 동작하도록 압축은 로컬 요약으로 처리했습니다. 작성된 요약이 필요하면 나중에 다시 시도하세요.</string>
 </resources>

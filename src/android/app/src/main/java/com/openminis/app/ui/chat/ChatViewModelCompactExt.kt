@@ -175,7 +175,8 @@ private inline fun ChatViewModel.compactAllImpl(
     // transcript, so a long first compaction is not cut off by a limit
     // tuned for a short one. Measured on the same truncated transcript the
     // request will carry, not the raw history.
-    val transcriptChars = buildConversationTextForSummary(toCompact).length
+    val transcriptText = buildConversationTextForSummary(toCompact)
+    val transcriptChars = transcriptText.length
     val timeoutMs = ChatViewModel.compactTimeoutMsFor(transcriptChars)
     compactCallsIssued.set(0)
     val stages = compactStagePlan()
@@ -207,19 +208,40 @@ private inline fun ChatViewModel.compactAllImpl(
         var timedOut = false
         try {
             val existing = _compactSummary.value
-            val summary = runTwoShotCompact(
+            val summaryFromModel = runTwoShotCompact(
                 messages = toCompact,
                 previousSummary = existing,
                 stages = stages,
                 timeoutMs = timeoutMs,
             )
-            lastSummary = summary
-            if (summary.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    appendSystemInfo("Compaction produced no output — try again later.", "compact")
+            // [T-009] A blank summary used to abort the whole pass, leaving the
+            // history to keep growing until the next request died on context
+            // length. Fall back to a labelled, model-free digest so compaction
+            // always lands; the model summary can be retried later.
+            val summary = if (summaryFromModel.isEmpty()) {
+                val digest = CompactFallback.digest(
+                    transcript = transcriptText,
+                    messageCount = toCompact.size,
+                    header = context.getString(R.string.compact_fallback_header),
+                )
+                if (!CompactFallback.usable(digest)) {
+                    withContext(Dispatchers.Main) {
+                        appendSystemInfo("Compaction produced no output — try again later.", "compact")
+                    }
+                    return@launch
                 }
-                return@launch
+                AppLogger.info(
+                    ChatViewModel.TAG,
+                    "[Compact] summary model returned nothing; local digest ${digest.length} chars",
+                )
+                withContext(Dispatchers.Main) {
+                    appendSystemInfo(context.getString(R.string.compact_fallback_used), "compact")
+                }
+                digest
+            } else {
+                summaryFromModel
             }
+            lastSummary = summary
 
             val sid = realSessionId.ifEmpty { sessionId }
             // v2 marker: lastCompactedMessageId IS the anchor — single
