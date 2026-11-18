@@ -67,26 +67,33 @@ internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
     val members by SubAgentActivityTracker.members.collectAsStateWithLifecycle()
     val mine = remember(members, sid) { members.filter { it.parentSessionId == sid } }
 
-    var planOpen by rememberSaveable(sid) { mutableStateOf(false) }
-    var subOpen by rememberSaveable(sid) { mutableStateOf(false) }
+    // [T-021] 单一展开状态：清单和子代理是同一行里的两个抽屉，同时展开会
+    // 在同一个锚点叠出两个 Popup，用户点哪个都像点错。用一个变量表达「当前
+    // 展开的是谁」，两个抽屉天然互斥，也不需要互相记得去关对方。
+    var open by rememberSaveable(sid) { mutableStateOf(SecondRowDrawer.NONE) }
+    val planOpen = open == SecondRowDrawer.PLAN
+    val subOpen = open == SecondRowDrawer.SUB
 
     // Nothing to show → take no vertical space at all.
     if (plans.isEmpty() && mine.isEmpty()) {
-        if (planOpen) planOpen = false
-        if (subOpen) subOpen = false
+        if (open != SecondRowDrawer.NONE) open = SecondRowDrawer.NONE
         return
     }
 
     Column(horizontalAlignment = Alignment.End) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box {
+            // [T-021] 空边不可展开：没有任务就不画「清单」这颗胶囊，而不是画出
+            // 来再弹一句「暂无任务」。按钮存在即代表有内容，点开必有东西。
+            if (plans.isNotEmpty()) Box {
                 DrawerPill(
                     text = "清单 ${plans.count { it.status == "done" }}/${plans.size}",
                     expanded = planOpen,
-                ) { planOpen = !planOpen }
+                ) {
+                    open = if (planOpen) SecondRowDrawer.NONE else SecondRowDrawer.PLAN
+                }
                 if (planOpen) {
                     Popup(
-                        onDismissRequest = { planOpen = false },
+                        onDismissRequest = { open = SecondRowDrawer.NONE },
                         alignment = Alignment.TopEnd,
                         properties = PopupProperties(focusable = true),
                     ) {
@@ -99,42 +106,37 @@ internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            if (plans.isEmpty()) {
-                                Text(
-                                    "暂无任务",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                plans.forEach { p ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(vertical = 2.dp),
-                                    ) {
-                                        Text(
-                                            statusMark(p.status),
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.width(16.dp),
-                                        )
-                                        Text(
-                                            p.title,
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
+                            plans.forEach { p ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        statusMark(p.status),
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.width(16.dp),
+                                    )
+                                    Text(
+                                        p.title,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
                         }
                     }
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            Box {
-                DrawerPill(text = "子代理 ${mine.size}", expanded = subOpen) { subOpen = !subOpen }
+            // [T-021] 只有两边都有内容才需要间距：单边时胶囊贴右边缘对齐。
+            if (plans.isNotEmpty() && mine.isNotEmpty()) Spacer(Modifier.width(8.dp))
+            if (mine.isNotEmpty()) Box {
+                DrawerPill(text = "子代理 ${mine.size}", expanded = subOpen) {
+                    open = if (subOpen) SecondRowDrawer.NONE else SecondRowDrawer.SUB
+                }
                 if (subOpen) {
                     Popup(
-                        onDismissRequest = { subOpen = false },
+                        onDismissRequest = { open = SecondRowDrawer.NONE },
                         alignment = Alignment.TopEnd,
                         properties = PopupProperties(focusable = true),
                     ) {
@@ -147,55 +149,48 @@ internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            if (mine.isEmpty()) {
-                                Text(
-                                    "当前没有子代理",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                mine.forEach { m ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(vertical = 2.dp),
+                            mine.forEach { m ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(vertical = 2.dp),
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(phaseColor(m.phase)),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        m.title.ifBlank { m.role ?: "子代理" },
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 140.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        m.phase.ifBlank { "思考中" } +
+                                            if (m.currentTool.isNotBlank()) " · ${m.currentTool}" else "",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 110.dp),
+                                    )
+                                    IconButton(
+                                        onClick = { SubAgentActivityTracker.stop(m.id) },
+                                        modifier = Modifier.size(26.dp),
                                     ) {
-                                        Box(
-                                            Modifier
-                                                .size(6.dp)
-                                                .clip(CircleShape)
-                                                .background(phaseColor(m.phase)),
+                                        Icon(
+                                            Icons.Default.Stop,
+                                            contentDescription = "停止",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(13.dp),
                                         )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            m.title.ifBlank { m.role ?: "子代理" },
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.widthIn(max = 140.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            m.phase.ifBlank { "思考中" } +
-                                                if (m.currentTool.isNotBlank()) " · ${m.currentTool}" else "",
-                                            fontSize = 10.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.widthIn(max = 110.dp),
-                                        )
-                                        IconButton(
-                                            onClick = { SubAgentActivityTracker.stop(m.id) },
-                                            modifier = Modifier.size(26.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Stop,
-                                                contentDescription = "停止",
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(13.dp),
-                                            )
-                                        }
                                     }
                                 }
+                            }
                             }
                         }
                     }
@@ -203,23 +198,38 @@ internal fun ChatTopRightSecondRow(viewModel: ChatViewModel) {
             }
         }
     }
-}
+
+/** [T-021] 顶栏第二排同一时刻只允许展开一个抽屉。 */
+private enum class SecondRowDrawer { NONE, PLAN, SUB }
 
 @Composable
 private fun DrawerPill(text: String, expanded: Boolean, onClick: () -> Unit) {
+    // [T-018] 无外框：与第一行的发送模式胶囊一致，只留点击区和文字，
+    // 不再画圆角底色块。两行视觉重量相同，右边缘才对得齐。
+    //
+    // 宽度上限是给「大字 + 窄屏」兜底的：TopAppBar 的 actions 是 intrinsic
+    // 宽度，第二行一旦比第一行宽，被挤掉的是中间的会话标题与模型名。所以这里
+    // 封顶，超出的文字省略，宁可标签短一点也不让标题列塌掉。
     Row(
         modifier = Modifier
+            .widthIn(max = 128.dp)
             .clip(RoundedCornerShape(999.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Text(
+            text,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
         Icon(
             imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
             contentDescription = null,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(13.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

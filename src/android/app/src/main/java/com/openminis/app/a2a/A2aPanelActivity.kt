@@ -477,46 +477,26 @@ class A2aPanelActivity : Activity() {
         }
     }
 
-    companion object {
-        /**
-         * 让页面自己判断是否在根路由。面板路由形如 /、/#/、/index.html；
-         * 其它路径一律 history.back()，并把判定结果回传给 Kotlin。
-         */
-        private const val PANEL_BACK_JS =
-            "(function(){var p=(location.pathname||'/');var h=(location.hash||'');" +
-                "var atRoot=(p==='/m'||p==='/m/'||p==='/'||p==='/index.html');" +
-                "if(atRoot&&(h===''||h==='#/'||h==='#')){return 'root';}" +
-                "if(history.length<=1){return 'root';}" +
-                "history.back();return 'back';})()"
-    }
-
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
     /**
-     * 面板是单页应用（SPA）：路由由前端 history 维护，WebView 的 canGoBack()
-     * 永远是 false，所以旧实现一点返回就直接退出面板。这里改成两段式：
-     *   1. WebView 真有历史 → goBack；
-     *   2. 否则问页面自己在不在根路由：不在就 history.back()，在根才 finish()。
-     * 顶栏的 "←" 与系统返回键走同一条路径，行为一致。
-     */
-    /**
-     * [T-a2a-back-hash] 面板是 hash 路由（#home / #routing / …）。旧实现靠
-     * history.length 判断，hash 导航不产生历史时会直接退出应用，用户看到的就是
-     * 「点返回整块面板没了」。改成看当前 URL 的 fragment：不在首页就回首页，
-     * 已经在首页才退出；WebView 真有上一页（授权跳转）时优先回上一页。
-     */
-    /**
-     * [T-a2a-back-router-aware] 返回键处理。
+     * [T-a2a-back-stuck] 返回手势在面板里"完全没反应"，用户必须回桌面再进 App。
      *
-     * 旧实现只看 `web.canGoBack()` 就直接 `web.goBack()`。面板是 SPA（hash 路由），
-     * WebView 历史与页面路由**不同步**：页面自己 pushState 之后 WebView 未必有
-     * 对应条目，反之从外部跳进来时 WebView 有历史但页面在首页。两个后果就是用户
-     * 说的「返回手势时不时用不了」——要么退出了整个面板，要么按了没反应。
+     * 旧实现第一句就是 `if (history.length > 1) { history.back(); return }`。面板
+     * 是 hash 路由的 SPA，而 WebView 里 history.length 几乎总是 > 1（初始
+     * about:blank、加载 /m 时的重定向、页面自己的 pushState 都算），于是每一次
+     * 返回都变成 SPA 内部后退一格——退到的地方往往立刻又渲染回面板主页，
+     * 用户看到的就是"按了没反应"，永远走不到 finish()。
      *
-     * 现在先问页面：它的路由器能不能退一步？能就交给它（页面自己会更新 hash 与
-     * UI），不能才回落到 WebView 历史，最后才关面板。JS 回调是异步的，所以用
-     * backInFlight 防重入，否则连续按两次会连退两层。
+     * 而且回调是异步的：`backInFlight` 一旦因为页面未加载完、JS 报错、
+     * WebView 已冻结而收不到回调，后续每次返回都只 return true 什么也不做，
+     * 彻底卡死。
+     *
+     * 现在的规则是可终止的，且不依赖 WebView 历史长度：
+     *   1. 不在根路由 → 把 hash 拉回根，交给页面渲染（一步，不递归）；
+     *   2. 已在根 → 直接 finish()，回到 Minis Ultra；
+     *   3. JS 500ms 内不回答（页面崩了/冻结/脚本被拦）→ 直接 finish()。
      */
     private var backInFlight = false
 
@@ -525,19 +505,34 @@ class A2aPanelActivity : Activity() {
         val web = webView ?: return false
         if (backInFlight) return true
         backInFlight = true
+
+        // Watchdog: a dead page must not swallow the gesture forever.
+        val watchdog = Runnable {
+            if (!backInFlight) return@Runnable
+            backInFlight = false
+            finish()
+        }
+        web.postDelayed(watchdog, BACK_JS_TIMEOUT_MS)
+
         web.evaluateJavascript(
             "(function(){try{" +
-                "if(window.history&&window.history.length>1){window.history.back();return 'handled';}" +
-                "if(location.hash&&location.hash!=='#home'&&location.hash!=='#/'){location.hash='#home';return 'handled';}" +
-                "return 'home';}catch(e){return 'home';}})()",
+                "var h=(location.hash||'');" +
+                "var root=(h===''||h==='#'||h==='#/'||h==='#home'||h==='#/home');" +
+                "if(!root){location.hash='#home';return 'routed';}" +
+                "return 'root';}catch(e){return 'root';}})()",
         ) { result ->
+            web.removeCallbacks(watchdog)
+            if (!backInFlight) return@evaluateJavascript
             backInFlight = false
-            val handled = result?.contains("handled") == true
-            if (handled) return@evaluateJavascript
-            // Page says it is at home — fall back to WebView history, then exit.
-            if (web.canGoBack()) web.goBack() else finish()
+            // 'routed' = the page handled it; anything else = we are at the root.
+            if (result?.contains("routed") != true) finish()
         }
         return true
+    }
+
+    private companion object {
+        /** How long the panel's router gets to answer before we just close. */
+        const val BACK_JS_TIMEOUT_MS = 500L
     }
 
     @Suppress("DEPRECATION")

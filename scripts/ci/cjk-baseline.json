@@ -98,7 +98,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatSubAgentBar.kt": 20,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatSubAgentDrawer.kt": 11,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatTopBarSection.kt": 7,
-    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatTopRightSecondRow.kt": 10,
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatTopRightSecondRow.kt": 8,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelCodeRunExt.kt": 5,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatViewModelExecuteToolExt.kt": 1,
