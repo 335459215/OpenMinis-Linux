@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Gateway</string>
+    <string name="gw_channels">Mga Channel</string>
+    <string name="gw_accounts">Mga Account</string>
+    <string name="gw_mappings">Mga mapping ng modelo</string>
+    <string name="gw_add">Idagdag</string>
+    <string name="gw_retry">Subukang muli</string>
+    <string name="gw_no_channels">Gumawa muna ng channel bago magdagdag ng mga account o mapping.</string>
+    <string name="gw_empty_channels">Wala pang channel. I-tap ang Idagdag para gumawa.</string>
+    <string name="gw_empty_accounts">Walang account para sa channel na ito.</string>
+    <string name="gw_empty_mappings">Walang mapping ng modelo para sa channel na ito.</string>
+    <string name="gw_sort_order">Ayos ng pagkakasunud-sunod</string>
+    <string name="gw_priority">Prayoridad</string>
+    <string name="gw_max_concurrent">Pinakamataas na concurrency</string>
+    <string name="gw_key_prefix">Key na nagtatapos sa</string>
+    <string name="gw_target">Target na modelo</string>
+    <string name="gw_alias">Pampublikong alias</string>
+    <string name="gw_retry_at">Susubukang muli sa</string>
+    <string name="gw_health_healthy">Maayos</string>
+    <string name="gw_health_backoff">Backoff</string>
+    <string name="gw_health_cooldown">Cooldown</string>
+    <string name="gw_health_breaker">Bukas ang breaker</string>
+    <string name="gw_health_rate_limit">May limitasyon ang rate</string>
+    <string name="gw_add_channel">Magdagdag ng channel</string>
+    <string name="gw_edit_channel">I-edit ang channel</string>
+    <string name="gw_add_account">Magdagdag ng account</string>
+    <string name="gw_edit_account">I-edit ang account</string>
+    <string name="gw_add_mapping">Magdagdag ng mapping</string>
+    <string name="gw_edit_mapping">I-edit ang mapping</string>
+    <string name="gw_name">Pangalan</string>
+    <string name="gw_protocol">Protocol</string>
+    <string name="gw_base_url">Base URL</string>
+    <string name="gw_api_key">API key</string>
+    <string name="gw_replace_key">Palitan ang API key</string>
+    <string name="gw_key_privacy">Isang beses lang na naka-encrypt ang key at hindi na ito ipapakita muli. Apat na huling character lang ang ise-save para sa pagkakakilanlan.</string>
+</resources>

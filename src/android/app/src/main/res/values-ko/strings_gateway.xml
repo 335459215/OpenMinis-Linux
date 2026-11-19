@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">게이트웨이</string>
+    <string name="gw_channels">채널</string>
+    <string name="gw_accounts">계정</string>
+    <string name="gw_mappings">모델 매핑</string>
+    <string name="gw_add">추가</string>
+    <string name="gw_retry">다시 시도</string>
+    <string name="gw_no_channels">계정이나 매핑을 추가하기 전에 채널을 만드세요.</string>
+    <string name="gw_empty_channels">아직 채널이 없습니다. 추가를 눌러 만드세요.</string>
+    <string name="gw_empty_accounts">이 채널에 계정이 없습니다.</string>
+    <string name="gw_empty_mappings">이 채널에 모델 매핑이 없습니다.</string>
+    <string name="gw_sort_order">정렬 순서</string>
+    <string name="gw_priority">우선순위</string>
+    <string name="gw_max_concurrent">최대 동시 실행 수</string>
+    <string name="gw_key_prefix">키 끝자리</string>
+    <string name="gw_target">대상 모델</string>
+    <string name="gw_alias">공개 별칭</string>
+    <string name="gw_retry_at">다시 시도 시간</string>
+    <string name="gw_health_healthy">정상</string>
+    <string name="gw_health_backoff">백오프</string>
+    <string name="gw_health_cooldown">쿨다운</string>
+    <string name="gw_health_breaker">차단기 열림</string>
+    <string name="gw_health_rate_limit">속도 제한</string>
+    <string name="gw_add_channel">채널 추가</string>
+    <string name="gw_edit_channel">채널 편집</string>
+    <string name="gw_add_account">계정 추가</string>
+    <string name="gw_edit_account">계정 편집</string>
+    <string name="gw_add_mapping">매핑 추가</string>
+    <string name="gw_edit_mapping">매핑 편집</string>
+    <string name="gw_name">이름</string>
+    <string name="gw_protocol">프로토콜</string>
+    <string name="gw_base_url">기본 URL</string>
+    <string name="gw_api_key">API 키</string>
+    <string name="gw_replace_key">API 키 교체</string>
+    <string name="gw_key_privacy">키는 한 번 암호화된 후 다시 표시되지 않습니다. 식별을 위해 마지막 네 문자만 저장됩니다.</string>
+</resources>

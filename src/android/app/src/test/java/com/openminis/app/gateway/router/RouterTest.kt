@@ -188,6 +188,83 @@ class RouterTest {
         assertEquals(listOf("acc1", "acc2"), planAll("acc1", "acc2").map { it.accountId })
     }
 
+    // ── 只读健康快照 ────────────────────────────────────────────
+
+    @Test
+    fun `健康快照 未记录账号返回健康`() {
+        assertEquals(
+            RouterAccountHealth("unknown", RouterHealthState.HEALTHY, null),
+            router.accountHealthSnapshot(listOf("unknown")).single(),
+        )
+    }
+
+    @Test
+    fun `健康快照 退避状态带恢复时刻`() {
+        router.markFailure(candidate("acc1"), UpstreamVerdict.Retryable)
+
+        assertEquals(
+            RouterAccountHealth("acc1", RouterHealthState.BACKOFF, now + 15 * 60_000L),
+            router.accountHealthSnapshot(listOf("acc1")).single(),
+        )
+    }
+
+    @Test
+    fun `健康快照 429 优先显示冷却与恢复时刻`() {
+        router.markFailure(candidate("acc1"), UpstreamVerdict.RateLimited(now + 90_000))
+
+        assertEquals(
+            RouterAccountHealth("acc1", RouterHealthState.COOLDOWN, now + 90_000),
+            router.accountHealthSnapshot(listOf("acc1")).single(),
+        )
+    }
+
+    @Test
+    fun `健康快照 熔断优先级最高`() {
+        router.markFailure(candidate("acc1"), UpstreamVerdict.RateLimited())
+        repeat(5) { router.markFailure(candidate("acc1"), UpstreamVerdict.Retryable) }
+
+        assertEquals(
+            RouterAccountHealth("acc1", RouterHealthState.BREAKER_OPEN, now + 60_000L),
+            router.accountHealthSnapshot(listOf("acc1")).single(),
+        )
+    }
+
+    @Test
+    fun `健康快照 冷却过期后显示垫底 垫底过期恢复健康`() {
+        router.markFailure(candidate("acc1"), UpstreamVerdict.RateLimited(now + 60_000))
+        now += 60_000
+        assertEquals(
+            RouterAccountHealth("acc1", RouterHealthState.RATE_LIMIT_SINK, now - 60_000 + RouteParams.SINK_TTL_MS),
+            router.accountHealthSnapshot(listOf("acc1")).single(),
+        )
+
+        now += RouteParams.SINK_TTL_MS
+        assertEquals(
+            RouterAccountHealth("acc1", RouterHealthState.HEALTHY, null),
+            router.accountHealthSnapshot(listOf("acc1")).single(),
+        )
+    }
+
+    @Test
+    fun `健康快照 退避与熔断过期恢复健康`() {
+        router.markFailure(candidate("backoff"), UpstreamVerdict.Retryable)
+        repeat(5) { router.markFailure(candidate("breaker"), UpstreamVerdict.Retryable) }
+        now += 60_000
+        assertEquals(
+            RouterHealthState.BACKOFF,
+            router.accountHealthSnapshot(listOf("breaker")).single().state,
+        )
+
+        now += 60 * 60_000
+        assertEquals(
+            listOf(
+                RouterAccountHealth("backoff", RouterHealthState.HEALTHY, null),
+                RouterAccountHealth("breaker", RouterHealthState.HEALTHY, null),
+            ),
+            router.accountHealthSnapshot(listOf("backoff", "breaker")),
+        )
+    }
+
     // ── 粘性：TTL 滑动续期 ────────────────────────────────────
 
     @Test

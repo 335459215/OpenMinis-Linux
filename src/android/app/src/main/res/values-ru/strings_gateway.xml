@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Шлюз</string>
+    <string name="gw_channels">Каналы</string>
+    <string name="gw_accounts">Учётные записи</string>
+    <string name="gw_mappings">Сопоставления моделей</string>
+    <string name="gw_add">Добавить</string>
+    <string name="gw_retry">Повторить</string>
+    <string name="gw_no_channels">Создайте канал, прежде чем добавлять учётные записи или сопоставления.</string>
+    <string name="gw_empty_channels">Каналов пока нет. Нажмите «Добавить», чтобы создать.</string>
+    <string name="gw_empty_accounts">Для этого канала нет учётных записей.</string>
+    <string name="gw_empty_mappings">Для этого канала нет сопоставлений моделей.</string>
+    <string name="gw_sort_order">Порядок сортировки</string>
+    <string name="gw_priority">Приоритет</string>
+    <string name="gw_max_concurrent">Максимальная параллельность</string>
+    <string name="gw_key_prefix">Ключ оканчивается на</string>
+    <string name="gw_target">Целевая модель</string>
+    <string name="gw_alias">Публичный псевдоним</string>
+    <string name="gw_retry_at">Повтор в</string>
+    <string name="gw_health_healthy">Исправен</string>
+    <string name="gw_health_backoff">Задержка</string>
+    <string name="gw_health_cooldown">Остывание</string>
+    <string name="gw_health_breaker">Предохранитель разомкнут</string>
+    <string name="gw_health_rate_limit">Ограничение частоты</string>
+    <string name="gw_add_channel">Добавить канал</string>
+    <string name="gw_edit_channel">Изменить канал</string>
+    <string name="gw_add_account">Добавить учётную запись</string>
+    <string name="gw_edit_account">Изменить учётную запись</string>
+    <string name="gw_add_mapping">Добавить сопоставление</string>
+    <string name="gw_edit_mapping">Изменить сопоставление</string>
+    <string name="gw_name">Название</string>
+    <string name="gw_protocol">Протокол</string>
+    <string name="gw_base_url">Базовый URL</string>
+    <string name="gw_api_key">Ключ API</string>
+    <string name="gw_replace_key">Заменить ключ API</string>
+    <string name="gw_key_privacy">Ключ шифруется один раз и больше не отображается. Для идентификации сохраняются только последние четыре символа.</string>
+</resources>

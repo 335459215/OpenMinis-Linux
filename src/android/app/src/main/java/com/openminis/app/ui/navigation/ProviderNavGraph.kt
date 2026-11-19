@@ -10,6 +10,7 @@ import com.openminis.app.navigation.Routes
 import com.openminis.app.ui.settings.AddAgentLoopGroupsScreen
 import com.openminis.app.ui.settings.AddAgentLoopModelsScreen
 import com.openminis.app.ui.settings.AddCustomModelScreen
+import com.openminis.app.ui.gateway.GatewaySettingsScreen
 import com.openminis.app.ui.settings.AddModelsToGroupScreen
 import com.openminis.app.ui.settings.AddProviderScreen
 import com.openminis.app.ui.settings.ModelEntryDetailScreen
@@ -65,6 +66,12 @@ internal fun NavGraphBuilder.providerRoutes(
             providerRepository = providerRepository,
             onBack = { navController.safePopBackStack() },
             onSaved = { navController.safePopBackStack() },
+        )
+    }
+
+    composable(Routes.GATEWAY_SETTINGS) {
+        GatewaySettingsScreen(
+            onBack = { navController.safePopBackStack() },
         )
     }
 

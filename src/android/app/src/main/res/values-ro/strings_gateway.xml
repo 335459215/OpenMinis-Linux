@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Gateway</string>
+    <string name="gw_channels">Canale</string>
+    <string name="gw_accounts">Conturi</string>
+    <string name="gw_mappings">Mapări de modele</string>
+    <string name="gw_add">Adaugă</string>
+    <string name="gw_retry">Reîncearcă</string>
+    <string name="gw_no_channels">Creează un canal înainte de a adăuga conturi sau mapări.</string>
+    <string name="gw_empty_channels">Niciun canal încă. Atinge Adaugă pentru a crea unul.</string>
+    <string name="gw_empty_accounts">Niciun cont pentru acest canal.</string>
+    <string name="gw_empty_mappings">Nicio mapare de model pentru acest canal.</string>
+    <string name="gw_sort_order">Ordine de sortare</string>
+    <string name="gw_priority">Prioritate</string>
+    <string name="gw_max_concurrent">Concurență maximă</string>
+    <string name="gw_key_prefix">Cheie care se termină cu</string>
+    <string name="gw_target">Model țintă</string>
+    <string name="gw_alias">Alias public</string>
+    <string name="gw_retry_at">Reîncercare la</string>
+    <string name="gw_health_healthy">Funcțional</string>
+    <string name="gw_health_backoff">Așteptare</string>
+    <string name="gw_health_cooldown">Răcire</string>
+    <string name="gw_health_breaker">Întrerupător deschis</string>
+    <string name="gw_health_rate_limit">Rată limitată</string>
+    <string name="gw_add_channel">Adaugă canal</string>
+    <string name="gw_edit_channel">Editează canalul</string>
+    <string name="gw_add_account">Adaugă cont</string>
+    <string name="gw_edit_account">Editează contul</string>
+    <string name="gw_add_mapping">Adaugă mapare</string>
+    <string name="gw_edit_mapping">Editează maparea</string>
+    <string name="gw_name">Nume</string>
+    <string name="gw_protocol">Protocol</string>
+    <string name="gw_base_url">URL de bază</string>
+    <string name="gw_api_key">Cheie API</string>
+    <string name="gw_replace_key">Înlocuiește cheia API</string>
+    <string name="gw_key_privacy">Cheia este criptată o singură dată și nu va mai fi afișată. Doar ultimele patru caractere sunt salvate pentru identificare.</string>
+</resources>

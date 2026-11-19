@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Gateway</string>
+    <string name="gw_channels">Channels</string>
+    <string name="gw_accounts">Accounts</string>
+    <string name="gw_mappings">Model mappings</string>
+    <string name="gw_add">Add</string>
+    <string name="gw_retry">Retry</string>
+    <string name="gw_no_channels">Create a channel before adding accounts or mappings.</string>
+    <string name="gw_empty_channels">No channels yet. Tap Add to create one.</string>
+    <string name="gw_empty_accounts">No accounts for this channel.</string>
+    <string name="gw_empty_mappings">No model mappings for this channel.</string>
+    <string name="gw_sort_order">Sort order</string>
+    <string name="gw_priority">Priority</string>
+    <string name="gw_max_concurrent">Maximum concurrency</string>
+    <string name="gw_key_prefix">Key ending in</string>
+    <string name="gw_target">Target model</string>
+    <string name="gw_alias">Public alias</string>
+    <string name="gw_retry_at">Retry at</string>
+    <string name="gw_health_healthy">Healthy</string>
+    <string name="gw_health_backoff">Backoff</string>
+    <string name="gw_health_cooldown">Cooldown</string>
+    <string name="gw_health_breaker">Breaker open</string>
+    <string name="gw_health_rate_limit">Rate-limited</string>
+    <string name="gw_add_channel">Add channel</string>
+    <string name="gw_edit_channel">Edit channel</string>
+    <string name="gw_add_account">Add account</string>
+    <string name="gw_edit_account">Edit account</string>
+    <string name="gw_add_mapping">Add mapping</string>
+    <string name="gw_edit_mapping">Edit mapping</string>
+    <string name="gw_name">Name</string>
+    <string name="gw_protocol">Protocol</string>
+    <string name="gw_base_url">Base URL</string>
+    <string name="gw_api_key">API key</string>
+    <string name="gw_replace_key">Replace API key</string>
+    <string name="gw_key_privacy">The key is encrypted once and never shown again. Only its last four characters are stored for identification.</string>
+</resources>

@@ -72,6 +72,7 @@ import com.openminis.app.ui.components.MinisSmallButton
 import com.openminis.app.ui.components.MinisSmallOutlinedButton
 import com.openminis.app.ui.components.MinisSmallTextButton
 import com.openminis.app.ui.components.SectionTextField
+import com.openminis.app.ui.gateway.GatewaySettingsScreen
 private const val TAG = "ProviderDetail"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -98,20 +99,17 @@ fun ProviderDetailScreen(
     var menuEntryId by remember { mutableStateOf<String?>(null) }
     var deleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    // [T-compose-nav-in-composition] Navigation out of composition — see
-    // SkillDetailScreen. The body early-returns (renders nothing) instead;
-    // keyed on the null-ness so a mid-session deletion still navigates.
     LaunchedEffect(instanceId, deleted, instance == null) {
         if (instance == null && !deleted) onBack()
     }
     if (instance == null) return
+    if (instance.providerType == ProviderType.gateway) {
+        GatewaySettingsScreen(onBack = onBack)
+        return
+    }
     var label by remember { mutableStateOf(instance.label) }
     val labelChanged = label != instance.label
 
-    // [T-android-provider-apikey-save-stale] Hold the stored key in Compose
-    // state: saveApiKey() writes with .apply() (async), so a recomposition
-    // right after Save could re-read prefs before the flush and show the OLD
-    // key. remember + synchronous update in onSave shows the new value now.
     var storedKey by remember(instanceId) { mutableStateOf(providerRepository.loadApiKey(instanceId) ?: "") }
     var isEditingKey by remember { mutableStateOf(false) }
     var editKeyValue by remember { mutableStateOf("") }

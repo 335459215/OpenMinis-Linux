@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Gateway</string>
+    <string name="gw_channels">Saluran</string>
+    <string name="gw_accounts">Akaun</string>
+    <string name="gw_mappings">Pemetaan model</string>
+    <string name="gw_add">Tambah</string>
+    <string name="gw_retry">Cuba lagi</string>
+    <string name="gw_no_channels">Cipta saluran sebelum menambah akaun atau pemetaan.</string>
+    <string name="gw_empty_channels">Tiada saluran lagi. Ketik Tambah untuk menciptanya.</string>
+    <string name="gw_empty_accounts">Tiada akaun untuk saluran ini.</string>
+    <string name="gw_empty_mappings">Tiada pemetaan model untuk saluran ini.</string>
+    <string name="gw_sort_order">Susunan</string>
+    <string name="gw_priority">Keutamaan</string>
+    <string name="gw_max_concurrent">Serentak maksimum</string>
+    <string name="gw_key_prefix">Kunci berakhir dengan</string>
+    <string name="gw_target">Model sasaran</string>
+    <string name="gw_alias">Alias awam</string>
+    <string name="gw_retry_at">Cuba lagi pada</string>
+    <string name="gw_health_healthy">Sihat</string>
+    <string name="gw_health_backoff">Penangguhan</string>
+    <string name="gw_health_cooldown">Penyejukan</string>
+    <string name="gw_health_breaker">Pemutus terbuka</string>
+    <string name="gw_health_rate_limit">Kadar dihadkan</string>
+    <string name="gw_add_channel">Tambah saluran</string>
+    <string name="gw_edit_channel">Edit saluran</string>
+    <string name="gw_add_account">Tambah akaun</string>
+    <string name="gw_edit_account">Edit akaun</string>
+    <string name="gw_add_mapping">Tambah pemetaan</string>
+    <string name="gw_edit_mapping">Edit pemetaan</string>
+    <string name="gw_name">Nama</string>
+    <string name="gw_protocol">Protokol</string>
+    <string name="gw_base_url">URL asas</string>
+    <string name="gw_api_key">Kunci API</string>
+    <string name="gw_replace_key">Ganti kunci API</string>
+    <string name="gw_key_privacy">Kunci disulitkan sekali dan tidak akan dipaparkan lagi. Hanya empat aksara terakhirnya disimpan untuk pengenalan.</string>
+</resources>

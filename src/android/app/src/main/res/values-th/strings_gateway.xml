@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">เกตเวย์</string>
+    <string name="gw_channels">ช่องทาง</string>
+    <string name="gw_accounts">บัญชี</string>
+    <string name="gw_mappings">การแมปโมเดล</string>
+    <string name="gw_add">เพิ่ม</string>
+    <string name="gw_retry">ลองใหม่</string>
+    <string name="gw_no_channels">สร้างช่องทางก่อนเพิ่มบัญชีหรือการแมป</string>
+    <string name="gw_empty_channels">ยังไม่มีช่องทาง แตะเพิ่มเพื่อสร้าง</string>
+    <string name="gw_empty_accounts">ไม่มีบัญชีสำหรับช่องทางนี้</string>
+    <string name="gw_empty_mappings">ไม่มีการแมปโมเดลสำหรับช่องทางนี้</string>
+    <string name="gw_sort_order">ลำดับการเรียง</string>
+    <string name="gw_priority">ลำดับความสำคัญ</string>
+    <string name="gw_max_concurrent">จำนวนทำงานพร้อมกันสูงสุด</string>
+    <string name="gw_key_prefix">คีย์ที่ลงท้ายด้วย</string>
+    <string name="gw_target">โมเดลเป้าหมาย</string>
+    <string name="gw_alias">นามแฝงสาธารณะ</string>
+    <string name="gw_retry_at">ลองใหม่เมื่อ</string>
+    <string name="gw_health_healthy">ปกติ</string>
+    <string name="gw_health_backoff">หน่วงเวลา</string>
+    <string name="gw_health_cooldown">พักคูลดาวน์</string>
+    <string name="gw_health_breaker">เบรกเกอร์เปิด</string>
+    <string name="gw_health_rate_limit">ถูกจำกัดอัตรา</string>
+    <string name="gw_add_channel">เพิ่มช่องทาง</string>
+    <string name="gw_edit_channel">แก้ไขช่องทาง</string>
+    <string name="gw_add_account">เพิ่มบัญชี</string>
+    <string name="gw_edit_account">แก้ไขบัญชี</string>
+    <string name="gw_add_mapping">เพิ่มการแมป</string>
+    <string name="gw_edit_mapping">แก้ไขการแมป</string>
+    <string name="gw_name">ชื่อ</string>
+    <string name="gw_protocol">โปรโตคอล</string>
+    <string name="gw_base_url">URL หลัก</string>
+    <string name="gw_api_key">คีย์ API</string>
+    <string name="gw_replace_key">เปลี่ยนคีย์ API</string>
+    <string name="gw_key_privacy">คีย์จะถูกเข้ารหัสเพียงครั้งเดียวและจะไม่แสดงอีก บันทึกเพียงสี่อักขระสุดท้ายเพื่อใช้ระบุ</string>
+</resources>

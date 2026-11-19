@@ -131,6 +131,7 @@ fun SettingsScreen(
     // invoked it (the Evolution entry migrated into the Memory hub).
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
+    onGatewayClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
     // T219-2: Mount External Folders entry. Default no-op for any caller
@@ -242,6 +243,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
                     onClick = onUsageClick,
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Dns,
+                    iconColor = IosIndigo,
+                    title = stringResource(R.string.provider_type_gateway),
+                    subtitle = stringResource(R.string.add_provider_subtitle_gateway),
+                    onClick = onGatewayClick,
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Tune,

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Brama</string>
+    <string name="gw_channels">Kanały</string>
+    <string name="gw_accounts">Konta</string>
+    <string name="gw_mappings">Mapowania modeli</string>
+    <string name="gw_add">Dodaj</string>
+    <string name="gw_retry">Ponów</string>
+    <string name="gw_no_channels">Utwórz kanał przed dodaniem kont lub mapowań.</string>
+    <string name="gw_empty_channels">Brak kanałów. Kliknij Dodaj, aby utworzyć.</string>
+    <string name="gw_empty_accounts">Brak kont dla tego kanału.</string>
+    <string name="gw_empty_mappings">Brak mapowań modeli dla tego kanału.</string>
+    <string name="gw_sort_order">Kolejność sortowania</string>
+    <string name="gw_priority">Priorytet</string>
+    <string name="gw_max_concurrent">Maksymalna współbieżność</string>
+    <string name="gw_key_prefix">Klucz kończy się na</string>
+    <string name="gw_target">Model docelowy</string>
+    <string name="gw_alias">Publiczny alias</string>
+    <string name="gw_retry_at">Ponów o</string>
+    <string name="gw_health_healthy">Sprawny</string>
+    <string name="gw_health_backoff">Wycofanie</string>
+    <string name="gw_health_cooldown">Czas oczekiwania</string>
+    <string name="gw_health_breaker">Wyłącznik otwarty</string>
+    <string name="gw_health_rate_limit">Limit żądań</string>
+    <string name="gw_add_channel">Dodaj kanał</string>
+    <string name="gw_edit_channel">Edytuj kanał</string>
+    <string name="gw_add_account">Dodaj konto</string>
+    <string name="gw_edit_account">Edytuj konto</string>
+    <string name="gw_add_mapping">Dodaj mapowanie</string>
+    <string name="gw_edit_mapping">Edytuj mapowanie</string>
+    <string name="gw_name">Nazwa</string>
+    <string name="gw_protocol">Protokół</string>
+    <string name="gw_base_url">Podstawowy URL</string>
+    <string name="gw_api_key">Klucz API</string>
+    <string name="gw_replace_key">Zastąp klucz API</string>
+    <string name="gw_key_privacy">Klucz jest szyfrowany raz i nigdy więcej nie będzie wyświetlany. Do identyfikacji zapisujemy tylko jego cztery ostatnie znaki.</string>
+</resources>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Ağ Geçidi</string>
+    <string name="gw_channels">Kanallar</string>
+    <string name="gw_accounts">Hesaplar</string>
+    <string name="gw_mappings">Model eşlemeleri</string>
+    <string name="gw_add">Ekle</string>
+    <string name="gw_retry">Yeniden dene</string>
+    <string name="gw_no_channels">Hesap veya eşleme eklemeden önce bir kanal oluşturun.</string>
+    <string name="gw_empty_channels">Henüz kanal yok. Oluşturmak için Ekle’ye dokunun.</string>
+    <string name="gw_empty_accounts">Bu kanal için hesap yok.</string>
+    <string name="gw_empty_mappings">Bu kanal için model eşlemesi yok.</string>
+    <string name="gw_sort_order">Sıralama düzeni</string>
+    <string name="gw_priority">Öncelik</string>
+    <string name="gw_max_concurrent">En yüksek eşzamanlılık</string>
+    <string name="gw_key_prefix">Anahtarın sonu</string>
+    <string name="gw_target">Hedef model</string>
+    <string name="gw_alias">Genel takma ad</string>
+    <string name="gw_retry_at">Yeniden deneme saati</string>
+    <string name="gw_health_healthy">Sağlıklı</string>
+    <string name="gw_health_backoff">Geri çekilme</string>
+    <string name="gw_health_cooldown">Soğuma</string>
+    <string name="gw_health_breaker">Devre kesici açık</string>
+    <string name="gw_health_rate_limit">Hız sınırlı</string>
+    <string name="gw_add_channel">Kanal ekle</string>
+    <string name="gw_edit_channel">Kanalı düzenle</string>
+    <string name="gw_add_account">Hesap ekle</string>
+    <string name="gw_edit_account">Hesabı düzenle</string>
+    <string name="gw_add_mapping">Eşleme ekle</string>
+    <string name="gw_edit_mapping">Eşlemeyi düzenle</string>
+    <string name="gw_name">Ad</string>
+    <string name="gw_protocol">Protokol</string>
+    <string name="gw_base_url">Temel URL</string>
+    <string name="gw_api_key">API anahtarı</string>
+    <string name="gw_replace_key">API anahtarını değiştir</string>
+    <string name="gw_key_privacy">Anahtar bir kez şifrelenir ve bir daha asla gösterilmez. Tanımlama için yalnızca son dört karakteri saklanır.</string>
+</resources>

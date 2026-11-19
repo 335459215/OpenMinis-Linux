@@ -366,8 +366,15 @@ class MinisApp : Application(), ImageLoaderFactory {
         AppGraph.installEvolutionEngine(evolutionEngineInstance)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
         // [G-P1 原生网关] 供给 ProviderFactory 的 gateway 分支（渠道池就绪前 factory 抛错）。
-        com.openminis.app.gateway.GatewayRuntime.repository =
-            com.openminis.app.gateway.store.GatewayRepository.getInstance(this)
+        val gatewayRepository = com.openminis.app.gateway.store.GatewayRepository.getInstance(this)
+        com.openminis.app.gateway.GatewayRuntime.repository = gatewayRepository
+        gatewayRepository.onCatalogChanged = {
+            appCoroutineScopes.io.launch {
+                providerRepository.config.value.instances
+                    .filter { it.providerType == com.openminis.app.data.model.ProviderType.gateway }
+                    .forEach { providerRepository.refreshModels(it, forceRefresh = true) }
+            }
+        }
         MinisAppAsyncInit.startWarmup(appContainer)
 
         // T-android-safemode-lateinit-crash: UI deps are ready, so set the flag early — a late non-UI failure must not lock the user out.

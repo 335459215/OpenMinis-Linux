@@ -3,7 +3,9 @@ package com.openminis.app.gateway.store
 import android.content.Context
 import android.content.SharedPreferences
 import com.openminis.app.data.db.ProviderDatabase
+import com.openminis.app.gateway.GatewayRuntime
 import com.openminis.app.gateway.router.RouteCandidate
+import com.openminis.app.gateway.router.RouterHealthState
 import com.openminis.app.util.EncryptedPrefsFactory
 
 /**
@@ -20,6 +22,12 @@ open class GatewayRepository(
     private val dao: GatewayDao,
     private val keyStore: GatewayKeyStore,
 ) {
+
+    /** 目录结构变更后由应用层刷新网关模型缓存；UI 不直接感知 ProviderRepository。 */
+    @Volatile
+    var onCatalogChanged: (() -> Unit)? = null
+
+    private fun notifyCatalogChanged() { onCatalogChanged?.invoke() }
 
     // ── 机密（EncryptedSharedPreferences） ────────────────────────────
 
@@ -41,8 +49,8 @@ open class GatewayRepository(
 
     // ── 渠道 ──────────────────────────────────────────────────────────
 
-    suspend fun upsertChannel(channel: ChannelEntity) = dao.upsertChannel(channel)
-    suspend fun deleteChannel(id: String) = dao.deleteChannelById(id)
+    suspend fun upsertChannel(channel: ChannelEntity) { dao.upsertChannel(channel); notifyCatalogChanged() }
+    suspend fun deleteChannel(id: String) { dao.deleteChannelById(id); notifyCatalogChanged() }
     open suspend fun channelById(id: String): ChannelEntity? = dao.channelById(id)
     suspend fun channels(): List<ChannelEntity> = dao.channelsAll()
 
@@ -73,17 +81,36 @@ open class GatewayRepository(
     suspend fun accountsForChannel(channelId: String): List<ChannelAccountEntity> =
         dao.accountsForChannel(channelId)
 
+    /** UI 的只读健康徽章；按入参顺序返回，未知账号视为健康。 */
+    fun accountHealth(
+        accountIds: Collection<String>,
+        nowMs: Long = System.currentTimeMillis(),
+    ): List<GatewayAccountHealth> =
+        GatewayRuntime.router.accountHealthSnapshot(accountIds, nowMs).map { snapshot ->
+            GatewayAccountHealth(
+                accountId = snapshot.accountId,
+                state = when (snapshot.state) {
+                    RouterHealthState.HEALTHY -> GatewayHealthState.HEALTHY
+                    RouterHealthState.BACKOFF -> GatewayHealthState.BACKOFF
+                    RouterHealthState.COOLDOWN -> GatewayHealthState.COOLDOWN
+                    RouterHealthState.BREAKER_OPEN -> GatewayHealthState.BREAKER_OPEN
+                    RouterHealthState.RATE_LIMIT_SINK -> GatewayHealthState.RATE_LIMIT_SINK
+                },
+                retryAtMs = snapshot.retryAtMs,
+            )
+        }
+
     // ── 渠道模型 ──────────────────────────────────────────────────────
 
-    suspend fun upsertModel(model: ChannelModelEntity) = dao.upsertModel(model)
-    suspend fun deleteModel(id: String) = dao.deleteModelById(id)
+    suspend fun upsertModel(model: ChannelModelEntity) { dao.upsertModel(model); notifyCatalogChanged() }
+    suspend fun deleteModel(id: String) { dao.deleteModelById(id); notifyCatalogChanged() }
     suspend fun modelsForChannel(channelId: String): List<ChannelModelEntity> =
         dao.modelsForChannel(channelId)
 
     // ── 映射 ──────────────────────────────────────────────────────────
 
-    suspend fun upsertMapping(mapping: ChannelMappingEntity) = dao.upsertMapping(mapping)
-    suspend fun deleteMapping(id: String) = dao.deleteMappingById(id)
+    suspend fun upsertMapping(mapping: ChannelMappingEntity) { dao.upsertMapping(mapping); notifyCatalogChanged() }
+    suspend fun deleteMapping(id: String) { dao.deleteMappingById(id); notifyCatalogChanged() }
     suspend fun mappingsForChannel(channelId: String): List<ChannelMappingEntity> =
         dao.mappingsForChannel(channelId)
 

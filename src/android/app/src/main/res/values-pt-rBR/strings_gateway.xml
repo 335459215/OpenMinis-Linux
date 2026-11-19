@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Gateway</string>
+    <string name="gw_channels">Canais</string>
+    <string name="gw_accounts">Contas</string>
+    <string name="gw_mappings">Mapeamentos de modelos</string>
+    <string name="gw_add">Adicionar</string>
+    <string name="gw_retry">Tentar novamente</string>
+    <string name="gw_no_channels">Crie um canal antes de adicionar contas ou mapeamentos.</string>
+    <string name="gw_empty_channels">Nenhum canal ainda. Toque em Adicionar para criar um.</string>
+    <string name="gw_empty_accounts">Nenhuma conta para este canal.</string>
+    <string name="gw_empty_mappings">Nenhum mapeamento de modelo para este canal.</string>
+    <string name="gw_sort_order">Ordem de classificação</string>
+    <string name="gw_priority">Prioridade</string>
+    <string name="gw_max_concurrent">Concorrência máxima</string>
+    <string name="gw_key_prefix">Chave terminada em</string>
+    <string name="gw_target">Modelo de destino</string>
+    <string name="gw_alias">Alias público</string>
+    <string name="gw_retry_at">Tentar novamente às</string>
+    <string name="gw_health_healthy">Íntegro</string>
+    <string name="gw_health_backoff">Espera progressiva</string>
+    <string name="gw_health_cooldown">Resfriamento</string>
+    <string name="gw_health_breaker">Disjuntor aberto</string>
+    <string name="gw_health_rate_limit">Taxa limitada</string>
+    <string name="gw_add_channel">Adicionar canal</string>
+    <string name="gw_edit_channel">Editar canal</string>
+    <string name="gw_add_account">Adicionar conta</string>
+    <string name="gw_edit_account">Editar conta</string>
+    <string name="gw_add_mapping">Adicionar mapeamento</string>
+    <string name="gw_edit_mapping">Editar mapeamento</string>
+    <string name="gw_name">Nome</string>
+    <string name="gw_protocol">Protocolo</string>
+    <string name="gw_base_url">URL base</string>
+    <string name="gw_api_key">Chave de API</string>
+    <string name="gw_replace_key">Substituir chave de API</string>
+    <string name="gw_key_privacy">A chave é criptografada uma vez e nunca será exibida novamente. Somente seus últimos quatro caracteres são armazenados para identificação.</string>
+</resources>

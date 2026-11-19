@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">网关</string>
+    <string name="gw_channels">渠道</string>
+    <string name="gw_accounts">账号</string>
+    <string name="gw_mappings">模型映射</string>
+    <string name="gw_add">添加</string>
+    <string name="gw_retry">重试</string>
+    <string name="gw_no_channels">请先创建渠道，再添加账号或映射。</string>
+    <string name="gw_empty_channels">暂无渠道。点击“添加”创建一个。</string>
+    <string name="gw_empty_accounts">此渠道暂无账号。</string>
+    <string name="gw_empty_mappings">此渠道暂无模型映射。</string>
+    <string name="gw_sort_order">排序值</string>
+    <string name="gw_priority">优先级</string>
+    <string name="gw_max_concurrent">最大并发数</string>
+    <string name="gw_key_prefix">密钥尾号</string>
+    <string name="gw_target">目标模型</string>
+    <string name="gw_alias">公开别名</string>
+    <string name="gw_retry_at">重试时间</string>
+    <string name="gw_health_healthy">健康</string>
+    <string name="gw_health_backoff">退避中</string>
+    <string name="gw_health_cooldown">冷却中</string>
+    <string name="gw_health_breaker">熔断器已断开</string>
+    <string name="gw_health_rate_limit">已限流</string>
+    <string name="gw_add_channel">添加渠道</string>
+    <string name="gw_edit_channel">编辑渠道</string>
+    <string name="gw_add_account">添加账号</string>
+    <string name="gw_edit_account">编辑账号</string>
+    <string name="gw_add_mapping">添加映射</string>
+    <string name="gw_edit_mapping">编辑映射</string>
+    <string name="gw_name">名称</string>
+    <string name="gw_protocol">协议</string>
+    <string name="gw_base_url">基础 URL</string>
+    <string name="gw_api_key">API 密钥</string>
+    <string name="gw_replace_key">更换 API 密钥</string>
+    <string name="gw_key_privacy">密钥仅加密写入一次，绝不再次显示。仅保存末四位用于识别。</string>
+</resources>

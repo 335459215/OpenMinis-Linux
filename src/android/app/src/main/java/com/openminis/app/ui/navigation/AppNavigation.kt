@@ -476,6 +476,7 @@ fun AppNavigation(
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
+                onGatewayClick = { navController.safeNavigate(Routes.GATEWAY_SETTINGS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
@@ -506,7 +507,6 @@ fun AppNavigation(
         backupRoutes(navController)
         providerRoutes(navController, providerRepository)
         storageRoutes(navController, chatRepository, mountedFoldersStore)
-
         composable(Routes.FILE_BROWSER) { entry ->
             // [T-android-filepreview-holder-lifetime] Released when this
             // destination leaves the stack — see FilePreviewHolder.

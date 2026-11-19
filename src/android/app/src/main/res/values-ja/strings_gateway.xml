@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">ゲートウェイ</string>
+    <string name="gw_channels">チャネル</string>
+    <string name="gw_accounts">アカウント</string>
+    <string name="gw_mappings">モデルマッピング</string>
+    <string name="gw_add">追加</string>
+    <string name="gw_retry">再試行</string>
+    <string name="gw_no_channels">アカウントやマッピングを追加する前にチャネルを作成してください。</string>
+    <string name="gw_empty_channels">チャネルはまだありません。「追加」をタップして作成してください。</string>
+    <string name="gw_empty_accounts">このチャネルにアカウントはありません。</string>
+    <string name="gw_empty_mappings">このチャネルにモデルマッピングはありません。</string>
+    <string name="gw_sort_order">並び順</string>
+    <string name="gw_priority">優先度</string>
+    <string name="gw_max_concurrent">最大同時実行数</string>
+    <string name="gw_key_prefix">キーの末尾</string>
+    <string name="gw_target">ターゲットモデル</string>
+    <string name="gw_alias">公開エイリアス</string>
+    <string name="gw_retry_at">再試行時刻</string>
+    <string name="gw_health_healthy">正常</string>
+    <string name="gw_health_backoff">バックオフ中</string>
+    <string name="gw_health_cooldown">クールダウン中</string>
+    <string name="gw_health_breaker">ブレーカー開放</string>
+    <string name="gw_health_rate_limit">レート制限中</string>
+    <string name="gw_add_channel">チャネルを追加</string>
+    <string name="gw_edit_channel">チャネルを編集</string>
+    <string name="gw_add_account">アカウントを追加</string>
+    <string name="gw_edit_account">アカウントを編集</string>
+    <string name="gw_add_mapping">マッピングを追加</string>
+    <string name="gw_edit_mapping">マッピングを編集</string>
+    <string name="gw_name">名前</string>
+    <string name="gw_protocol">プロトコル</string>
+    <string name="gw_base_url">ベース URL</string>
+    <string name="gw_api_key">API キー</string>
+    <string name="gw_replace_key">API キーを置き換える</string>
+    <string name="gw_key_privacy">キーは一度だけ暗号化され、再表示されることはありません。識別用に末尾4文字のみ保存されます。</string>
+</resources>

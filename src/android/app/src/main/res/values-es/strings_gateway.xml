@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">Puerta de enlace</string>
+    <string name="gw_channels">Canales</string>
+    <string name="gw_accounts">Cuentas</string>
+    <string name="gw_mappings">Asignaciones de modelos</string>
+    <string name="gw_add">Añadir</string>
+    <string name="gw_retry">Reintentar</string>
+    <string name="gw_no_channels">Crea un canal antes de añadir cuentas o asignaciones.</string>
+    <string name="gw_empty_channels">Aún no hay canales. Pulsa Añadir para crear uno.</string>
+    <string name="gw_empty_accounts">No hay cuentas para este canal.</string>
+    <string name="gw_empty_mappings">No hay asignaciones de modelos para este canal.</string>
+    <string name="gw_sort_order">Orden de clasificación</string>
+    <string name="gw_priority">Prioridad</string>
+    <string name="gw_max_concurrent">Concurrencia máxima</string>
+    <string name="gw_key_prefix">Clave que termina en</string>
+    <string name="gw_target">Modelo de destino</string>
+    <string name="gw_alias">Alias público</string>
+    <string name="gw_retry_at">Reintentar a las</string>
+    <string name="gw_health_healthy">Correcto</string>
+    <string name="gw_health_backoff">Espera progresiva</string>
+    <string name="gw_health_cooldown">Enfriamiento</string>
+    <string name="gw_health_breaker">Interruptor abierto</string>
+    <string name="gw_health_rate_limit">Límite de frecuencia</string>
+    <string name="gw_add_channel">Añadir canal</string>
+    <string name="gw_edit_channel">Editar canal</string>
+    <string name="gw_add_account">Añadir cuenta</string>
+    <string name="gw_edit_account">Editar cuenta</string>
+    <string name="gw_add_mapping">Añadir asignación</string>
+    <string name="gw_edit_mapping">Editar asignación</string>
+    <string name="gw_name">Nombre</string>
+    <string name="gw_protocol">Protocolo</string>
+    <string name="gw_base_url">URL base</string>
+    <string name="gw_api_key">Clave de API</string>
+    <string name="gw_replace_key">Sustituir clave de API</string>
+    <string name="gw_key_privacy">La clave se cifra una vez y no vuelve a mostrarse. Solo se guardan sus últimos cuatro caracteres para identificarla.</string>
+</resources>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gw_title">閘道</string>
+    <string name="gw_channels">管道</string>
+    <string name="gw_accounts">帳號</string>
+    <string name="gw_mappings">模型對應</string>
+    <string name="gw_add">新增</string>
+    <string name="gw_retry">重試</string>
+    <string name="gw_no_channels">請先建立管道，再新增帳號或對應。</string>
+    <string name="gw_empty_channels">尚無管道。點選「新增」建立一個。</string>
+    <string name="gw_empty_accounts">此管道尚無帳號。</string>
+    <string name="gw_empty_mappings">此管道尚無模型對應。</string>
+    <string name="gw_sort_order">排序值</string>
+    <string name="gw_priority">優先順序</string>
+    <string name="gw_max_concurrent">並行上限</string>
+    <string name="gw_key_prefix">金鑰尾碼</string>
+    <string name="gw_target">目標模型</string>
+    <string name="gw_alias">公開別名</string>
+    <string name="gw_retry_at">重試時間</string>
+    <string name="gw_health_healthy">正常</string>
+    <string name="gw_health_backoff">退避中</string>
+    <string name="gw_health_cooldown">冷卻中</string>
+    <string name="gw_health_breaker">熔斷器已開啟</string>
+    <string name="gw_health_rate_limit">已限流</string>
+    <string name="gw_add_channel">新增管道</string>
+    <string name="gw_edit_channel">編輯管道</string>
+    <string name="gw_add_account">新增帳號</string>
+    <string name="gw_edit_account">編輯帳號</string>
+    <string name="gw_add_mapping">新增對應</string>
+    <string name="gw_edit_mapping">編輯對應</string>
+    <string name="gw_name">名稱</string>
+    <string name="gw_protocol">通訊協定</string>
+    <string name="gw_base_url">基礎 URL</string>
+    <string name="gw_api_key">API 金鑰</string>
+    <string name="gw_replace_key">更換 API 金鑰</string>
+    <string name="gw_key_privacy">金鑰只會加密寫入一次，絕不再次顯示。僅保存末四位以供識別。</string>
+</resources>

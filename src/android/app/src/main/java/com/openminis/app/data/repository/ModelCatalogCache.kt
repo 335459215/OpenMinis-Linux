@@ -2,6 +2,7 @@ package com.openminis.app.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ProviderConfig
 import com.openminis.app.data.model.ProviderCredential
@@ -9,6 +10,8 @@ import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.VoiceProviderTemplate
 import com.openminis.app.data.model.hasVoiceModality
+import com.openminis.app.gateway.GatewayRuntime
+import com.openminis.app.gateway.catalog.ModelCatalog
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.provider.ModelRefreshGeneration
 import com.openminis.app.provider.anthropic.AnthropicModelsApi
@@ -333,9 +336,16 @@ internal class ModelCatalogCache(
                     // query for a type this build cannot drive; the instance
                     // keeps whatever entries the restore brought with it.
                     // [G-P3] Gateway models are the aggregated channel catalog
-                    // (gateway/catalog/ModelCatalog), not a /models fetch —
-                    // no live endpoint to query here.
-                    ProviderType.gateway -> emptyList()
+                    // (gateway/catalog/ModelCatalog), not a /models fetch.
+                    // Publishing aliases here makes them visible to ModelEntryPicker;
+                    // wire targets stay inside the gateway.
+                    ProviderType.gateway -> GatewayRuntime.repository
+                        ?.let { gatewayRepository ->
+                            ModelCatalog.models(gatewayRepository).map { model ->
+                                LLMModel(id = model.alias, displayName = model.alias, provider = "gateway")
+                            }
+                        }
+                        ?: emptyList()
                     ProviderType.antigravity, ProviderType.unsupported -> emptyList()
                 }
             } catch (e: Exception) {

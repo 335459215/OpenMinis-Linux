@@ -202,6 +202,38 @@ class Router(private val clock: () -> Long = System::currentTimeMillis) {
     /** Auto 档粘性 TTL（上游 StickyMode::Auto → ttl_ms 5min）。 */
     fun stickyTtlMs(): Long = RouteParams.STICKY_TTL_MS
 
+    /**
+     * 只读账号健康快照，不改变路由表与选路状态。
+     * 多状态共存时熔断 > 退避 > 限额冷却 > 垫底；过期状态等同健康。
+     * 同一账号多个模型的冷却取最晚恢复时刻。
+     */
+    fun accountHealthSnapshot(
+        accountIds: Collection<String>,
+        nowMs: Long = clock(),
+    ): List<RouterAccountHealth> = accountIds.map { accountId ->
+        val breakerUntil = breaker[accountId]?.openUntil ?: 0L
+        if (breakerUntil > nowMs) {
+            return@map RouterAccountHealth(accountId, RouterHealthState.BREAKER_OPEN, breakerUntil)
+        }
+
+        val backoffUntil = backoff[accountId]?.until ?: 0L
+        if (backoffUntil > nowMs) {
+            return@map RouterAccountHealth(accountId, RouterHealthState.BACKOFF, backoffUntil)
+        }
+
+        val cooldownUntil = rateLimits[accountId]?.values?.filter { it > nowMs }?.maxOrNull()
+        if (cooldownUntil != null) {
+            return@map RouterAccountHealth(accountId, RouterHealthState.COOLDOWN, cooldownUntil)
+        }
+
+        val sunkAt = sink[accountId]
+        if (sunkAt != null && nowMs - sunkAt < RouteParams.SINK_TTL_MS) {
+            return@map RouterAccountHealth(accountId, RouterHealthState.RATE_LIMIT_SINK, sunkAt + RouteParams.SINK_TTL_MS)
+        }
+
+        RouterAccountHealth(accountId, RouterHealthState.HEALTHY, null)
+    }
+
     // ── 内部：冷却 ──────────────────────────────────────────────
 
     /**
