@@ -34,4 +34,5 @@
     <string name="gw_api_key">API key</string>
     <string name="gw_replace_key">Palitan ang API key</string>
     <string name="gw_key_privacy">Isang beses lang na naka-encrypt ang key at hindi na ito ipapakita muli. Apat na huling character lang ang ise-save para sa pagkakakilanlan.</string>
+    <string name="settings_group_connections">Mga koneksyon at kredensyal</string>
 </resources>

@@ -34,4 +34,5 @@
     <string name="gw_api_key">API-Schlüssel</string>
     <string name="gw_replace_key">API-Schlüssel ersetzen</string>
     <string name="gw_key_privacy">Der Schlüssel wird einmal verschlüsselt und nie wieder angezeigt. Nur die letzten vier Zeichen werden zur Identifikation gespeichert.</string>
+    <string name="settings_group_connections">Verbindungen und Anmeldedaten</string>
 </resources>

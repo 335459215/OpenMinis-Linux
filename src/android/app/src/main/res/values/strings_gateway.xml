@@ -34,4 +34,5 @@
     <string name="gw_api_key">API key</string>
     <string name="gw_replace_key">Replace API key</string>
     <string name="gw_key_privacy">The key is encrypted once and never shown again. Only its last four characters are stored for identification.</string>
+    <string name="settings_group_connections">Connections &amp; credentials</string>
 </resources>

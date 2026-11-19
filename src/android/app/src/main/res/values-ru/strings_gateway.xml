@@ -34,4 +34,5 @@
     <string name="gw_api_key">Ключ API</string>
     <string name="gw_replace_key">Заменить ключ API</string>
     <string name="gw_key_privacy">Ключ шифруется один раз и больше не отображается. Для идентификации сохраняются только последние четыре символа.</string>
+    <string name="settings_group_connections">Подключения и учетные данные</string>
 </resources>

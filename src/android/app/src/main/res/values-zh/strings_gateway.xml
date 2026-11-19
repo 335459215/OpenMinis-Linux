@@ -34,4 +34,5 @@
     <string name="gw_api_key">API 密钥</string>
     <string name="gw_replace_key">更换 API 密钥</string>
     <string name="gw_key_privacy">密钥仅加密写入一次，绝不再次显示。仅保存末四位用于识别。</string>
+    <string name="settings_group_connections">连接与凭据</string>
 </resources>

@@ -34,4 +34,5 @@
     <string name="gw_api_key">Klucz API</string>
     <string name="gw_replace_key">Zastąp klucz API</string>
     <string name="gw_key_privacy">Klucz jest szyfrowany raz i nigdy więcej nie będzie wyświetlany. Do identyfikacji zapisujemy tylko jego cztery ostatnie znaki.</string>
+    <string name="settings_group_connections">Połączenia i dane logowania</string>
 </resources>

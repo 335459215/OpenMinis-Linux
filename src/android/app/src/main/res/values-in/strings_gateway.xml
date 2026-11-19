@@ -34,4 +34,5 @@
     <string name="gw_api_key">Kunci API</string>
     <string name="gw_replace_key">Ganti kunci API</string>
     <string name="gw_key_privacy">Kunci dienkripsi sekali dan tidak akan ditampilkan lagi. Hanya empat karakter terakhirnya yang disimpan untuk identifikasi.</string>
+    <string name="settings_group_connections">Koneksi dan kredensial</string>
 </resources>

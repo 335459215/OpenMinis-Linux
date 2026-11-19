@@ -117,6 +117,7 @@ fun SettingsScreen(
     onSshClick: () -> Unit = {},
     onSkillsClick: () -> Unit = {},
     onMultiAgentClick: () -> Unit = {},
+    onAgentRuntimeClick: () -> Unit = {},
     onTerminalClick: () -> Unit = {},
     onMemoryClick: () -> Unit = {},
     // [T-mcp-integration-android] MCP Integrations page, listed directly below
@@ -157,23 +158,6 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showFeedbackSheet by remember { mutableStateOf(false) }
-    var showCompactThresholdDialog by remember { mutableStateOf(false) }
-    var compactThreshold by remember {
-        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.thresholdPercent())
-    }
-    var autoNewSessionEnabled by remember {
-        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.autoNewSessionEnabled())
-    }
-    var autoNewSessionThreshold by remember {
-        mutableStateOf(com.openminis.app.data.AutoCompactPrefs.autoNewSessionThreshold())
-    }
-    var showAutoNewSessionDialog by remember { mutableStateOf(false) }
-    // [T-retry-prefs] Mirrors the persisted values so the rows re-render on change.
-    var retryEnabled by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.isEnabled()) }
-    var retryAttempts by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.maxAttempts()) }
-    var retryIntervalSec by remember { mutableStateOf(com.openminis.app.data.RetryPrefs.intervalSec()) }
-    var showRetryAttemptsDialog by remember { mutableStateOf(false) }
-    var showRetryIntervalDialog by remember { mutableStateOf(false) }
     // [T-ssh-workspace] (#32) Inline host-management sheet (no nav route).
     var showSshWorkspaceSheet by remember { mutableStateOf(false) }
     Scaffold(
@@ -285,6 +269,13 @@ fun SettingsScreen(
             // -- Agent Runtime --
             SettingsSection(header = stringResource(R.string.settings_section_agent_runtime)) {
                 SettingsRow(
+                    icon = Icons.Outlined.Tune,
+                    iconColor = IosTeal,
+                    title = stringResource(R.string.settings_section_agent_runtime),
+                    subtitle = stringResource(R.string.settings_compact_threshold_subtitle),
+                    onClick = onAgentRuntimeClick,
+                )
+                SettingsRow(
                     icon = Icons.Outlined.Groups,
                     iconColor = IosIndigo,
                     title = stringResource(R.string.settings_multi_agent),
@@ -354,88 +345,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.plugin_market_subtitle),
                     onClick = onPluginMarketClick,
                 )
-                SettingsRow(
-                    icon = Icons.Outlined.Tune,
-                    iconColor = IosTeal,
-                    title = stringResource(R.string.settings_compact_threshold),
-                    subtitle = stringResource(R.string.settings_compact_threshold_subtitle),
-                    trailing = { Text("$compactThreshold%") },
-                    onClick = { showCompactThresholdDialog = true },
-                )
-                SettingsSwitchRow(
-                    title = stringResource(R.string.settings_auto_retry),
-                    subtitle = stringResource(
-                        if (retryEnabled) R.string.settings_auto_retry_subtitle
-                        else R.string.settings_auto_retry_off_subtitle,
-                    ),
-                    checked = retryEnabled,
-                    onCheckedChange = { enabled ->
-                        retryEnabled = enabled
-                        com.openminis.app.data.RetryPrefs.setEnabled(context, enabled)
-                    },
-                    icon = Icons.Outlined.Autorenew,
-                    iconColor = IosTeal,
-                )
-                if (retryEnabled) {
-                    SettingsRow(
-                        icon = Icons.Outlined.Replay,
-                        iconColor = IosTeal,
-                        title = stringResource(R.string.settings_auto_retry_attempts),
-                        subtitle = null,
-                        trailing = {
-                            Text(
-                                stringResource(
-                                    R.string.settings_auto_retry_attempts_value,
-                                    retryAttempts,
-                                ),
-                            )
-                        },
-                        onClick = { showRetryAttemptsDialog = true },
-                    )
-                    SettingsRow(
-                        icon = Icons.Outlined.Timer,
-                        iconColor = IosTeal,
-                        title = stringResource(R.string.settings_auto_retry_interval),
-                        subtitle = null,
-                        trailing = {
-                            Text(
-                                stringResource(
-                                    R.string.settings_auto_retry_interval_value,
-                                    retryIntervalSec,
-                                ),
-                            )
-                        },
-                        onClick = { showRetryIntervalDialog = true },
-                    )
-                }
-                SettingsSwitchRow(
-                    title = stringResource(R.string.settings_auto_new_session),
-                    subtitle = stringResource(R.string.settings_auto_new_session_subtitle),
-                    checked = autoNewSessionEnabled,
-                    onCheckedChange = { enabled ->
-                        autoNewSessionEnabled = enabled
-                        com.openminis.app.data.AutoCompactPrefs.setAutoNewSessionEnabled(context, enabled)
-                    },
-                    icon = Icons.Outlined.Refresh,
-                    iconColor = IosTeal,
-                )
-                if (autoNewSessionEnabled) {
-                    SettingsRow(
-                        icon = Icons.Outlined.Repeat,
-                        iconColor = IosTeal,
-                        title = stringResource(R.string.settings_auto_new_session_threshold),
-                        subtitle = stringResource(R.string.settings_auto_new_session_threshold_subtitle),
-                        trailing = {
-                            Text(
-                                stringResource(
-                                    R.string.settings_auto_new_session_times,
-                                    autoNewSessionThreshold,
-                                ),
-                            )
-                        },
-                        onClick = { showAutoNewSessionDialog = true },
-                    )
-                }
+            SettingsSection(header = stringResource(R.string.settings_group_connections)) {
                 SettingsRow(
                     icon = Icons.Outlined.Terminal,
                     iconColor = IosGreen,
@@ -443,8 +353,6 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
                     onClick = onEnvVarsClick,
                 )
-                // [T-android-ssh-settings] Touch surface for the SSH/SFTP remote backend;
-                // before this the only entry point was the agent's add_host action.
                 SettingsRow(
                     icon = Icons.Outlined.Terminal,
                     iconColor = IosIndigo,
@@ -453,6 +361,8 @@ fun SettingsScreen(
                     onClick = onSshClick,
                     showDivider = false,
                 )
+            }
+
             }
 
             SettingsSection(header = stringResource(R.string.settings_section_tools)) {
@@ -619,61 +529,6 @@ fun SettingsScreen(
         }
     }
 
-    // [T-arch-extract-retry-ui] Compaction + retry dialogs live in
-    // RetrySettingsDialogs.kt: SettingsScreen.kt is capped at 800 lines.
-    if (showCompactThresholdDialog) {
-        CompactThresholdDialog(
-            value = compactThreshold,
-            onValueChange = { compactThreshold = it },
-            onDismiss = { showCompactThresholdDialog = false },
-            onConfirm = {
-                com.openminis.app.data.AutoCompactPrefs.setThresholdPercent(context, compactThreshold)
-                showCompactThresholdDialog = false
-            },
-        )
-    }
-
-    if (showAutoNewSessionDialog) {
-        AutoNewSessionThresholdDialog(
-            value = autoNewSessionThreshold,
-            onValueChange = { autoNewSessionThreshold = it },
-            onDismiss = { showAutoNewSessionDialog = false },
-            onConfirm = {
-                com.openminis.app.data.AutoCompactPrefs
-                    .setAutoNewSessionThreshold(context, autoNewSessionThreshold)
-                showAutoNewSessionDialog = false
-            },
-        )
-    }
-
-    // [T-arch-extract-retry-ui] Both retry dialogs live in RetrySettingsDialogs.kt:
-    // SettingsScreen.kt is capped at 800 lines.
-    if (showRetryAttemptsDialog) {
-        RetryAttemptsDialog(
-            value = retryAttempts,
-            onValueChange = { retryAttempts = it },
-            onDismiss = { showRetryAttemptsDialog = false },
-            onConfirm = {
-                com.openminis.app.data.RetryPrefs.setMaxAttempts(context, retryAttempts)
-                showRetryAttemptsDialog = false
-            },
-        )
-    }
-
-    if (showRetryIntervalDialog) {
-        RetryIntervalDialog(
-            value = retryIntervalSec,
-            onValueChange = { retryIntervalSec = it },
-            onDismiss = { showRetryIntervalDialog = false },
-            onConfirm = {
-                com.openminis.app.data.RetryPrefs.setIntervalSec(context, retryIntervalSec)
-                showRetryIntervalDialog = false
-            },
-        )
-    }
-
-    // [T-ssh-workspace] (#32) SSH hosts: add / test / remove. Inline sheet,
-    // same hosting style as the feedback sheet above.
     if (showSshWorkspaceSheet) {
         SshHostsManagerSheet(onDismiss = { showSshWorkspaceSheet = false })
     }
