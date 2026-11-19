@@ -16,10 +16,12 @@ import java.io.File
  * test replays the hand-written DDL from source and compares the resulting
  * column set with the exported schema JSON.
  *
- * [T-codex-client-fingerprint] Bumped 8 → 9: the newest migration is now
- * 8→9 (provider_instances.codex_client_fingerprint). The 7→8 assertion for
- * provider_model_entries.compat_json is KEPT as a separate case rather than
- * retargeted — a historical migration that silently disappears is exactly what
+ * [T-codex-client-fingerprint] Bumped 8 → 9: provider_instances.codex_client_fingerprint.
+ * [G-P3] Bumped 9 → 10: the newest migration is now 9→10, which CREATES the four
+ * gateway tables (gateway_channels / gateway_accounts / gateway_models /
+ * gateway_mappings) instead of adding a column. Every historical addColumn
+ * migration (7→8 compat_json, 8→9 codex_client_fingerprint) is KEPT as its own
+ * pinned case — a historical migration that silently disappears is exactly what
  * this suite exists to catch, and retargeting would have let that slip through.
  *
  * Scope note (mirrors SchemaMigrationDriftTest limitations): column comparison
@@ -46,34 +48,36 @@ class ProviderDatabaseCompatSchemaTest {
     private val migrationRegex = Regex(
         """\bMIGRATION_(\d+)_(\d+)\s*=\s*object\s*:\s*Migration\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*\{""",
     )
-    private val addColumnRegex = Regex(
-        """addColumnIfMissing\("([A-Za-z_][A-Za-z0-9_]*)",\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*,\s*"([A-Za-z_][A-Za-z0-9_ ]*)"\)""",
-    )
 
     /** Version this build declares; must equal the newest exported schema. */
-    private val currentVersion = 9
+    private val currentVersion = 10
 
-    /** Column + migration under test for the CURRENT version. */
-    private val currentTable = "provider_instances"
-    private val currentColumn = "codex_client_fingerprint"
-    private val currentMigration = 8 to 9
-
-    /** The previous version's delta, pinned so it cannot be silently dropped. */
-    private val legacyTable = "provider_model_entries"
-    private val legacyColumn = "compat_json"
-    private val legacyMigration = 7 to 8
+    /** The previous version's addColumn delta, pinned so it cannot be silently dropped. */
+    private val legacyTable = "provider_instances"
+    private val legacyColumn = "codex_client_fingerprint"
+    private val legacyMigration = 8 to 9
 
     private fun source(): String = File(dbDir, "ProviderDatabase.kt").readText()
 
-    /** All addColumnIfMissing calls inside the body of one MIGRATION_x_y. */
-    private fun columnsAddedBy(migration: Pair<Int, Int>): List<List<String>> {
+    /** Full body (source text) of one MIGRATION_x_y, empty string when absent. */
+    private fun migrationBody(migration: Pair<Int, Int>): String {
         val src = source()
         val match = migrationRegex.findAll(src)
             .firstOrNull { (it.groupValues[1].toInt() to it.groupValues[2].toInt()) == migration }
-            ?: return emptyList()
+            ?: return ""
         val bodyStart = match.range.last + 1
-        val segment = src.substring(bodyStart, src.indexOf('}', bodyStart))
-        return addColumnRegex.findAll(segment).map { it.groupValues }.toList()
+        // The migration body ends at the first '{'-balanced close of the object;
+        // it contains nested blocks, so scan braces instead of indexOf('}').
+        var depth = 1
+        var i = bodyStart
+        while (i < src.length && depth > 0) {
+            when (src[i]) {
+                '{' -> depth++
+                '}' -> depth--
+            }
+            i++
+        }
+        return src.substring(bodyStart, i - 1)
     }
 
     private fun exportedSchemas(): List<Pair<Int, File>> =
@@ -95,43 +99,58 @@ class ProviderDatabaseCompatSchemaTest {
     }
 
     @Test
-    fun `database version is 9`() {
+    fun `database version is 10`() {
         assertTrue(
-            "ProviderDatabase must declare version = 9",
-            source().contains(Regex("""version\s*=\s*9,""")),
+            "ProviderDatabase must declare version = 10",
+            source().contains(Regex("""version\s*=\s*10,""")),
         )
     }
 
     @Test
-    fun `MIGRATION_8_9 adds codex_client_fingerprint as NOT NULL DEFAULT 0`() {
-        val added = columnsAddedBy(currentMigration)
-            .filter { it[1] == currentTable && it[2] == currentColumn }
+    fun `MIGRATION_9_10 creates the four gateway tables`() {
+        val body = migrationBody(9 to 10)
+        assertTrue("MIGRATION_9_10 must exist in ProviderDatabase.kt", body.isNotEmpty())
+        // 四张网关表 + 三个 channelId 索引，一个都不能少。
+        val statements = body.split("db.execSQL(")
+        for (table in listOf(
+            "gateway_channels", "gateway_accounts", "gateway_models", "gateway_mappings",
+        )) {
+            assertEquals(
+                "MIGRATION_9_10 must CREATE TABLE $table exactly once",
+                1,
+                statements.count { it.contains("CREATE TABLE IF NOT EXISTS $table (") },
+            )
+        }
+        for (index in listOf(
+            "index_gateway_accounts_channelId",
+            "index_gateway_models_channelId",
+            "index_gateway_mappings_channelId",
+        )) {
+            assertEquals(
+                "MIGRATION_9_10 must CREATE INDEX $index exactly once",
+                1,
+                statements.count { it.contains("CREATE INDEX IF NOT EXISTS $index") },
+            )
+        }
+        // 网关表是新增实体：迁移里绝不允许出现 DROP，否则升级即数据丢失。
+        assertFalse("MIGRATION_9_10 must not DROP anything", body.contains("DROP"))
+    }
+
+    @Test
+    fun `historical MIGRATION_8_9 still adds codex_client_fingerprint`() {
+        val body = migrationBody(legacyMigration)
+        assertTrue("MIGRATION_8_9 must exist in ProviderDatabase.kt", body.isNotEmpty())
         assertEquals(
-            "MIGRATION_8_9 must addColumnIfMissing($currentTable, $currentColumn, ...) exactly once",
+            "MIGRATION_8_9 must addColumnIfMissing($legacyTable, $legacyColumn, ...) exactly once",
             1,
-            added.size,
+            Regex(
+                """addColumnIfMissing\("$legacyTable",\s*"$legacyColumn",\s*"INTEGER NOT NULL DEFAULT 0"\)""",
+            ).findAll(body).count(),
         )
-        // 存量行必须回填为关：DEFAULT 0 缺了的话 NOT NULL 列加不上去，迁移直接崩。
-        val type = added[0][3]
-        assertTrue("column type must be INTEGER NOT NULL DEFAULT 0, got '$type'", type.startsWith("INTEGER"))
-        assertTrue("column must be NOT NULL", type.contains("NOT NULL"))
-        assertTrue("column must default to 0 so existing rows read as off", type.contains("DEFAULT 0"))
     }
 
     @Test
-    fun `historical MIGRATION_7_8 still adds compat_json`() {
-        val added = columnsAddedBy(legacyMigration)
-            .filter { it[1] == legacyTable && it[2] == legacyColumn }
-        assertEquals(
-            "MIGRATION_7_8 must still addColumnIfMissing($legacyTable, $legacyColumn, TEXT)",
-            1,
-            added.size,
-        )
-        assertEquals("compat_json must stay nullable TEXT", "TEXT", added[0][3])
-    }
-
-    @Test
-    fun `newest exported schema is version 9`() {
+    fun `newest exported schema is version 10`() {
         val schemas = exportedSchemas()
         assertTrue("at least two schemas must be exported", schemas.size >= 2)
         assertEquals(
@@ -148,52 +167,7 @@ class ProviderDatabaseCompatSchemaTest {
     }
 
     @Test
-    fun `schema 9 carries codex_client_fingerprint on provider_instances`() {
-        val newest = exportedSchemas().last().second
-        val fields = columnsOf(newest, currentTable)
-        val col = fields.firstOrNull { it.getString("columnName") == currentColumn }
-        assertNotNull("exported schema must carry $currentTable.$currentColumn", col)
-        assertEquals("INTEGER", col!!.getString("affinity"))
-        assertTrue("$currentColumn must be NOT NULL (entity default 0 backfills)", col.getBoolean("notNull"))
-    }
-
-    @Test
-    fun `schema 9 keeps the full provider_instances column set`() {
-        val newest = exportedSchemas().last().second
-        val names = columnsOf(newest, currentTable).map { it.getString("columnName") }.toSet()
-        // 逐列 pin 住：历史迁移被静默丢掉时，这里会立刻炸，而不是被"重新加一遍"
-        // 掩盖过去。顺序不 pin（SQLite 列序不影响读写），集合必须完全相等。
-        assertEquals(
-            setOf(
-                "id", "label", "provider_type", "credential_type", "custom_base_url",
-                "append_v1_suffix", "use_responses_api", "azure_mode", "force_thinking",
-                "image_endpoint_mode", "image_endpoint_resolved", "custom_user_agent",
-                "codex_client_fingerprint",
-                "is_enabled", "pinned", "sort_order", "created_at",
-            ),
-            names,
-        )
-    }
-
-    @Test
-    fun `schema 9 keeps provider_model_entries shape`() {
-        val newest = exportedSchemas().last().second
-        val fields = columnsOf(newest, legacyTable)
-        val names = fields.map { it.getString("columnName") }.toSet()
-        assertEquals(
-            setOf(
-                "id", "provider_instance_id", "base_model_json", "overrides_json",
-                "is_custom", "is_hidden", "sort_order", "user_modified_at", "compat_json",
-            ),
-            names,
-        )
-        val compat = fields.firstOrNull { it.getString("columnName") == legacyColumn }
-        assertNotNull("$legacyTable.$legacyColumn must survive into schema 9", compat)
-        assertFalse("compat_json must stay nullable", compat!!.getBoolean("notNull"))
-    }
-
-    @Test
-    fun `schema 9 describes every entity the database declares`() {
+    fun `schema 10 carries the four gateway tables`() {
         val newest = exportedSchemas().last().second
         val json = JSONObject(newest.readText()).getJSONObject("database")
         val arr = json.getJSONArray("entities")
@@ -202,8 +176,62 @@ class ProviderDatabaseCompatSchemaTest {
             setOf(
                 "provider_instances", "provider_model_entries", "provider_model_groups",
                 "provider_agent_loop_ids", "provider_config_meta", "provider_thinking_rules",
+                "gateway_channels", "gateway_accounts", "gateway_models", "gateway_mappings",
             ),
             tables,
         )
+        // 逐表 pin 关键列：gateway 表是 G-P3 的核心资产，列集变了这里立刻炸。
+        assertEquals(
+            setOf(
+                "id", "name", "protocol", "baseUrl", "urlSuffix", "headersJson",
+                "sortOrder", "enabled", "createdAt",
+            ),
+            columnsOf(newest, "gateway_channels").map { it.getString("columnName") }.toSet(),
+        )
+        assertEquals(
+            setOf(
+                "id", "channelId", "name", "keyRef", "keyTail", "priority",
+                "enabled", "maxConcurrent", "extraJson", "createdAt",
+            ),
+            columnsOf(newest, "gateway_accounts").map { it.getString("columnName") }.toSet(),
+        )
+        assertEquals(
+            setOf("id", "channelId", "modelId", "enabled", "capabilitiesJson"),
+            columnsOf(newest, "gateway_models").map { it.getString("columnName") }.toSet(),
+        )
+        assertEquals(
+            setOf("id", "channelId", "alias", "target", "enabled", "reasoning"),
+            columnsOf(newest, "gateway_mappings").map { it.getString("columnName") }.toSet(),
+        )
+    }
+
+    @Test
+    fun `schema 10 carries codex_client_fingerprint on provider_instances`() {
+        val newest = exportedSchemas().last().second
+        val fields = columnsOf(newest, "provider_instances")
+        val col = fields.firstOrNull { it.getString("columnName") == "codex_client_fingerprint" }
+        assertNotNull("exported schema must carry provider_instances.codex_client_fingerprint", col)
+        assertEquals("INTEGER", col!!.getString("affinity"))
+        assertTrue(
+            "codex_client_fingerprint must be NOT NULL (entity default 0 backfills)",
+            col.getBoolean("notNull"),
+        )
+    }
+
+    @Test
+    fun `schema 10 keeps provider_model_entries shape`() {
+        val newest = exportedSchemas().last().second
+        val fields = columnsOf(newest, "provider_model_entries")
+        val names = fields.map { it.getString("columnName") }.toSet()
+        assertEquals(
+            setOf(
+                "id", "provider_instance_id", "base_model_json", "overrides_json",
+                "is_custom", "is_hidden", "sort_order", "user_modified_at", "compat_json",
+            ),
+            names,
+        )
+        val compat = fields.firstOrNull { it.getString("columnName") == "compat_json" }
+        assertNotNull("provider_model_entries.compat_json must survive into schema 10", compat)
+        assertFalse("compat_json must stay nullable", compat!!.getBoolean("notNull"))
     }
 }

@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
@@ -22,6 +26,10 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Title is centered on the full bar width, not in the leftover gap between
@@ -35,7 +43,7 @@ import androidx.compose.foundation.layout.WindowInsets
 fun MinisCenterTopBar(
     title: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    navigationIcon: @Composable () -> Unit = {},
+    navigationIcon: @Composable () -> Unit = { MinisDefaultBackIcon() },
     actions: @Composable RowScope.() -> Unit = {},
     colors: TopAppBarColors = TopAppBarDefaults.centerAlignedTopAppBarColors(),
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
@@ -102,5 +110,19 @@ fun MinisCenterTopBar(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MinisDefaultBackIcon() {
+    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    IconButton(
+        onClick = { dispatcher?.onBackPressed() },
+        enabled = dispatcher != null,
+    ) {
+        Icon(
+            imageVector = m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
+            contentDescription = stringResource(R.string.common_back),
+        )
     }
 }
