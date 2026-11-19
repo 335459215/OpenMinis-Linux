@@ -34,4 +34,5 @@
     <string name="gw_api_key">Clave de API</string>
     <string name="gw_replace_key">Sustituir clave de API</string>
     <string name="gw_key_privacy">La clave se cifra una vez y no vuelve a mostrarse. Solo se guardan sus últimos cuatro caracteres para identificarla.</string>
+    <string name="settings_group_connections">Conexiones y credenciales</string>
 </resources>

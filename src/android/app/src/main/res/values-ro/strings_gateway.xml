@@ -34,4 +34,5 @@
     <string name="gw_api_key">Cheie API</string>
     <string name="gw_replace_key">Înlocuiește cheia API</string>
     <string name="gw_key_privacy">Cheia este criptată o singură dată și nu va mai fi afișată. Doar ultimele patru caractere sunt salvate pentru identificare.</string>
+    <string name="settings_group_connections">Conexiuni și acreditări</string>
 </resources>

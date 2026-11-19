@@ -34,4 +34,5 @@
     <string name="gw_api_key">API anahtarı</string>
     <string name="gw_replace_key">API anahtarını değiştir</string>
     <string name="gw_key_privacy">Anahtar bir kez şifrelenir ve bir daha asla gösterilmez. Tanımlama için yalnızca son dört karakteri saklanır.</string>
+    <string name="settings_group_connections">Bağlantılar ve kimlik bilgileri</string>
 </resources>

@@ -34,4 +34,5 @@
     <string name="gw_api_key">API 키</string>
     <string name="gw_replace_key">API 키 교체</string>
     <string name="gw_key_privacy">키는 한 번 암호화된 후 다시 표시되지 않습니다. 식별을 위해 마지막 네 문자만 저장됩니다.</string>
+    <string name="settings_group_connections">연결 및 자격 증명</string>
 </resources>

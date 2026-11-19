@@ -34,4 +34,5 @@
     <string name="gw_api_key">API 金鑰</string>
     <string name="gw_replace_key">更換 API 金鑰</string>
     <string name="gw_key_privacy">金鑰只會加密寫入一次，絕不再次顯示。僅保存末四位以供識別。</string>
+    <string name="settings_group_connections">連線與憑證</string>
 </resources>

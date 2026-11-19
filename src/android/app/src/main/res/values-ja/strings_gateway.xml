@@ -34,4 +34,5 @@
     <string name="gw_api_key">API キー</string>
     <string name="gw_replace_key">API キーを置き換える</string>
     <string name="gw_key_privacy">キーは一度だけ暗号化され、再表示されることはありません。識別用に末尾4文字のみ保存されます。</string>
+    <string name="settings_group_connections">接続と認証情報</string>
 </resources>

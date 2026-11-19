@@ -34,4 +34,5 @@
     <string name="gw_api_key">คีย์ API</string>
     <string name="gw_replace_key">เปลี่ยนคีย์ API</string>
     <string name="gw_key_privacy">คีย์จะถูกเข้ารหัสเพียงครั้งเดียวและจะไม่แสดงอีก บันทึกเพียงสี่อักขระสุดท้ายเพื่อใช้ระบุ</string>
+    <string name="settings_group_connections">การเชื่อมต่อและข้อมูลรับรอง</string>
 </resources>
