@@ -168,31 +168,6 @@ fun AddProviderScreen(
     }
 }
 
-/** Returns available credential types per provider. */
-private fun availableCredentials(type: ProviderType): List<ProviderCredential> {
-    return when (type) {
-        ProviderType.openRouter -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        ProviderType.anthropic,
-        ProviderType.openAI -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        ProviderType.gemini -> listOf(ProviderCredential.apiKey)
-        // xAI Grok primarily targets SuperGrok / X Premium+ OAuth, but also
-        // offers a plain API key path (api.x.ai). Mirror OpenAI's pattern
-        // of exposing both so users on tiers without OAuth API access can
-        // still configure manually.
-        ProviderType.xAI -> listOf(ProviderCredential.oauth, ProviderCredential.apiKey)
-        // [T-kimi-oauth] Primary target is the Coding Plan device-code
-        // sign-in; a manual Moonshot API key remains available.
-        ProviderType.kimiCode -> listOf(ProviderCredential.oauth, ProviderCredential.apiKey)
-        // [T-android-provider-type-parity] Responses API instances authenticate
-        // exactly like OpenAI ones (API key, or a Codex OAuth login).
-        ProviderType.openAIResponses -> listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
-        // Undrivable types: an API key is the only thing worth showing, and the
-        // screen never offers them for creation anyway.
-        ProviderType.antigravity,
-        ProviderType.unsupported -> listOf(ProviderCredential.apiKey)
-    }
-}
-
 // -- Step 1: Choose Provider Type --
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -222,6 +197,9 @@ private fun ChooseProviderScreen(
                     ProviderType.openRouter -> "OpenRouter"
                     ProviderType.xAI -> "xAI (Grok)"
                     ProviderType.kimiCode -> "Kimi Code"
+                    // [G-P3] Localized gateway title (enum displayName is
+                    // English-only in the pure-JVM core model).
+                    ProviderType.gateway -> stringResource(R.string.provider_type_gateway)
                     // [T-android-provider-type-parity] Fall back to the enum's
                     // own display name for types this screen doesn't curate.
                     ProviderType.openAIResponses,
@@ -241,6 +219,7 @@ private fun ChooseProviderScreen(
                     // creation; reuse the OpenAI copy for the Responses API and
                     // a generic line for the undrivable types.
                     ProviderType.openAIResponses -> R.string.add_provider_subtitle_openai
+                    ProviderType.gateway -> R.string.add_provider_subtitle_gateway
                     ProviderType.antigravity,
                     ProviderType.unsupported -> R.string.add_provider_subtitle_openai
                 }
@@ -459,6 +438,7 @@ private fun ColumnScope.ApiKeyConfigSection(
         ProviderType.xAI -> "xai-..."
         ProviderType.kimiCode -> "sk-..."
         ProviderType.openAIResponses -> "sk-..."
+        ProviderType.gateway -> ""
         ProviderType.antigravity,
         ProviderType.unsupported -> "API Key..."
     }
@@ -645,6 +625,7 @@ private fun ColumnScope.OAuthConfigSection(
         ProviderType.xAI -> "Sign in with xAI"
         ProviderType.kimiCode -> "Sign in with Kimi Code"
         ProviderType.openAIResponses -> "Sign in with OpenAI"
+        ProviderType.gateway -> "Sign in"
         ProviderType.antigravity,
         ProviderType.unsupported -> "Sign in"
     }
@@ -824,6 +805,8 @@ private fun ColumnScope.OAuthConfigSection(
             // [T-kimi-oauth] /v1 is load-bearing (…/coding/… 404s without it).
             ProviderType.kimiCode -> "https://api.kimi.com/coding/v1"
             ProviderType.openAIResponses -> "https://api.openai.com"
+            // [G-P3] No endpoint on the instance — channels carry their own.
+            ProviderType.gateway -> ""
             ProviderType.antigravity,
             ProviderType.unsupported -> ""
         }

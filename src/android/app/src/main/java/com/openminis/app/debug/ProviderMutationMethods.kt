@@ -220,6 +220,7 @@ internal object ProviderMutationMethods {
             ProviderType.openRouter -> "https://openrouter.ai/api/v1"
             ProviderType.xAI -> "https://api.x.ai/v1"
             ProviderType.kimiCode -> "https://api.kimi.com/coding/v1"
+            ProviderType.gateway -> ""
             ProviderType.antigravity, ProviderType.unsupported -> ""
         }
         val probeURL = when (instance.providerType) {
@@ -232,6 +233,8 @@ internal object ProviderMutationMethods {
             ProviderType.xAI -> if (baseURL.endsWith("/v1")) "$baseURL/models" else "$baseURL/v1/models"
             // Kimi Coding: OpenAI-compatible /models under /coding/v1.
             ProviderType.kimiCode -> if (baseURL.endsWith("/v1")) "$baseURL/models" else "$baseURL/v1/models"
+            // [G-P3] No single probe endpoint — channels have their own.
+            ProviderType.gateway -> baseURL
             // No probe endpoint for a type this build cannot drive.
             ProviderType.antigravity, ProviderType.unsupported -> baseURL
         }
@@ -253,6 +256,9 @@ internal object ProviderMutationMethods {
             ProviderType.xAI -> if (!key.isNullOrEmpty()) builder.header("Authorization", "Bearer $key")
             // Kimi Coding: OpenAI-compat bearer (OAuth access token or key).
             ProviderType.kimiCode -> if (!key.isNullOrEmpty()) builder.header("Authorization", "Bearer $key")
+            // [G-P3] Gateway keys are per channel account; the instance-level
+            // key slot is empty, so the probe sends no auth header.
+            ProviderType.gateway -> { /* keys live per channel */ }
             // [T-android-provider-type-parity] No auth scheme known for a type
             // this build cannot drive; the probe will simply fail.
             ProviderType.antigravity, ProviderType.unsupported -> { /* no auth */ }

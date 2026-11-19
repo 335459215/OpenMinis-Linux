@@ -604,6 +604,8 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     // OpenAI under the hood — same green dot. Undrivable types share
     // the neutral gray used for "no provider".
     ProviderType.openAIResponses -> Color(0xFF4CAF50)
+    // [G-P3] Same violet as the add-provider icon cue.
+    ProviderType.gateway -> Color(0xFF7E57C2)
     ProviderType.antigravity,
     ProviderType.unsupported -> Color(0xFF8E8E93)
     null -> Color(0xFF8E8E93)

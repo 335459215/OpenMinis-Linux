@@ -332,6 +332,10 @@ internal class ModelCatalogCache(
                     // [T-android-provider-type-parity] No models endpoint to
                     // query for a type this build cannot drive; the instance
                     // keeps whatever entries the restore brought with it.
+                    // [G-P3] Gateway models are the aggregated channel catalog
+                    // (gateway/catalog/ModelCatalog), not a /models fetch —
+                    // no live endpoint to query here.
+                    ProviderType.gateway -> emptyList()
                     ProviderType.antigravity, ProviderType.unsupported -> emptyList()
                 }
             } catch (e: Exception) {
@@ -591,6 +595,9 @@ internal class ModelCatalogCache(
             ProviderType.openRouter -> "https://openrouter.ai/api/v1"
             ProviderType.xAI -> "https://api.x.ai/v1"
             ProviderType.kimiCode -> "${com.openminis.app.auth.KimiDeviceFlow.CODING_API_BASE}/v1"
+            // [G-P3] No canonical host — a gateway instance fronts the
+            // channel pool, and each channel carries its own base URL.
+            ProviderType.gateway -> ""
             // No canonical host for a type this build cannot drive. Callers
             // reaching here have already exhausted effectiveBaseURL.
             ProviderType.antigravity, ProviderType.unsupported -> "https://api.openai.com/v1"

@@ -71,7 +71,7 @@ class ProviderRepository(
             ProviderType.xAI, ProviderType.kimiCode, ProviderType.openAIResponses ->
                 listOf(ProviderCredential.apiKey, ProviderCredential.oauth)
             ProviderType.gemini -> listOf(ProviderCredential.apiKey)
-            ProviderType.antigravity, ProviderType.unsupported -> listOf(ProviderCredential.apiKey)
+            ProviderType.gateway, ProviderType.antigravity, ProviderType.unsupported -> listOf(ProviderCredential.apiKey) // [G-P3] gateway keys live in channel accounts
         }
 
         internal fun supportsCredential(type: ProviderType, credential: ProviderCredential): Boolean =

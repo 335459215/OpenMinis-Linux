@@ -2499,6 +2499,9 @@
     <string name="voice_correction_cleared">Voice correction data cleared</string>
     <string name="voice_provider_system">System</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan — sign in with your Kimi account</string>
+    <string name="provider_type_gateway">Gateway</string>
+    <string name="add_provider_subtitle_gateway">Aggregate channels with automatic failover</string>
+    <string name="add_provider_api_key_desc_gateway">Keys are stored per channel account in encrypted preferences</string>
     <string name="kimi_login_title">Sign in with Kimi Code</string>
     <string name="kimi_login_instructions">Open the verification page and enter this code to authorize Minis Ultra:</string>
     <string name="kimi_login_copy_code">Copy code</string>

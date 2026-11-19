@@ -755,6 +755,9 @@ object QuotaStore {
             ProviderType.openAIResponses -> QuotaInstanceDescriptor.ProviderKind.openAIResponses
             ProviderType.xAI -> QuotaInstanceDescriptor.ProviderKind.xAI
             ProviderType.kimiCode -> QuotaInstanceDescriptor.ProviderKind.kimiCode
+            // [G-P3] Gateway is a virtual aggregator, not a quota vendor of
+            // its own; per-account quotas live with each channel upstream.
+            ProviderType.gateway -> QuotaInstanceDescriptor.ProviderKind.unsupported
             // [port-upstream-1.16] This tree's ProviderType has no
             // githubCopilot case yet; add the mapping here when it lands.
             ProviderType.unsupported -> QuotaInstanceDescriptor.ProviderKind.unsupported
@@ -777,6 +780,8 @@ object QuotaStore {
         ProviderType.kimiCode,
         ->
             com.openminis.app.provider.OpenCodeSessionHeader.matches(instance.customBaseURL)
+        // [G-P3] A gateway instance is not an OpenCode channel itself.
+        ProviderType.gateway -> false
         ProviderType.anthropic, ProviderType.gemini, ProviderType.antigravity, ProviderType.unsupported -> false
     }
 

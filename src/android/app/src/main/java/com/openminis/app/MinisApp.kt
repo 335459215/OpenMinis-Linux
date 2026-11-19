@@ -365,6 +365,9 @@ class MinisApp : Application(), ImageLoaderFactory {
         // Possibly null (runCatching-guarded); readers tolerate null.
         AppGraph.installEvolutionEngine(evolutionEngineInstance)
         appContainer.webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
+        // [G-P1 原生网关] 供给 ProviderFactory 的 gateway 分支（渠道池就绪前 factory 抛错）。
+        com.openminis.app.gateway.GatewayRuntime.repository =
+            com.openminis.app.gateway.store.GatewayRepository.getInstance(this)
         MinisAppAsyncInit.startWarmup(appContainer)
 
         // T-android-safemode-lateinit-crash: UI deps are ready, so set the flag early — a late non-UI failure must not lock the user out.

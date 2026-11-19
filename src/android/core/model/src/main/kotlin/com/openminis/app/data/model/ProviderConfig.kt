@@ -16,6 +16,15 @@ enum class ProviderType(val displayName: String) {
     // name-based (ProviderCredential.valueOf), so appending is migration-safe.
     kimiCode("Kimi Code"),
 
+    /**
+     * [G-P3] Native gateway channel aggregator — a virtual provider whose
+     * "models" are aliases resolved per-request across the channel pool
+     * (gateway/store + gateway/router). displayName stays English here
+     * (core/model is pure JVM, no strings.xml); the UI layer localizes via
+     * `provider_type_gateway`.
+     */
+    gateway("Gateway"),
+
     // [T-android-provider-type-parity] The cases below exist on iOS but were
     // missing here. They are declared so a cross-platform restore or sync can
     // DECODE them: without a case, kotlinx.serialization throws on the unknown
@@ -66,6 +75,9 @@ enum class ProviderType(val displayName: String) {
             // openAIResponses included: it routes through the OpenAI provider
             // with the Responses endpoint forced on.
             anthropic, gemini, openAI, openRouter, xAI, kimiCode, openAIResponses -> true
+            // [G-P3] Gateway instances are driven by GatewayProvider via the
+            // channel pool — fully usable.
+            gateway -> true
             antigravity, unsupported -> false
         }
 
@@ -79,7 +91,9 @@ enum class ProviderType(val displayName: String) {
             kimiCode -> LLMModel.allKimi
             // No built-in catalog for the decode-only types; models restored
             // alongside the instance still appear as custom entries.
-            openAIResponses, antigravity, unsupported -> emptyList()
+            // [G-P3] Gateway models come from the channel pool at runtime
+            // (ModelCatalog), never from a static vendor list.
+            openAIResponses, gateway, antigravity, unsupported -> emptyList()
         }
 
     companion object {

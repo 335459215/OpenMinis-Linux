@@ -26,6 +26,8 @@ internal val providerDisplayOrder = listOf(
     ProviderType.xAI,
     ProviderType.kimiCode,
     ProviderType.openRouter,
+    // [G-P3] Native gateway — channel aggregator entry.
+    ProviderType.gateway,
 )
 
 /**
@@ -74,6 +76,8 @@ internal fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (
     // package / newer build; never offered in addableProviderTypes, but the
     // icon helper is also used to render an already-restored instance.
     ProviderType.openAIResponses -> Icons.Default.Hub to Color(0xFF4CAF50)
+    // [G-P3] Gateway — multi-channel router visual cue.
+    ProviderType.gateway -> Icons.Default.AltRoute to Color(0xFF7E57C2)
     ProviderType.antigravity,
     ProviderType.unsupported -> Icons.Default.Cloud to Color(0xFF9E9E9E)
 }
@@ -107,6 +111,8 @@ internal fun apiKeyDescription(type: ProviderType): String = when (type) {
     ProviderType.xAI -> stringResource(R.string.add_provider_api_key_desc_xai)
     ProviderType.kimiCode -> stringResource(R.string.add_provider_api_key_desc_kimicode)
     ProviderType.openAIResponses -> stringResource(R.string.add_provider_api_key_desc_openai_responses)
+    // [G-P3] Keys are managed per channel account, not on the instance.
+    ProviderType.gateway -> stringResource(R.string.add_provider_api_key_desc_gateway)
     ProviderType.antigravity,
     ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
 }
@@ -120,6 +126,8 @@ internal fun oauthDescription(type: ProviderType): String = when (type) {
     ProviderType.openRouter -> stringResource(R.string.add_provider_oauth_desc_openrouter)
     ProviderType.kimiCode -> stringResource(R.string.add_provider_oauth_desc_kimicode)
     ProviderType.openAIResponses -> stringResource(R.string.add_provider_oauth_desc_openai)
+    // [G-P3] Gateway has no OAuth flow; keys live on channel accounts.
+    ProviderType.gateway -> stringResource(R.string.add_provider_api_key_desc_gateway)
     ProviderType.antigravity,
     ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
 }

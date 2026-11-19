@@ -85,6 +85,8 @@ internal object ProviderDebugMethods {
         // [T-android-provider-type-parity] Responses API shares the OpenAI
         // host; undrivable types have no canonical base to report.
         ProviderType.openAIResponses -> "https://api.openai.com"
+        // [G-P3] Each channel carries its own base URL.
+        ProviderType.gateway -> ""
         ProviderType.antigravity, ProviderType.unsupported -> ""
     }
 

@@ -1,6 +1,10 @@
 package com.openminis.app.data.db
 
 import android.content.Context
+import com.openminis.app.gateway.store.ChannelAccountEntity
+import com.openminis.app.gateway.store.ChannelEntity
+import com.openminis.app.gateway.store.ChannelMappingEntity
+import com.openminis.app.gateway.store.ChannelModelEntity
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -44,12 +48,19 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderAgentLoopIdEntity::class,
         ProviderConfigMetaEntity::class,
         ProviderThinkingRuleEntity::class,
+        ChannelEntity::class,
+        ChannelAccountEntity::class,
+        ChannelModelEntity::class,
+        ChannelMappingEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 abstract class ProviderDatabase : RoomDatabase() {
     abstract fun providerConfigDao(): ProviderConfigDao
+
+    /** [G-P1 原生网关] Room 据此生成 GatewayDao 实现；GatewayRepository 单例经此取 DAO。 */
+    abstract fun gatewayDao(): com.openminis.app.gateway.store.GatewayDao
 
     companion object {
         @Volatile
@@ -179,6 +190,79 @@ abstract class ProviderDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * [G-P1 原生网关] 新增网关四表（渠道/账号/模型/映射）。纯追加
+         * CREATE TABLE：旧 5 表一行不动，网关功能未配置的用户就是四张空表，
+         * 读写行为与迁移前逐字节一致。DDL 逐字对齐契约
+         * (gateway-contract.md「P1 数据面」)：gateway_accounts/model/mapping 的
+         * channelId 建索引（candidatesFor 按渠道联查）；明文 key 不进 Room，
+         * 只存 keyRef。10.json 随本次构建导出到 schemas/，需一并入库。
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_channels (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        protocol TEXT NOT NULL,
+                        baseUrl TEXT NOT NULL,
+                        urlSuffix TEXT NOT NULL DEFAULT '',
+                        headersJson TEXT NOT NULL DEFAULT '{}',
+                        sortOrder INTEGER NOT NULL,
+                        enabled INTEGER NOT NULL DEFAULT 1,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_accounts (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        channelId TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        keyRef TEXT NOT NULL,
+                        keyTail TEXT NOT NULL DEFAULT '',
+                        priority INTEGER NOT NULL,
+                        enabled INTEGER NOT NULL DEFAULT 1,
+                        maxConcurrent INTEGER NOT NULL DEFAULT 0,
+                        extraJson TEXT NOT NULL DEFAULT '{}',
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gateway_accounts_channelId " +
+                    "ON gateway_accounts(channelId)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_models (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        channelId TEXT NOT NULL,
+                        modelId TEXT NOT NULL,
+                        enabled INTEGER NOT NULL DEFAULT 1,
+                        capabilitiesJson TEXT NOT NULL DEFAULT '{}'
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gateway_models_channelId " +
+                    "ON gateway_models(channelId)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gateway_mappings (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        channelId TEXT NOT NULL,
+                        alias TEXT NOT NULL,
+                        target TEXT NOT NULL,
+                        enabled INTEGER NOT NULL DEFAULT 1,
+                        reasoning TEXT NOT NULL DEFAULT ''
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gateway_mappings_channelId " +
+                    "ON gateway_mappings(channelId)")
+            }
+        }
+
         fun getInstance(context: Context): ProviderDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -188,7 +272,7 @@ abstract class ProviderDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                        MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     )
                     .build()
                     .also { INSTANCE = it }

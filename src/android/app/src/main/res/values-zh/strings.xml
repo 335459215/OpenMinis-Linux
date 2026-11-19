@@ -2192,6 +2192,9 @@
     <string name="voice_correction_cleared">语音纠错数据已清除</string>
     <string name="voice_provider_system">系统</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan — 使用 Kimi 账号登录</string>
+    <string name="provider_type_gateway">网关</string>
+    <string name="add_provider_subtitle_gateway">聚合多渠道，自动故障转移</string>
+    <string name="add_provider_api_key_desc_gateway">密钥按渠道账户存入加密偏好</string>
     <string name="kimi_login_title">使用 Kimi Code 登录</string>
     <string name="kimi_login_instructions">打开验证页面并输入以下代码以授权 Minis Ultra:</string>
     <string name="kimi_login_copy_code">复制代码</string>

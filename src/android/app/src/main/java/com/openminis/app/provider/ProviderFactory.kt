@@ -315,6 +315,25 @@ object ProviderFactory {
                     ).also { it.supportsPriorityProcessing = true }
                 }
             }
+            // [G-P3] Gateway instances are virtual: the real upstream is picked
+            // per-request from the channel pool (gateway/store) by the process-
+            // singleton Router (gateway/router), so there is nothing to build
+            // here except the aggregator. Deps come from GatewayRuntime because
+            // this factory's signature (instance+apiKey+model) predates the
+            // gateway design — the apiKey/model params are meaningless for a
+            // type whose credentials and models live in the channel pool.
+            ProviderType.gateway -> {
+                val repo = com.openminis.app.gateway.GatewayRuntime.repository
+                    ?: throw com.openminis.app.data.model.LLMError.ProviderError(
+                        "Gateway channel pool is not initialized yet (app still starting up)",
+                    )
+                com.openminis.app.gateway.GatewayProvider(
+                    instance = instance,
+                    repository = repo,
+                    router = com.openminis.app.gateway.GatewayRuntime.router,
+                    model = model,
+                )
+            }
             ProviderType.kimiCode -> {
                 // [T-kimi-oauth] Kimi Coding Plan — OpenAI-compatible upstream.
                 // ⚠️ The `/v1` is load-bearing: /coding/chat/completions 404s;

@@ -111,6 +111,9 @@ object VoiceProviderFactory {
 
             // [T-kimi-oauth] Kimi Coding Plan serves no voice models.
             ProviderType.kimiCode -> null
+            // [G-P3] The gateway aggregates chat models per channel; voice is
+            // not part of the channel schema, so there is nothing to serve.
+            ProviderType.gateway -> null
             // [T-android-provider-type-parity] No voice support for types this
             // build cannot drive.
             ProviderType.antigravity, ProviderType.unsupported -> null
