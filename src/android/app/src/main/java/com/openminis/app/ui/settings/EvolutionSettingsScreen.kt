@@ -43,7 +43,7 @@ fun EvolutionSettingsScreen(onBack: () -> Unit) {
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.evolution_enable_title),
-                subtitle = stringResource(R.string.evolution_enable_subtitle),
+                helpText = stringResource(R.string.evolution_enable_subtitle),
                 checked = enabled,
                 onCheckedChange = { on ->
                     enabled = on

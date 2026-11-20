@@ -336,7 +336,7 @@ fun CheckUpdateSection() {
         // confirmation dialog, which this toggle bypasses entirely.
         com.openminis.app.ui.settings.SettingsSwitchRow(
             title = stringResource(R.string.check_update_wifi_only),
-            subtitle = stringResource(R.string.check_update_wifi_only_sub),
+            helpText = stringResource(R.string.check_update_wifi_only_sub),
             checked = wifiOnly,
             onCheckedChange = { checked ->
                 wifiOnly = checked
@@ -347,7 +347,7 @@ fun CheckUpdateSection() {
         // channel (android-latest, CI builds). Off by default.
         com.openminis.app.ui.settings.SettingsSwitchRow(
             title = stringResource(R.string.check_update_include_rolling),
-            subtitle = stringResource(R.string.check_update_include_rolling_sub),
+            helpText = stringResource(R.string.check_update_include_rolling_sub),
             checked = includeRolling,
             onCheckedChange = { checked ->
                 includeRolling = checked

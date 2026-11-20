@@ -4807,67 +4807,48 @@ fun ChatScreen(
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // Left: + button (iOS: 34×34 circle, secondary bg)
-                        Box {
-                            InputCircleButton(
-                                onClick = { showAttachMenu = true },
-                            ) {
-                                Icon(
-                                    m3Icon(Icons.Default.Add),
-                                    contentDescription = stringResource(R.string.cd_attach),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
-                            MinisMenu(
-                                expanded = showAttachMenu,
-                                onDismissRequest = { showAttachMenu = false },
-                            ) {
-                                // iOS parity: Take Photo / Choose Photos & Videos / Add File
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_attach_take_photo)) },
-                                    leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
-                                    onClick = {
-                                        showAttachMenu = false
-                                        launchExternalPickerAfterMenuDismiss {
-                                            val granted = ContextCompat.checkSelfPermission(
-                                                context, android.Manifest.permission.CAMERA,
-                                            ) == PackageManager.PERMISSION_GRANTED
-                                            if (granted) {
-                                                launchCamera()
-                                            } else {
-                                                cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
-                                            }
-                                        }
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_attach_choose_photos_videos)) },
-                                    leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
-                                    onClick = {
-                                        showAttachMenu = false
-                                        launchExternalPickerAfterMenuDismiss {
-                                            mediaPickerLauncher.launch(
-                                                androidx.activity.result.PickVisualMediaRequest(
-                                                    ActivityResultContracts.PickVisualMedia.ImageAndVideo,
-                                                ),
-                                            )
-                                        }
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.chat_attach_add_file)) },
-                                    leadingIcon = { Icon(m3Icon(Icons.Default.Description), contentDescription = null) },
-                                    onClick = {
-                                        showAttachMenu = false
-                                        launchExternalPickerAfterMenuDismiss { filePickerLauncher.launch(arrayOf("*/*")) }
-                                    },
-                                )
-                            }
+                        var showLangSheet by remember { mutableStateOf(false) }
+                        InputCircleButton(onClick = { showAttachMenu = true }) {
+                            Icon(
+                                m3Icon(Icons.Default.Add),
+                                contentDescription = stringResource(R.string.cd_attach),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
+                        ChatComposerInsertMenu(
+                            expanded = showAttachMenu,
+                            onDismiss = { showAttachMenu = false },
+                            onTakePhoto = {
+                                launchExternalPickerAfterMenuDismiss {
+                                    val granted = ContextCompat.checkSelfPermission(
+                                        context, android.Manifest.permission.CAMERA,
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) launchCamera()
+                                    else cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                                }
+                            },
+                            onChooseMedia = {
+                                launchExternalPickerAfterMenuDismiss {
+                                    mediaPickerLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageAndVideo,
+                                        ),
+                                    )
+                                }
+                            },
+                            onAddFile = {
+                                launchExternalPickerAfterMenuDismiss { filePickerLauncher.launch(arrayOf("*/*")) }
+                            },
+                            onExpandEditor = { showExpandedEditor = true },
+                            onSlashCommands = {
+                                viewModel.setInputText(
+                                    if (viewModel.showSlashMenu.value) viewModel.dismissSlashMenu(inputText)
+                                    else viewModel.showSlashMenuOverInput(inputText),
+                                )
+                            },
+                            onVoiceLanguage = { showLangSheet = true },
+                        )
                         if (showExpandedEditor) {
                             LongTextEditorDialog(
                                 text = inputText,
@@ -4882,34 +4863,6 @@ fun ChatScreen(
                                 onDismiss = { showExpandedEditor = false },
                             )
                         }
-                        InputCircleButton(onClick = { showExpandedEditor = true }) {
-                            Icon(
-                                Icons.Filled.OpenInFull,
-                                contentDescription = stringResource(R.string.composer_expand_editor),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Left: "/" slash command button (iOS: italic /, bold)
-                        InputCircleButton(onClick = {
-                            if (viewModel.showSlashMenu.value) {
-                                viewModel.setInputText(viewModel.dismissSlashMenu(inputText))
-                            } else {
-                                viewModel.setInputText(viewModel.showSlashMenuOverInput(inputText))
-                            }
-                        }) {
-                            Text(
-                                "/",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontStyle = FontStyle.Italic,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
                         // T187: Exit Edit Mode pill, only while editingMessageId
                         // is non-null. Tap clears the edit flag + composer text
                         // without truncating history. iOS parity:
@@ -4945,7 +4898,6 @@ fun ChatScreen(
                             .state.collectAsStateWithLifecycle()
                         val sttLocale by com.openminis.app.speech.SpeechRecognitionManager
                             .locale.collectAsStateWithLifecycle()
-                        var showLangSheet by remember { mutableStateOf(false) }
                         // While recording, a tappable 2-letter language pill
                         // appears to the left of the mic button. Outside a
                         // session the mic button's own badge stays hidden and
@@ -5395,24 +5347,19 @@ fun ChatScreen(
                             // renders while a run is in flight (send-into-queue
                             // mode), and the 38dp button stays fully tappable.
                             Box(
-                                modifier = Modifier.size(46.dp),
+                                modifier = Modifier.size(48.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (isStreaming) {
                                     androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(46.dp),
+                                        modifier = Modifier.size(48.dp),
                                         strokeWidth = 2.dp,
                                         color = ChatColors.sendButton,
                                     )
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(38.dp)
-                                        .background(
-                                            if (canActivate) ChatColors.sendButton
-                                            else ChatColors.sendButtonDisabled,
-                                            CircleShape,
-                                        )
+                                        .size(48.dp)
                                         .clip(CircleShape)
                                         .clickable(enabled = canActivate) {
                                             // T-drag-send-queue: route through the
@@ -5426,7 +5373,13 @@ fun ChatScreen(
                                             // re-pin to catch the late-mounting
                                             // "thinking" indicator.
                                             performSendOrEnqueue(inputText)
-                                        },
+                                        }
+                                        .padding(5.dp)
+                                        .background(
+                                            if (canActivate) ChatColors.sendButton
+                                            else ChatColors.sendButtonDisabled,
+                                            CircleShape,
+                                        ),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(

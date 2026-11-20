@@ -146,7 +146,7 @@ fun TranslationSettingsScreen(
         SettingsSection {
             SettingsRow(
                 title = stringResource(R.string.translate_pad_open),
-                subtitle = stringResource(R.string.translate_pad_open_sub),
+                helpText = stringResource(R.string.translate_pad_open_sub),
                 onClick = onOpenPad,
                 showDivider = false,
             )

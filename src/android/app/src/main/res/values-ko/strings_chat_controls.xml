@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">전송 모드</string>
+    <string name="chat_send_queue">대기열 추가</string>
+    <string name="chat_send_interrupt">중단 후 전송</string>
+    <string name="chat_send_auto">자동</string>
+    <string name="composer_insert_commands">명령</string>
+</resources>

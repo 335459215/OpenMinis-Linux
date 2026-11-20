@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">Mod de trimitere</string>
+    <string name="chat_send_queue">Pune în coadă</string>
+    <string name="chat_send_interrupt">Întrerupe</string>
+    <string name="chat_send_auto">Automat</string>
+    <string name="composer_insert_commands">Comenzi</string>
+</resources>

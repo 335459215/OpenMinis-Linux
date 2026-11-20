@@ -297,7 +297,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.Palette,
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_monet_title),
-                subtitle = stringResource(R.string.appearance_monet_subtitle),
+                helpText = stringResource(R.string.appearance_monet_subtitle),
                 checked = dynamicColor && monetSupported,
                 onCheckedChange = {
                     dynamicColor = it
@@ -398,7 +398,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.Bolt,
                 iconColor = tileGreen,
                 title = stringResource(R.string.high_refresh_title),
-                subtitle = stringResource(R.string.high_refresh_sub),
+                helpText = stringResource(R.string.high_refresh_sub),
                 checked = highRefresh,
                 onCheckedChange = {
                     highRefresh = it
@@ -429,7 +429,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.ViewAgenda,
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_completed_tool_cards),
-                subtitle = stringResource(R.string.appearance_show_completed_tool_cards_subtitle),
+                helpText = stringResource(R.string.appearance_show_completed_tool_cards_subtitle),
                 checked = showCompletedToolCards,
                 onCheckedChange = {
                     showCompletedToolCards = it
@@ -450,7 +450,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.Mic,
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_mic_button_title),
-                subtitle = stringResource(R.string.appearance_show_mic_button_subtitle),
+                helpText = stringResource(R.string.appearance_show_mic_button_subtitle),
                 checked = showMicButton,
                 onCheckedChange = {
                     showMicButton = it
@@ -463,7 +463,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.Bolt,
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_message_usage_title),
-                subtitle = stringResource(R.string.appearance_message_usage_subtitle),
+                helpText = stringResource(R.string.appearance_message_usage_subtitle),
                 checked = showMessageUsage,
                 onCheckedChange = {
                     showMessageUsage = it
@@ -475,7 +475,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.LightMode,
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_context_glow_title),
-                subtitle = stringResource(R.string.appearance_context_glow_subtitle),
+                helpText = stringResource(R.string.appearance_context_glow_subtitle),
                 checked = composerContextGlow,
                 onCheckedChange = {
                     composerContextGlow = it
@@ -507,7 +507,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.ViewAgenda,
                 iconColor = tilePurple,
                 title = stringResource(R.string.appearance_fold_ai_process_title),
-                subtitle = stringResource(R.string.appearance_fold_ai_process_subtitle),
+                helpText = stringResource(R.string.appearance_fold_ai_process_subtitle),
                 checked = foldAiProcess,
                 onCheckedChange = {
                     foldAiProcess = it
@@ -546,7 +546,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.ChatBubbleOutline,
                 iconColor = tileBlue,
                 title = stringResource(R.string.appearance_show_chat_title),
-                subtitle = stringResource(R.string.appearance_show_chat_title_subtitle),
+                helpText = stringResource(R.string.appearance_show_chat_title_subtitle),
                 checked = showChatTitle,
                 onCheckedChange = {
                     showChatTitle = it
@@ -566,7 +566,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.Folder,
                 iconColor = tileBlue,
                 title = stringResource(R.string.appearance_auto_grouping),
-                subtitle = stringResource(R.string.appearance_auto_grouping_subtitle),
+                helpText = stringResource(R.string.appearance_auto_grouping_subtitle),
                 checked = autoGrouping,
                 onCheckedChange = {
                     autoGrouping = it
@@ -585,7 +585,7 @@ fun AppearanceScreen(
                 icon = Icons.Outlined.FormatSize,
                 iconColor = tileOrange,
                 title = stringResource(R.string.appearance_font_scale_title),
-                subtitle = stringResource(R.string.appearance_font_scale_subtitle),
+                helpText = stringResource(R.string.appearance_font_scale_subtitle),
                 onClick = null,
                 showChevron = false,
                 showDivider = true,

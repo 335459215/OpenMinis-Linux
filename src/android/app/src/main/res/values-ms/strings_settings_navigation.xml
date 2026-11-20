@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Model &amp; penyedia</string>
+    <string name="settings_nav_agent">Ejen</string>
+    <string name="settings_nav_data">Data &amp; sandaran</string>
+    <string name="settings_nav_system">Sistem</string>
+    <string name="home_tab_chats">Sembang</string>
+    <string name="home_tab_tasks">Tugasan</string>
+    <string name="home_tab_me">Saya</string>
+</resources>

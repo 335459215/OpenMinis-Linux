@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">모델 및 제공업체</string>
+    <string name="settings_nav_agent">에이전트</string>
+    <string name="settings_nav_data">데이터 및 백업</string>
+    <string name="settings_nav_system">시스템</string>
+    <string name="home_tab_chats">채팅</string>
+    <string name="home_tab_tasks">작업</string>
+    <string name="home_tab_me">내 정보</string>
+</resources>

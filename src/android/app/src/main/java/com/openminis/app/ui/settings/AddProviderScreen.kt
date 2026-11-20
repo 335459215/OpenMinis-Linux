@@ -226,7 +226,7 @@ private fun ChooseProviderScreen(
                 val (icon, iconColor) = providerIcon(type).let { (i, c) -> m3Icon(i) to c }
                 SettingsRow(
                     title = displayTitle,
-                    subtitle = stringResource(subtitleRes),
+                    helpText = stringResource(subtitleRes),
                     icon = icon,
                     iconColor = iconColor,
                     onClick = { onSelect(type) },
@@ -305,7 +305,7 @@ private fun ChooseCredentialScreen(
                 }
                 SettingsRow(
                     title = title,
-                    subtitle = description,
+                    helpText = description,
                     icon = icon,
                     onClick = { onSelect(credential) },
                     showDivider = index < credentials.size - 1,

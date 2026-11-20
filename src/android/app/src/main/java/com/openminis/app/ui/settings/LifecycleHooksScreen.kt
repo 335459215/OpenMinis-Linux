@@ -51,7 +51,7 @@ fun LifecycleHooksScreen(onBack: () -> Unit) {
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.lifecycle_hooks_enable),
-                subtitle = stringResource(R.string.lifecycle_hooks_enable_sub),
+                helpText = stringResource(R.string.lifecycle_hooks_enable_sub),
                 checked = enabled,
                 onCheckedChange = { on ->
                     enabled = on
@@ -70,7 +70,7 @@ fun LifecycleHooksScreen(onBack: () -> Unit) {
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.boot_hook_enable),
-                subtitle = stringResource(R.string.boot_hook_enable_sub),
+                helpText = stringResource(R.string.boot_hook_enable_sub),
                 checked = bootHookEnabled,
                 onCheckedChange = { on ->
                     bootHookEnabled = on

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">โมเดลและผู้ให้บริการ</string>
+    <string name="settings_nav_agent">เอเจนต์</string>
+    <string name="settings_nav_data">ข้อมูลและการสำรอง</string>
+    <string name="settings_nav_system">ระบบ</string>
+    <string name="home_tab_chats">แชต</string>
+    <string name="home_tab_tasks">งาน</string>
+    <string name="home_tab_me">ของฉัน</string>
+</resources>

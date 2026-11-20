@@ -35,7 +35,7 @@ internal fun FreeLaneRestoreRow(
         missing.forEachIndexed { index, builtin ->
             SettingsRow(
                 title = stringResource(R.string.free_lane_restore_title, builtin.label),
-                subtitle = stringResource(R.string.zen_restore_subtitle),
+                helpText = stringResource(R.string.zen_restore_subtitle),
                 icon = m3Icon(Icons.Filled.CloudDownload),
                 onClick = { onRestore(builtin) },
                 showDivider = index != missing.lastIndex,

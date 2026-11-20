@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Modeller ve sağlayıcılar</string>
+    <string name="settings_nav_agent">Ajan</string>
+    <string name="settings_nav_data">Veriler ve yedekleme</string>
+    <string name="settings_nav_system">Sistem</string>
+    <string name="home_tab_chats">Sohbetler</string>
+    <string name="home_tab_tasks">Görevler</string>
+    <string name="home_tab_me">Ben</string>
+</resources>

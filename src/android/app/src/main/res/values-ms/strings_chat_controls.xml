@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">Mod penghantaran</string>
+    <string name="chat_send_queue">Baris gilir</string>
+    <string name="chat_send_interrupt">Sampuk</string>
+    <string name="chat_send_auto">Automatik</string>
+    <string name="composer_insert_commands">Arahan</string>
+</resources>

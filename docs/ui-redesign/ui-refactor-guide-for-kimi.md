@@ -1,5 +1,9 @@
 # Minis Ultra 前端重构指导（给 Kimi 模型）
 
+> 历史指导，部分状态已过期。Gateway 三页与模型目录接线已在 `4baccd00`
+> 完成；计划条条件展示与抽屉互斥也已存在。当前续作、分支和验证范围见
+> [implementation-2026-11-19.md](implementation-2026-11-19.md)，不要重复创建这些功能。
+
 > 依据：① `ui-redesign/audit.md`（11-18 全 App 31 页走查 + Apple HIG 审计）
 > ② `index-v9.html`（11-18 定稿的 iOS 风可交互设计稿，真实磨砂玻璃材质）
 > ③ dev 分支 `996ea56` 之后的实际代码状态。

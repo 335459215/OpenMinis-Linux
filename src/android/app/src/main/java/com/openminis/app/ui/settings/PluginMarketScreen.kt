@@ -187,7 +187,7 @@ fun PluginMarketScreen(
             }
             SettingsRow(
                 title = stringResource(R.string.plugin_market_local_add),
-                subtitle = stringResource(R.string.plugin_market_local_add_hint),
+                helpText = stringResource(R.string.plugin_market_local_add_hint),
                 onClick = {
                     editTool = LocalToolPluginStore.LocalToolDef(
                         id = "lt-" + java.util.UUID.randomUUID().toString().take(8),

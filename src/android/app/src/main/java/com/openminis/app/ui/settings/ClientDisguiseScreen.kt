@@ -108,7 +108,7 @@ fun ClientDisguiseScreen(onBack: () -> Unit) {
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.client_disguise_master_title),
-                subtitle = stringResource(R.string.client_disguise_master_subtitle),
+                helpText = stringResource(R.string.client_disguise_master_subtitle),
                 checked = enabled,
                 onCheckedChange = { on ->
                     ClientDisguisePrefs.setEnabled(context, on)
@@ -136,7 +136,7 @@ fun ClientDisguiseScreen(onBack: () -> Unit) {
                         R.string.client_disguise_clients_selected_count,
                         clientChoices.size,
                     ),
-                    subtitle = stringResource(R.string.client_disguise_clients_row_hint),
+                    helpText = stringResource(R.string.client_disguise_clients_row_hint),
                     onClick = { clientsExpanded = !clientsExpanded },
                     showChevron = false,
                     showDivider = false,

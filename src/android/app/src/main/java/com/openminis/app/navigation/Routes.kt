@@ -53,6 +53,11 @@ object Routes {
     const val SESSION_LIST = "sessions"
     const val CHAT = "chat/{sessionId}"
     const val SETTINGS = "settings"
+    const val SETTINGS_CATEGORY = "settings/category/{categoryId}"
+    fun settingsCategory(categoryId: String) = "settings/category/${navEnc(categoryId)}"
+    const val AGENT_RUNTIME = "agent_runtime"
+    const val TOOLBOX = "toolbox"
+    const val TOOLBOX_FILES = "toolbox/files"
     /** [T-client-disguise-app-level] App 级「客户端伪装」板块。 */
     const val CLIENT_DISGUISE = "client_disguise"
     const val PROVIDER_LIST = "providers"

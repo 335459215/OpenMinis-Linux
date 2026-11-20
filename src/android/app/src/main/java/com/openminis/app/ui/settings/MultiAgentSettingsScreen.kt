@@ -87,7 +87,7 @@ fun MultiAgentSettingsScreen(
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.settings_multi_agent_enable),
-                subtitle = stringResource(R.string.settings_multi_agent_enable_subtitle),
+                helpText = stringResource(R.string.settings_multi_agent_enable_subtitle),
                 checked = enabled,
                 onCheckedChange = { repo.setEnabled(it) },
                 icon = Icons.Outlined.Groups,
@@ -354,7 +354,7 @@ fun MultiAgentSettingsScreen(
             }
             SettingsRow(
                 title = stringResource(R.string.settings_collab_roles_import_mindmap),
-                subtitle = stringResource(R.string.settings_collab_roles_import_mindmap_subtitle),
+                helpText = stringResource(R.string.settings_collab_roles_import_mindmap_subtitle),
                 showChevron = true,
                 onClick = {
                     mindMapDraft = ""
@@ -373,7 +373,7 @@ fun MultiAgentSettingsScreen(
             }
             SettingsRow(
                 title = stringResource(R.string.ma_add_role),
-                subtitle = stringResource(R.string.ma_add_role_sub),
+                helpText = stringResource(R.string.ma_add_role_sub),
                 showChevron = false,
                 onClick = { showAddDialog = true },
                 showDivider = false,
@@ -484,7 +484,7 @@ fun MultiAgentSettingsScreen(
         SettingsSection(footer = stringResource(R.string.settings_shared_controls_footer)) {
             SettingsRow(
                 title = stringResource(R.string.settings_open_tool_limits),
-                subtitle = stringResource(R.string.settings_open_tool_limits_sub),
+                helpText = stringResource(R.string.settings_open_tool_limits_sub),
                 onClick = onOpenToolLimits,
                 showDivider = false,
             )

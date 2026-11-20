@@ -180,11 +180,12 @@ internal fun InputCircleButton(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp)
-            .background(ChatColors.inputIconBg, CircleShape)
-            .border(0.5.dp, ChatColors.inputIconBorder, CircleShape)
+            .size(48.dp)
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .padding(6.dp)
+            .background(ChatColors.inputIconBg, CircleShape)
+            .border(0.5.dp, ChatColors.inputIconBorder, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         content()
@@ -216,14 +217,15 @@ internal fun MicButton(
     val borderColor = if (isRecording) Color.Transparent else ChatColors.inputIconBorder
     Box(
         modifier = Modifier
-            .size(38.dp)
-            .background(bg, CircleShape)
-            .border(0.5.dp, borderColor, CircleShape)
+            .size(48.dp)
             .clip(CircleShape)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-            ),
+            )
+            .padding(6.dp)
+            .background(bg, CircleShape)
+            .border(0.5.dp, borderColor, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

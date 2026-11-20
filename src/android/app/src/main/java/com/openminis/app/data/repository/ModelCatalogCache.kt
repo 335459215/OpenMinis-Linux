@@ -14,6 +14,7 @@ import com.openminis.app.gateway.GatewayRuntime
 import com.openminis.app.gateway.catalog.ModelCatalog
 import com.openminis.app.provider.ModelsDevApi
 import com.openminis.app.provider.ModelRefreshGeneration
+import com.openminis.app.provider.ProviderHeaderStore
 import com.openminis.app.provider.anthropic.AnthropicModelsApi
 import com.openminis.app.provider.gemini.GeminiModelsApi
 import com.openminis.app.provider.openai.OpenAIModelsApi
@@ -131,6 +132,12 @@ internal class ModelCatalogCache(
         instance: ProviderInstance,
         forceRefresh: Boolean = false,
         clearFirst: Boolean = false,
+    ): ModelRefreshResult = refreshModelsSnapshot(instance.copy(), forceRefresh, clearFirst)
+
+    private suspend fun refreshModelsSnapshot(
+        instance: ProviderInstance,
+        forceRefresh: Boolean,
+        clearFirst: Boolean,
     ): ModelRefreshResult {
         // [OpenMinis#306] 入口守卫：Main 线程冷启动窗口里 config 还是空占位，
         // 这里一旦继续，后面的 addMissingBuiltInModels / replaceEntries 就会
@@ -199,7 +206,30 @@ internal class ModelCatalogCache(
         // VisionGroupResolver already resolve credentials through
         // `usableApiKey`, so a keyless local server could be chatted with but
         // not refreshed. That inconsistency was the bug.
-        var apiKey = repo.usableApiKey(instance)
+        var credentialRevision = 0L
+        val headerRevision = ProviderHeaderStore.revision(instance.id)
+        var apiKey = synchronized(repo.configLock) {
+            credentialRevision = ProviderCredentialEdits.revision(instance.id)
+            val expected = ModelCatalogConnection.from(instance, credentialRevision, headerRevision)
+            val key = withCurrentModelCatalogConnection(
+                repo.configLock,
+                expected,
+                {
+                    repo.instance(instance.id)?.let {
+                        ModelCatalogConnection.from(it, ProviderCredentialEdits.revision(instance.id), ProviderHeaderStore.revision(instance.id))
+                    }
+                },
+                { repo.usableApiKey(instance) to Unit },
+            ) ?: return ModelRefreshResult.PRESERVED
+            key.first
+        }
+        fun expectedConnection() = ModelCatalogConnection.from(instance, credentialRevision, headerRevision)
+        fun currentConnection() = repo.instance(instance.id)?.let {
+            ModelCatalogConnection.from(it, ProviderCredentialEdits.revision(instance.id), ProviderHeaderStore.revision(instance.id))
+        }
+        fun publishCurrentCatalog(publish: () -> Unit) = publishCatalog(
+            generation, instance, expectedConnection(), ::currentConnection, publish,
+        )
 
         // For OAuth providers, try to refresh the token before using it (mirrors iOS validAccessToken)
         if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth && apiKey != null) {
@@ -207,7 +237,14 @@ internal class ModelCatalogCache(
                 val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
                 val freshToken = manager?.validAccessToken()
                 if (freshToken != null && freshToken != apiKey) {
-                    repo.saveApiKey(instance.id, freshToken)
+                    val accepted = synchronized(repo.configLock) {
+                        if (currentConnection() != expectedConnection()) false else {
+                            repo.saveApiKey(instance.id, freshToken)
+                            credentialRevision = ProviderCredentialEdits.revision(instance.id)
+                            true
+                        }
+                    }
+                    if (!accepted) return ModelRefreshResult.PRESERVED
                     apiKey = freshToken
                     android.util.Log.i("ProviderRepo", "refreshModels: OAuth token refreshed")
                 }
@@ -226,7 +263,7 @@ internal class ModelCatalogCache(
             if (models.isNotEmpty()) {
                 // [T-model-refresh-generation] Publish only while still the
                 // live generation; a superseded run writes nothing.
-                if (!publishCatalog(generation, instance) {
+                if (!publishCurrentCatalog {
                     hardClearIfNeeded()
                     repo.replaceEntries(instance.id, models)
                 }) return ModelRefreshResult.PRESERVED
@@ -373,7 +410,7 @@ internal class ModelCatalogCache(
             if (models.isNotEmpty()) {
                 // [T-model-refresh-generation] Publish only while still the
                 // live generation; a superseded run writes nothing.
-                if (!publishCatalog(generation, instance) {
+                if (!publishCurrentCatalog {
                     hardClearIfNeeded()
                     val pruned = repo.replaceEntries(instance.id, models, dropStaleRefs = clearFirst)
                     if (pruned.isNotEmpty()) repo.scrubExternalEntryRefs(pruned)
@@ -395,7 +432,7 @@ internal class ModelCatalogCache(
             // [T-model-refresh-generation] The reseed is a config write, so it
             // goes through the same generation gate as a catalog publish.
             var builtinAdded = false
-            if (!publishCatalog(generation, instance) {
+            if (!publishCurrentCatalog {
                 builtinAdded = addMissingBuiltInModels(instance)
             }) return ModelRefreshResult.PRESERVED
             return if (builtinAdded) ModelRefreshResult.SUCCESS_BUILTIN
@@ -414,7 +451,7 @@ internal class ModelCatalogCache(
             android.util.Log.i("ProviderRepo", "models.dev fallback returned ${curatedFallback.size} models for ${instance.label}")
             // [T-model-refresh-generation] Publish only while still the live
             // generation; a superseded run writes nothing.
-            if (!publishCatalog(generation, instance) {
+            if (!publishCurrentCatalog {
                 repo.replaceEntries(instance.id, curatedFallback)
             }) return ModelRefreshResult.PRESERVED
             return ModelRefreshResult.SUCCESS_API
@@ -427,13 +464,13 @@ internal class ModelCatalogCache(
             // [T-model-refresh-generation] The reseed is a config write, so it
             // goes through the same generation gate as a catalog publish; the
             // result is PRESERVED either way.
-            publishCatalog(generation, instance) { addMissingBuiltInModels(instance) }
+            publishCurrentCatalog { addMissingBuiltInModels(instance) }
             return ModelRefreshResult.PRESERVED
         }
         if (apiKey == null) return ModelRefreshResult.NO_KEY
         // [T-model-refresh-generation] Same gate for the last-resort reseed.
         var builtinAdded = false
-        if (!publishCatalog(generation, instance) {
+        if (!publishCurrentCatalog {
             builtinAdded = addMissingBuiltInModels(instance)
         }) return ModelRefreshResult.PRESERVED
         return if (builtinAdded) ModelRefreshResult.SUCCESS_BUILTIN
@@ -457,14 +494,19 @@ internal class ModelCatalogCache(
     private fun publishCatalog(
         generation: Int,
         instance: ProviderInstance,
+        expectedConnection: ModelCatalogConnection,
+        currentConnection: () -> ModelCatalogConnection?,
         publish: () -> Unit,
     ): Boolean {
-        val published = refreshGenerations.publishIfCurrent(instance.id, generation, publish)
+        val published = publishModelCatalogIfCurrent(
+            repo.configLock, refreshGenerations, instance.id, generation,
+            expectedConnection, currentConnection, publish,
+        )
         if (!published) {
             android.util.Log.i(
                 "ProviderRepo",
-                "[ModelList] refreshModels: stale generation for ${instance.id} — fetch result " +
-                    "discarded, nothing written or announced (a newer refresh is in charge)",
+                "[ModelList] refreshModels: stale request for ${instance.id}; configuration " +
+                    "changed or a newer refresh started, discarding the fetched catalog",
             )
         }
         return published

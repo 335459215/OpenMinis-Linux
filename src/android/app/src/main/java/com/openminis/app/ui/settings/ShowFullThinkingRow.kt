@@ -28,7 +28,7 @@ internal fun ShowFullThinkingRow(
         icon = Icons.Outlined.ViewAgenda,
         iconColor = IosIndigo,
         title = stringResource(R.string.appearance_show_full_thinking_title),
-        subtitle = stringResource(R.string.appearance_show_full_thinking_footer),
+        helpText = stringResource(R.string.appearance_show_full_thinking_footer),
         checked = checked,
         onCheckedChange = onCheckedChange,
         showDivider = true,

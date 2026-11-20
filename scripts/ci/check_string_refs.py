@@ -18,6 +18,7 @@ import difflib
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -29,6 +30,36 @@ STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
 LINE_COMMENT = re.compile(r"//.*$")
 
 KIND_TO_TAG = {"string": "string", "plurals": "plurals", "array": "array"}
+
+
+def duplicate_resources(res_dir):
+    """Find same-name resources within a qualifier, including split XML files.
+
+    Translations and different qualifiers intentionally reuse names. Comments
+    and nested plural/array items are not independent resource declarations.
+    """
+    duplicates = []
+    for qualifier in sorted(os.listdir(res_dir)):
+        values = os.path.join(res_dir, qualifier)
+        if not qualifier.startswith("values") or not os.path.isdir(values):
+            continue
+        seen = {}
+        for filename in sorted(os.listdir(values)):
+            if not filename.endswith(".xml"):
+                continue
+            path = os.path.join(values, filename)
+            for element in ET.parse(path).getroot():
+                kind = element.get("type") if element.tag == "item" else element.tag
+                if kind in ("string-array", "integer-array"):
+                    kind = "array"
+                if kind not in KIND_TO_TAG or not element.get("name"):
+                    continue
+                key = (kind, element.get("name"))
+                if key in seen:
+                    duplicates.append((qualifier, key, seen[key], path))
+                else:
+                    seen[key] = path
+    return duplicates
 
 
 def defined_names(values_dir):
@@ -91,6 +122,14 @@ def main():
     if not mods:
         print("no resource modules found under src/ — nothing to check")
         return 1
+    duplicate_count = 0
+    for mod in mods:
+        for qualifier, (kind, name), first, second in duplicate_resources(os.path.join(mod, "res")):
+            duplicate_count += 1
+            print(f"FAIL: duplicate {qualifier}/{kind}/{name}: "
+                  f"{os.path.relpath(first, REPO)} and {os.path.relpath(second, REPO)}")
+    if duplicate_count:
+        return 1
     verbose = "--verbose" in sys.argv
     dangling = []
     scanned = 0
@@ -145,4 +184,5 @@ def main():
     return 1
 
 
-sys.exit(main())
+if __name__ == "__main__":
+    sys.exit(main())

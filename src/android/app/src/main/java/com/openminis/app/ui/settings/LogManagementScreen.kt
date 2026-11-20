@@ -224,7 +224,7 @@ private fun LogsBody(
             )
             SettingsRow(
                 title = stringResource(R.string.log_stream_trace_browse),
-                subtitle = stringResource(R.string.log_stream_trace_browse_sub),
+                helpText = stringResource(R.string.log_stream_trace_browse_sub),
                 onClick = { showStreamTraces = true },
                 showDivider = false,
             )
@@ -333,7 +333,7 @@ private fun LogsBody(
         SettingsSection(header = stringResource(R.string.log_context_snapshot_section)) {
             SettingsRow(
                 title = stringResource(R.string.log_context_snapshot_view),
-                subtitle = stringResource(R.string.log_context_snapshot_sub),
+                helpText = stringResource(R.string.log_context_snapshot_sub),
                 onClick = { showContextSnapshot = true },
                 showDivider = false,
             )
@@ -343,7 +343,7 @@ private fun LogsBody(
         SettingsSection(header = stringResource(R.string.log_answer_versions_section)) {
             SettingsRow(
                 title = stringResource(R.string.log_answer_versions_browse),
-                subtitle = stringResource(R.string.log_answer_versions_sub),
+                helpText = stringResource(R.string.log_answer_versions_sub),
                 onClick = { showAnswerVersions = true },
                 showDivider = false,
             )

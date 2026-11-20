@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">送信モード</string>
+    <string name="chat_send_queue">キューに追加</string>
+    <string name="chat_send_interrupt">割り込み</string>
+    <string name="chat_send_auto">自動</string>
+    <string name="composer_insert_commands">コマンド</string>
+</resources>

@@ -102,12 +102,12 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
             ) {
                 SettingsRow(
                     title = stringResource(R.string.shizuku_install_btn),
-                    subtitle = stringResource(R.string.shizuku_install_btn_subtitle),
+                    helpText = stringResource(R.string.shizuku_install_btn_subtitle),
                     onClick = { ShizukuManager.openInstallPage(context, ShizukuBackend.SHIZUKU_GITHUB_URL) },
                 )
                 SettingsRow(
                     title = stringResource(R.string.shizuku_install_btn_axmanager),
-                    subtitle = stringResource(R.string.shizuku_install_btn_axmanager_subtitle),
+                    helpText = stringResource(R.string.shizuku_install_btn_axmanager_subtitle),
                     onClick = { ShizukuManager.openInstallPage(context, ShizukuBackend.AXMANAGER_GITHUB_URL) },
                 )
                 // [T-android-sui-support] Third option for rooted users: Sui
@@ -115,7 +115,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
                 // than Shizuku IF the user already runs Magisk/KernelSU.
                 SettingsRow(
                     title = stringResource(R.string.shizuku_install_btn_sui),
-                    subtitle = stringResource(R.string.shizuku_install_btn_sui_subtitle),
+                    helpText = stringResource(R.string.shizuku_install_btn_sui_subtitle),
                     onClick = { ShizukuManager.openInstallPage(context, ShizukuBackend.SUI_GITHUB_URL) },
                     showDivider = false,
                 )
@@ -127,12 +127,12 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
             ) {
                 SettingsRow(
                     title = stringResource(R.string.shizuku_open_btn),
-                    subtitle = stringResource(R.string.shizuku_open_btn_subtitle),
+                    helpText = stringResource(R.string.shizuku_open_btn_subtitle),
                     onClick = { ShizukuManager.openShizukuApp(context) },
                 )
                 SettingsRow(
                     title = stringResource(R.string.shizuku_recheck_btn),
-                    subtitle = stringResource(R.string.shizuku_recheck_subtitle),
+                    helpText = stringResource(R.string.shizuku_recheck_subtitle),
                     onClick = { ShizukuManager.refresh() },
                     showDivider = false,
                 )
@@ -147,7 +147,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
             ) {
                 SettingsRow(
                     title = stringResource(R.string.shizuku_grant_btn),
-                    subtitle = stringResource(R.string.shizuku_grant_subtitle),
+                    helpText = stringResource(R.string.shizuku_grant_subtitle),
                     onClick = { ShizukuManager.requestPermission() },
                     // Sui has no manager activity, so this is the only row.
                     showDivider = !snap.isSui,
@@ -155,7 +155,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
                 if (!snap.isSui) {
                     SettingsRow(
                         title = stringResource(R.string.shizuku_open_btn),
-                        subtitle = stringResource(R.string.shizuku_open_btn_subtitle),
+                        helpText = stringResource(R.string.shizuku_open_btn_subtitle),
                         onClick = { ShizukuManager.openShizukuApp(context) },
                         showDivider = false,
                     )
@@ -183,7 +183,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
                 if (!snap.isSui) {
                     SettingsRow(
                         title = stringResource(R.string.shizuku_open_btn),
-                        subtitle = stringResource(R.string.shizuku_open_btn_subtitle),
+                        helpText = stringResource(R.string.shizuku_open_btn_subtitle),
                         onClick = { ShizukuManager.openShizukuApp(context) },
                     )
                 }

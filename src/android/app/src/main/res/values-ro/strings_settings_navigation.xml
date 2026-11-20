@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Modele și furnizori</string>
+    <string name="settings_nav_agent">Agent</string>
+    <string name="settings_nav_data">Date și copii de siguranță</string>
+    <string name="settings_nav_system">Sistem</string>
+    <string name="home_tab_chats">Conversații</string>
+    <string name="home_tab_tasks">Sarcini</string>
+    <string name="home_tab_me">Eu</string>
+</resources>

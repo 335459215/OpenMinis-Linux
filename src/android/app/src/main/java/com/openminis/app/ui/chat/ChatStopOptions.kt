@@ -87,7 +87,7 @@ internal fun StopButtonWithOptions(
     var menuOpen by remember { mutableStateOf(false) }
     var confirmOpen by remember { mutableStateOf(false) }
     var confirmEnabled by remember { mutableStateOf(StopOptionsPrefs.enabled(context)) }
-    Box(modifier = modifier.size(46.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.size(48.dp), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
             modifier = Modifier.size(46.dp),
             strokeWidth = 2.dp,
@@ -95,8 +95,7 @@ internal fun StopButtonWithOptions(
         )
         Box(
             modifier = Modifier
-                .size(38.dp)
-                .background(ToolErrorColor, CircleShape)
+                .size(48.dp)
                 .clip(CircleShape)
                 .combinedClickable(
                     onClick = {
@@ -106,7 +105,9 @@ internal fun StopButtonWithOptions(
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     },
-                ),
+                )
+                .padding(5.dp)
+                .background(ToolErrorColor, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

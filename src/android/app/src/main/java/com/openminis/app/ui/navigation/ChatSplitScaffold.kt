@@ -1,6 +1,9 @@
 package com.openminis.app.ui.navigation
 
 import com.openminis.app.navigation.Routes
+import androidx.compose.runtime.SideEffect
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.navigation.NavBackStackEntry
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -396,18 +399,8 @@ fun ChatSplitScaffold(
 
     val directive = chatPaneScaffoldDirective(twoPane, effectiveListWidth)
 
-    // [T-android-tablet-split] The selected session, held HERE rather than read back out of the navigator.
-    //
-    // `rememberListDetailPaneScaffoldNavigator` captures `scaffoldDirective` when it first builds the navigator and never re-reads the argument — it
-    // is an initial value, not a live binding. Measured on a Pixel 4a: with the directive supplied only at construction, a COLD START at 550dp correctly
-    // showed one pane, but RESIZING a running window from 1745dp down to 550dp stayed at two. That is the original bug one layer deeper — a correct
-    // decision that never reaches the layout — and it defeats the whole point of this screen, since windows change size at runtime.
-    //
-    // The supported fix is to rebuild the navigator when the directive changes (`key(...)` below). DefaultThreePaneScaffoldNavigator does expose a
-    // settable `scaffoldDirective`, but the class is `internal` and cannot be referenced from here. Rebuilding discards the navigator's own history,
-    // so the selection is hoisted into this state and fed back as the new
-    // navigator's initial history — the user stays on the same chat across the
-    // breakpoint, which is the behaviour being verified.
+    // Rebuild the navigator on pane-count changes: its directive is only an initial
+    // value. The hoisted session seeds the rebuilt history to preserve selection.
 
     key(directive.maxHorizontalPartitions) {
         val navigator = rememberListDetailPaneScaffoldNavigator<String>(
@@ -444,6 +437,14 @@ fun ChatSplitScaffold(
             // until the navigator publishes the replacement destination.
             ?: selectedSessionId
 
+        val homePaneReporter = LocalHomeChatPaneReporter.current
+        val homeEntryId = (LocalViewModelStoreOwner.current as? NavBackStackEntry)?.id
+        val homeListVisible = homeChatListVisible(
+            twoPane,
+            navigator.currentDestination?.pane == ListDetailPaneScaffoldRole.Detail,
+        )
+        SideEffect { homeEntryId?.let { homePaneReporter(it, homeListVisible) } }
+
         // [T-android-new-chat-shortcut] Open a fresh draft in the detail pane.
         // Hoisted out of the detailPane call below so the keyboard shortcut and
         // the "New Chat" menu item cannot drift into doing different things.
@@ -455,11 +456,7 @@ fun ChatSplitScaffold(
             }
         }
 
-        // [T-android-session-select-one-place] One owner for "the user picked a
-        // session". The list pane (single-pane full screen and two-pane
-        // sidebar share the one slot) and the detail pane's move-to used to
-        // write the same navigation out twice; keeping it in one place stops
-        // them drifting.
+        // One session-selection owner serves the list and detail-pane move-to.
         fun selectSession(sessionId: String) {
             selectedSessionId = sessionId
             scope.launch {
@@ -876,12 +873,10 @@ fun ChatSplitScaffoldRoute(
                 // phone behaviour is unchanged.
                 onSessionClick = onSessionSelected,
                 onNewChat = onSessionSelected,
-                onSettingsClick = { navController.safeNavigate(Routes.SETTINGS) },
                 onAddProviderClick = { navController.safeNavigate(Routes.ADD_PROVIDER) },
                 onSelectModelsClick = { navController.safeNavigate(Routes.ONBOARDING_MODELS) },
                 onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
                 onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
-                onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
                 selectedSessionId = selectedSessionId,
                 // [T-android-draft-placeholder-row] Synthetic "New Chat" row,
                 // never persisted — see the listPane param docs.

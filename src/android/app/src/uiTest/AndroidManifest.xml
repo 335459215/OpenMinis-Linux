@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Opt-in emulator host, never part of an ordinary release build. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:name="android.app.Application"
+        android:label="Minis UI Tests"
+        tools:replace="android:name,android:label">
+        <provider android:name="com.openminis.app.documentsprovider.MinisDocumentsProvider"
+            tools:node="remove" />
+    </application>
+</manifest>

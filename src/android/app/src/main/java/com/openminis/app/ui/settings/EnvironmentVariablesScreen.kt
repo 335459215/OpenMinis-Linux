@@ -443,7 +443,7 @@ private fun EnvVarFormSheet(
                 Spacer(Modifier.height(16.dp))
                 SettingsSwitchRow(
                     title = stringResource(R.string.env_var_enabled),
-                    subtitle = stringResource(R.string.env_var_enabled_hint),
+                    helpText = stringResource(R.string.env_var_enabled_hint),
                     checked = enabledFlag,
                     onCheckedChange = { enabledFlag = it },
                     showDivider = false,

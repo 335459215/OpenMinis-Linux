@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">傳送方式</string>
+    <string name="chat_send_queue">排隊</string>
+    <string name="chat_send_interrupt">插話</string>
+    <string name="chat_send_auto">自動</string>
+    <string name="composer_insert_commands">快捷指令</string>
+</resources>

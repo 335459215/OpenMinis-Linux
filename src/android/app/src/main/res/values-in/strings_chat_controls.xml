@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">Mode kirim</string>
+    <string name="chat_send_queue">Antrekan</string>
+    <string name="chat_send_interrupt">Sela</string>
+    <string name="chat_send_auto">Otomatis</string>
+    <string name="composer_insert_commands">Perintah</string>
+</resources>

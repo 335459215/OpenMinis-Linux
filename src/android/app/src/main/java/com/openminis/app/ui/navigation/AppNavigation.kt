@@ -43,7 +43,6 @@ import com.openminis.app.ui.sandbox.FileBrowserScreen
 import com.openminis.app.ui.sandbox.FileBrowserViewModel
 import com.openminis.app.ui.settings.EnvironmentVariablesScreen
 import com.openminis.app.ui.settings.AppearanceScreen
-import com.openminis.app.ui.settings.SettingsScreen
 import com.openminis.app.ui.settings.SkillDetailScreen
 import com.openminis.app.ui.settings.SkillFileViewerScreen
 import com.openminis.app.ui.settings.UsageStatsScreen
@@ -363,6 +362,7 @@ fun AppNavigation(
     // reader — [HtmlBrowserHost] at the bottom — subscribes internally. A
     // preview open/close now invalidates just the host child.
     val htmlBrowserState = remember { HtmlBrowserState() }
+    HomeNavigationScaffold(navController) { hostModifier ->
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -373,8 +373,7 @@ fun AppNavigation(
         // background flashes white between screens. Tying the host to
         // the active Material colorScheme also keeps the first frame
         // correct on cold start.
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = hostModifier
             .background(MaterialTheme.colorScheme.background),
         // T342: Material 3 motion — shared-axis X transition.
         // Spec (m3.material.io/styles/motion/transitions):
@@ -456,42 +455,9 @@ fun AppNavigation(
             )
         }
 
-        composable(Routes.SETTINGS) {
-            SettingsScreen(
-                onBack = { navController.safePopBackStack() },
-                onProvidersClick = { navController.safeNavigate(Routes.PROVIDER_LIST) },
-                onClientDisguiseClick = { navController.safeNavigate(Routes.CLIENT_DISGUISE) },
-                onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
-                onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
-                onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
-                onNetworkClick = { navController.safeNavigate(Routes.NETWORK) },
-                onEnvVarsClick = { navController.safeNavigate(Routes.ENV_VARS) },
-                onSshClick = { navController.safeNavigate(Routes.SSH_HOSTS) },
-                onSkillsClick = { navController.safeNavigate(Routes.SKILLS) },
-                onMultiAgentClick = { navController.safeNavigate(Routes.MULTI_AGENT) },
-                onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
-                onMemoryClick = { navController.safeNavigate(Routes.MEMORY) },
-                onMcpClick = { navController.safeNavigate(Routes.MCP) },
-                onPluginMarketClick = { navController.safeNavigate(Routes.PLUGIN_MARKET) },
-                onSoulClick = { navController.safeNavigate(Routes.SOUL) },
-                onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
-                onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
-                onGatewayClick = { navController.safeNavigate(Routes.GATEWAY_SETTINGS) },
-                onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
-                onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
-                onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
-                // [GH#131] Lifecycle hooks settings.
-                onLifecycleHooksClick = { navController.safeNavigate(Routes.LIFECYCLE_HOOKS) },
-                onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
-                onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
-                onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
+        toolboxRoutes(navController)
 
-                onLogsClick = { navController.safeNavigate(Routes.LOGS) },
-                onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
-                onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
-                onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
-            )
-        }
+        settingsHomeRoutes(navController)
 
         composable(Routes.CLIENT_DISGUISE) {
             com.openminis.app.ui.settings.ClientDisguiseScreen(
@@ -989,6 +955,8 @@ fun AppNavigation(
                 },
             )
         }
+    }
+
     }
 
     // [T-android-highfreq-read-isolation] The whole BrowserSheet host moved

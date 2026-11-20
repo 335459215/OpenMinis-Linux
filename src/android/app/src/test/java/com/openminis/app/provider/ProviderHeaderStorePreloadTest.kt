@@ -2,9 +2,11 @@ package com.openminis.app.provider
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -62,5 +64,16 @@ class ProviderHeaderStorePreloadTest {
         val after = ProviderHeaderStore.revision()
         ProviderHeaderStore.preload()
         assertEquals(after, ProviderHeaderStore.revision())
+    }
+
+    @Test
+    fun `header edit only changes the edited providers catalog revision`() = runBlocking {
+        ProviderHeaderStore.prime(context)
+        ProviderHeaderStore.preload()
+        val before = ProviderHeaderStore.revision("catalog-header-a")
+        val unrelated = ProviderHeaderStore.revision("catalog-header-b")
+        assertNull(ProviderHeaderStore.save("catalog-header-a", "X-Test: example"))
+        assertEquals(before + 1, ProviderHeaderStore.revision("catalog-header-a"))
+        assertEquals(unrelated, ProviderHeaderStore.revision("catalog-header-b"))
     }
 }

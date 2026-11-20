@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Модели и провайдеры</string>
+    <string name="settings_nav_agent">Агент</string>
+    <string name="settings_nav_data">Данные и резервные копии</string>
+    <string name="settings_nav_system">Система</string>
+    <string name="home_tab_chats">Чаты</string>
+    <string name="home_tab_tasks">Задачи</string>
+    <string name="home_tab_me">Моё</string>
+</resources>

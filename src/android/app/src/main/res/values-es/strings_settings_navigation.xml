@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Modelos y proveedores</string>
+    <string name="settings_nav_agent">Agente</string>
+    <string name="settings_nav_data">Datos y copias</string>
+    <string name="settings_nav_system">Sistema</string>
+    <string name="home_tab_chats">Chats</string>
+    <string name="home_tab_tasks">Tareas</string>
+    <string name="home_tab_me">Yo</string>
+</resources>

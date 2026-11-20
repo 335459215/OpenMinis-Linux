@@ -80,8 +80,9 @@ class MultiAgentPageCleanupTest {
         // approval UI owns the mode, so removing the row lost nothing.
         val vm = ProductionSources.read("ui/chat/ChatViewModel.kt")
         assertTrue(vm.contains("fun setSessionPermissionMode"))
-        // [T-chat-screen-sections] 顶栏审批入口随四区块抽取迁至 ChatTopBarSection。
-        val chat = ProductionSources.read("ui/chat/ChatTopBarSection.kt")
-        assertTrue(chat.contains("setSessionPermissionMode"))
+        // The top-bar action host owns the category menu after extraction.
+        val chat = ProductionSources.read("ui/chat/ChatTopBarActions.kt")
+        assertTrue(chat.contains("setSessionPermissionMode(sessionPerm.next())"))
+        assertTrue(chat.contains("ChatActionPage.SESSION"))
     }
 }

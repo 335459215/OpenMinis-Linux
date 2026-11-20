@@ -50,7 +50,7 @@ internal fun FreeLanePresetRow(builtin: BuiltinFreeLane?, onPick: (BuiltinFreeLa
         // Brand copy, not UI copy: the lane label is a proper noun, so it comes
         // from the descriptor rather than a per-lane string resource.
         title = builtin.label,
-        subtitle = stringResource(R.string.free_lane_preset_subtitle),
+        helpText = stringResource(R.string.free_lane_preset_subtitle),
         icon = m3Icon(Icons.Filled.CloudDownload),
         onClick = { onPick(builtin) },
         showDivider = false,

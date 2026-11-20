@@ -673,9 +673,10 @@ internal class ProviderConfigStore(
 
     /** [T-backup-pool-singleton] Full-replacement write routed through the
      *  repo-owned singleton so cursors/cooldowns stay consistent. */
-    fun setPoolKeys(instanceId: String, keys: List<String>) {
+    fun setPoolKeys(instanceId: String, keys: List<String>) = synchronized(repo.configLock) {
         credentialPool.setKeys(instanceId, keys)
         _credentialRevision.update { it + 1 }
+        ProviderCredentialEdits.changed(instanceId)
     }
 
     // [T-credential-pool-mode] Round-robin vs random pick for this instance.
@@ -775,21 +776,5 @@ internal class ProviderConfigStore(
             // the documented approximation here (markCooledByIndex).
             credentialPool.markCooledByIndex(other.id, lastIndex, System.currentTimeMillis() + coolFor)
         }
-    }
-}
-
-/**
- * [port-upstream-1.16][T-android-provider-edit-mid-session] Edits the key store
- * makes that the `providerRepository.config` flow cannot see (saved / removed
- * API key, pool rotation). Port of upstream's same-named object: consumed by
- * ChatViewModel's provider-edit watch so an open chat rebuilds its provider
- * before the next turn.
- */
-object ProviderCredentialEdits {
-    private val _ids = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 64)
-    val ids: kotlinx.coroutines.flow.SharedFlow<String> = _ids
-
-    fun changed(instanceId: String) {
-        _ids.tryEmit(instanceId)
     }
 }

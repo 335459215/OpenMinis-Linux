@@ -25,7 +25,7 @@ internal fun FreeLaneDeletedModelsRestoreRow(count: Int, onRestore: () -> Unit) 
     if (count <= 0) return
     SettingsRow(
         title = stringResource(R.string.zen_deleted_models_title, count),
-        subtitle = stringResource(R.string.zen_deleted_models_subtitle),
+        helpText = stringResource(R.string.zen_deleted_models_subtitle),
         icon = m3Icon(Icons.Filled.History),
         onClick = onRestore,
         showDivider = false,

@@ -35,7 +35,7 @@ internal fun LoggingSection(
         // recording switch because that is the question a reader arrives with.
         SettingsRow(
             title = stringResource(R.string.logcat_panel_entry),
-            subtitle = stringResource(R.string.logcat_panel_entry_sub),
+            helpText = stringResource(R.string.logcat_panel_entry_sub),
             icon = Icons.Default.List,
             onClick = onOpenLogcat,
             showDivider = false,

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">โหมดการส่ง</string>
+    <string name="chat_send_queue">เข้าคิว</string>
+    <string name="chat_send_interrupt">แทรก</string>
+    <string name="chat_send_auto">อัตโนมัติ</string>
+    <string name="composer_insert_commands">คำสั่ง</string>
+</resources>

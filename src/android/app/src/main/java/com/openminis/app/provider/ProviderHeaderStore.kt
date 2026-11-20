@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * [GH#221] 每个 provider 实例的自定义请求头（KV）。
@@ -101,11 +102,16 @@ object ProviderHeaderStore {
      * 一次，观察者据此刷新；未完成期间的读取是空 map（见 [headersFor]）。
      */
     private val _revision = MutableStateFlow(0L)
+    private val instanceRevisions = ConcurrentHashMap<String, Long>()
+    @Volatile private var loadedRevision = 0L
     val revisionFlow: StateFlow<Long> = _revision.asStateFlow()
 
     fun revision(): Long = _revision.value
+    fun revision(instanceId: String): Long = loadedRevision + (instanceRevisions[instanceId] ?: 0L)
 
-    private fun bumpRevision() {
+    private fun bumpRevision(instanceId: String? = null) {
+        if (instanceId == null) loadedRevision++
+        else instanceRevisions.merge(instanceId, 1L) { before, increment -> before + increment }
         _revision.update { it + 1 }
     }
 
@@ -144,6 +150,8 @@ object ProviderHeaderStore {
             openCodeSession = emptyMap()
             loaded = false
             _revision.value = 0L
+            loadedRevision = 0L
+            instanceRevisions.clear()
         }
     }
 
@@ -212,7 +220,7 @@ object ProviderHeaderStore {
         }.getOrDefault(false)
         if (!ok) return@withContext "Failed to persist headers"
         cache = next
-        bumpRevision()
+        bumpRevision(instanceId)
         null
     }
 
@@ -273,7 +281,7 @@ object ProviderHeaderStore {
             }.getOrDefault(false)
             if (!ok) return@withContext false
             openCodeSession = next
-            bumpRevision()
+            bumpRevision(instanceId)
             true
         }
 

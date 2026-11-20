@@ -2,6 +2,9 @@ package com.openminis.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * [T-send-mode] 流式回复进行中，用户再次发送时的行为。
@@ -20,27 +23,29 @@ object ChatSendModePrefs {
     const val MODE_INTERRUPT = "interrupt"
     const val MODE_AUTO = "auto"
 
-    @Volatile
-    private var cached: String = MODE_QUEUE
+    private val _modeFlow = MutableStateFlow(MODE_QUEUE)
+    val modeFlow: StateFlow<String> = _modeFlow.asStateFlow()
+
+    private fun normalize(mode: String?): String = when (mode) {
+        MODE_INTERRUPT, MODE_AUTO -> mode
+        else -> MODE_QUEUE
+    }
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun prime(context: Context) {
-        cached = prefs(context).getString(KEY_MODE, MODE_QUEUE) ?: MODE_QUEUE
+        _modeFlow.value = normalize(prefs(context).getString(KEY_MODE, MODE_QUEUE))
     }
 
-    fun mode(): String = cached
+    fun mode(): String = _modeFlow.value
 
     fun setMode(context: Context, mode: String) {
-        val normalized = when (mode) {
-            MODE_INTERRUPT, MODE_AUTO -> mode
-            else -> MODE_QUEUE
-        }
-        cached = normalized
+        val normalized = normalize(mode)
         prefs(context).edit().putString(KEY_MODE, normalized).apply()
+        _modeFlow.value = normalized
     }
 
     fun isInterrupt(context: Context): Boolean =
-        (prefs(context).getString(KEY_MODE, cached) ?: cached) == MODE_INTERRUPT
+        normalize(prefs(context).getString(KEY_MODE, mode())) == MODE_INTERRUPT
 }

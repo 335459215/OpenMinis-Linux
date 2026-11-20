@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">模型與供應商</string>
+    <string name="settings_nav_agent">智慧體</string>
+    <string name="settings_nav_data">資料與備份</string>
+    <string name="settings_nav_system">系統</string>
+    <string name="home_tab_chats">對話</string>
+    <string name="home_tab_tasks">任務</string>
+    <string name="home_tab_me">我的</string>
+</resources>

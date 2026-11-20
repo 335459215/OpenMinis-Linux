@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">Modo de envío</string>
+    <string name="chat_send_queue">En cola</string>
+    <string name="chat_send_interrupt">Interrumpir</string>
+    <string name="chat_send_auto">Automático</string>
+    <string name="composer_insert_commands">Comandos</string>
+</resources>

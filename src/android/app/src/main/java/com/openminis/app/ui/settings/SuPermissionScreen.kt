@@ -75,7 +75,7 @@ fun SuPermissionScreen(
             )
             SettingsRow(
                 title = stringResource(R.string.host_su_recheck_btn),
-                subtitle = stringResource(R.string.host_su_recheck_sub),
+                helpText = stringResource(R.string.host_su_recheck_sub),
                 onClick = {
                     HostSuManager.refresh()
                     probeText = null

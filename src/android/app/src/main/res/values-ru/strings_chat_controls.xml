@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_send_mode">Режим отправки</string>
+    <string name="chat_send_queue">В очередь</string>
+    <string name="chat_send_interrupt">Прервать</string>
+    <string name="chat_send_auto">Авто</string>
+    <string name="composer_insert_commands">Команды</string>
+</resources>

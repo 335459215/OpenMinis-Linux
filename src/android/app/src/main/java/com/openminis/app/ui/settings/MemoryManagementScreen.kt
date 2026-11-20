@@ -125,7 +125,7 @@ fun MemoryManagementScreen(
         ) {
             SettingsSwitchRow(
                 title = stringResource(R.string.settings_memory_global_enabled_title),
-                subtitle = stringResource(R.string.settings_memory_global_enabled_subtitle),
+                helpText = stringResource(R.string.settings_memory_global_enabled_subtitle),
                 checked = globalMemoryOn,
                 onCheckedChange = { newValue ->
                     globalMemoryOn = newValue
@@ -140,7 +140,7 @@ fun MemoryManagementScreen(
         ) {
             SettingsRow(
                 title = stringResource(R.string.settings_evolution),
-                subtitle = stringResource(R.string.memory_evolution_open),
+                helpText = stringResource(R.string.memory_evolution_open),
                 onClick = onEvolutionClick,
                 showDivider = false,
             )

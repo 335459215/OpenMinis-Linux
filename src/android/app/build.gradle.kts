@@ -11,6 +11,9 @@ import java.io.FileOutputStream
 // may pass `-Pminis.skipMinifyForTests=true` to install an unminified pair.
 val skipMinifyForTests =
     providers.gradleProperty("minis.skipMinifyForTests").orNull == "true"
+// Isolated UI host: no sandbox/Application startup, native binaries or user data.
+// Its distinct package cannot replace a user's production installation.
+val uiTestHost = providers.gradleProperty("minis.uiTests").orNull == "true"
 
 plugins {
     id("com.android.application")
@@ -175,7 +178,7 @@ android {
             debugSymbolLevel = "SYMBOL_TABLE"
         }
 
-        externalNativeBuild {
+        if (!uiTestHost) externalNativeBuild {
             cmake {
                 cppFlags += "-std=c++17"
                 arguments += "-DANDROID_STL=c++_shared"
@@ -183,7 +186,7 @@ android {
         }
     }
 
-    externalNativeBuild {
+    if (!uiTestHost) externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             // A RANGE, not a pin. `3.22.1` alone forces every builder to own that
@@ -258,8 +261,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = !skipMinifyForTests
-            isShrinkResources = !skipMinifyForTests
+            if (uiTestHost) applicationIdSuffix = ".uitest"
+            isMinifyEnabled = !skipMinifyForTests && !uiTestHost
+            isShrinkResources = !skipMinifyForTests && !uiTestHost
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -270,7 +274,7 @@ android {
             // signing.properties, then a local src/android/release.keystore if
             // the developer has one, so local assembleRelease still builds.
             // Debug keystore is last-resort only.
-            signingConfig = if (hasUploadKeystore) {
+            signingConfig = if (hasUploadKeystore && !uiTestHost) {
                 signingConfigs.getByName("releaseUpload")
             } else {
                 signingConfigs.getByName("debug")
@@ -302,7 +306,8 @@ android {
 
     packaging {
         jniLibs {
-            pickFirsts += "lib/*/libtermux.so"
+            if (!uiTestHost) pickFirsts += "lib/*/libtermux.so"
+            if (uiTestHost) excludes += "**/*.so"
         }
         resources {
             // jsch (mwiede fork) and jspecify both ship an OSGi manifest under
@@ -341,7 +346,10 @@ android {
     // without this it fails with "Cannot find the schema file in the assets
     // folder" no matter that the files exist on disk.
     sourceSets {
+        if (uiTestHost) getByName("release").manifest.srcFile("src/uiTest/AndroidManifest.xml")
         getByName("androidTest") {
+            // UI host exercises Compose controls without sandbox instrumentation.
+            if (uiTestHost) java.setSrcDirs(listOf("src/androidTest/java/com/openminis/app/ui"))
             assets.srcDirs("$projectDir/schemas")
         }
         // First APK: if rclone.aar is absent (Go/gomobile not required), compile
@@ -415,6 +423,8 @@ tasks.named("preBuild") { dependsOn(copyBashismRules) }
 // shell_execute, su_exec, ui_read, agent_terminal, background_job and every
 // MCP server all route through PRoot). Fail the build instead of shipping it.
 val verifyProotJniLibs by tasks.registering {
+    val guardEnabled = !uiTestHost
+    onlyIf { guardEnabled }
     group = "verification"
     description = "Fails the build when the PRoot jniLibs triplet is missing."
     val libsDir = layout.projectDirectory.dir("src/main/jniLibs/arm64-v8a")
@@ -652,6 +662,10 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    // Test host is opt-in so ordinary release APKs never ship the empty activity.
+    if (uiTestHost) {
+        releaseImplementation("androidx.compose.ui:ui-test-manifest")
+    }
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation("junit:junit:4.13.2")
 }
@@ -797,7 +811,7 @@ val verifyRootfsAsset by tasks.registering {
     // Capture these during configuration: reading script-level properties from
     // doLast breaks the configuration cache (the outer reference deserialises
     // as null -> "Cannot invoke ... because this.this$0 is null").
-    val guardEnabled = !skipRootfsAssetGuard
+    val guardEnabled = !skipRootfsAssetGuard && !uiTestHost
     val candidateFiles = listOf("ubuntu-base.tgz", "ubuntu-base.tar.gz", "ubuntu-base.tar")
         .map { assetsDir.file(it).asFile }
     val candidatePaths = candidateFiles.map { it.path }

@@ -102,7 +102,7 @@ internal fun MCPMergedServerList(
                     // technical id written to servers.json — the id stays
                     // visible in the edit sheet.
                     title = preset.name,
-                    subtitle = preset.description,
+                    helpText = preset.description,
                     checked = false,
                     enabled = !busy,
                     onCheckedChange = toggle,
@@ -115,7 +115,7 @@ internal fun MCPMergedServerList(
                 // actions behind a switch.
                 SettingsRow(
                     title = preset.name,
-                    subtitle = preset.description,
+                    helpText = preset.description,
                     showDivider = showDivider,
                     onClick = { onEditServer(existing) },
                     trailing = { ServerTrailing(existing, toggle, { onOpenTools(existing) }, enabled = !busy) },

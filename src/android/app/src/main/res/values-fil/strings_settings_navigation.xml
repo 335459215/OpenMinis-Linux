@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">Mga modelo at provider</string>
+    <string name="settings_nav_agent">Ahente</string>
+    <string name="settings_nav_data">Data at backup</string>
+    <string name="settings_nav_system">Sistema</string>
+    <string name="home_tab_chats">Mga chat</string>
+    <string name="home_tab_tasks">Mga gawain</string>
+    <string name="home_tab_me">Ako</string>
+</resources>

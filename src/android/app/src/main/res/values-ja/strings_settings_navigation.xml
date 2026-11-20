@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_models">モデルとプロバイダー</string>
+    <string name="settings_nav_agent">エージェント</string>
+    <string name="settings_nav_data">データとバックアップ</string>
+    <string name="settings_nav_system">システム</string>
+    <string name="home_tab_chats">チャット</string>
+    <string name="home_tab_tasks">タスク</string>
+    <string name="home_tab_me">自分</string>
+</resources>

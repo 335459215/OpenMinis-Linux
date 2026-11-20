@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Single source of truth for Settings section-card visual rhythm.
@@ -53,6 +54,16 @@ object SectionDesign {
 
     /** Standard row height inside a card. iOS row ≈ 44pt. */
     val RowMinHeight = 44.dp
+
+    /** Compact settings navigation keeps a full touch target around small glyphs. */
+    val SettingsRowMinHeight = 56.dp
+    val SettingsRowTitleSize = 15.sp
+    val SettingsIconTileSize = 28.dp
+    val SettingsIconSize = 16.dp
+    val SettingsIconGap = 12.dp
+    val HelpTouchTargetSize = 48.dp
+    val HelpIconSize = 16.dp
+    val SettingsHelpRowVerticalPadding = 4.dp
 
     /** [T-android-settings-ui-md3] #3 Single-line text-field min height. MD3
      *  text fields are 56dp; the section rows were normalized to the same 56dp

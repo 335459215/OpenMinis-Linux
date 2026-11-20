@@ -1,596 +1,97 @@
 package com.openminis.app.ui.settings
 
-import com.openminis.app.ui.theme.IosBlue
-import com.openminis.app.ui.theme.IosGray
-import com.openminis.app.ui.theme.IosGreen
-import com.openminis.app.ui.theme.IosIndigo
-import com.openminis.app.ui.theme.IosOrange
-import com.openminis.app.ui.theme.IosTeal
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Autorenew
-import androidx.compose.material.icons.outlined.Replay
-import androidx.compose.material.icons.outlined.Timer
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.BatteryFull
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material.icons.outlined.Build
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.Extension
-import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.Feedback
-import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.FolderShared
-import androidx.compose.material.icons.outlined.FrontHand
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Inventory2
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.Psychology
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Repeat
-import androidx.compose.material.icons.outlined.TravelExplore
-import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Shield
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.Translate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
-
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import com.openminis.app.ui.components.MinisCenterTopBar
-import com.openminis.app.ui.theme.m3Icon
-import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.ProjectRepo
-import com.openminis.app.BuildConfig
+import androidx.compose.ui.unit.dp
 import com.openminis.app.R
-import com.openminis.app.knowledge.AppNotes
-import com.openminis.app.knowledge.AppNotesStore
-import com.openminis.app.ui.components.openExternalUrl
 
+/** A compact index. Detailed features belong to their own category and back stack. */
 @Composable
-private fun SettingsGroupLabel(text: String) {
-    Text(
-        text = text,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+internal fun SettingsScreen(
+    onBack: () -> Unit,
+    onCategoryClick: (SettingsCategory) -> Unit,
+    onAppearanceClick: () -> Unit,
+    onNavigate: (String) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val activate = settingsFeatureAction(onNavigate)
+    // The root is a bottom-tab destination; its back affordance would duplicate
+    // the tab bar and push the V9 large title down. System back still handles
+    // deep-link callers; category/detail pages keep their explicit back arrow.
+    SettingsScaffold(title = stringResource(R.string.settings_title), navigation = {}, largeTitle = true) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            placeholder = { androidx.compose.material3.Text(stringResource(R.string.sessionlist_search_action)) },
+            leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.sessionlist_search_action)) },
+            trailingIcon = {
+                if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                    Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.browser_settings_clear))
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            singleLine = true,
+        )
+        if (query.isNotBlank()) {
+            SettingsSearchResults(query = query, onActivate = activate, onAppearanceClick = onAppearanceClick)
+            Spacer(Modifier.height(24.dp))
+            return@SettingsScaffold
+        }
+        SettingsSection {
+            CategoryRow(SettingsCategory.MODELS, onCategoryClick)
+            SettingsRow(
+                title = stringResource(R.string.settings_section_appearance),
+                helpText = stringResource(R.string.settings_appearance_subtitle),
+                icon = Icons.Outlined.Palette,
+                onClick = onAppearanceClick,
+                showDivider = false,
+            )
+        }
+        SettingsSection {
+            CategoryRow(SettingsCategory.AGENT, onCategoryClick)
+            CategoryRow(SettingsCategory.TOOLS, onCategoryClick)
+            CategoryRow(SettingsCategory.CONNECTIONS, onCategoryClick, showDivider = false)
+        }
+        SettingsSection {
+            CategoryRow(SettingsCategory.SECURITY, onCategoryClick)
+            CategoryRow(SettingsCategory.DATA, onCategoryClick)
+            CategoryRow(SettingsCategory.SYSTEM, onCategoryClick, showDivider = false)
+        }
+        Spacer(Modifier.height(24.dp))
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    onBack: () -> Unit,
-    onProvidersClick: () -> Unit,
-    // [T-client-disguise-app-level] App 级客户端伪装板块。默认 no-op，兼容旧调用方。
-    onClientDisguiseClick: () -> Unit = {},
-    onModelGroupsClick: () -> Unit,
-    onRootfsClick: () -> Unit = {},
-    onBackupClick: () -> Unit = {},
-    // [port-upstream-1.16] Settings > Network (Routing / Tailscale / Proxies).
-    onNetworkClick: () -> Unit = {},
-    onEnvVarsClick: () -> Unit = {},
-    onSshClick: () -> Unit = {},
-    onSkillsClick: () -> Unit = {},
-    onMultiAgentClick: () -> Unit = {},
-    onAgentRuntimeClick: () -> Unit = {},
-    onTerminalClick: () -> Unit = {},
-    onMemoryClick: () -> Unit = {},
-    // [T-mcp-integration-android] MCP Integrations page, listed directly below
-    // Memory. Default no-op for callers that haven't wired the route yet.
-    onMcpClick: () -> Unit = {},
-    onPluginMarketClick: () -> Unit = {},
-    // [T-soul-md] Soul settings page lives between Skills and Memory in the
-    // Agent Runtime section; default no-op for callers that haven't wired
-    // the route yet.
-    onSoulClick: () -> Unit = {},
-    // [T-dead-character-extras] onEvolutionClick removed: no Settings row ever
-    // invoked it (the Evolution entry migrated into the Memory hub).
-    onPermissionsClick: () -> Unit = {},
-    onUsageClick: () -> Unit = {},
-    onGatewayClick: () -> Unit = {},
-    onAppearanceClick: () -> Unit = {},
-    onLogsClick: () -> Unit = {},
-    // T219-2: Mount External Folders entry. Default no-op for any caller
-    // that hasn't wired the route yet.
-    onMountedFoldersClick: () -> Unit = {},
-    // T235: Shared Folders entry (Shared / Skills / Memory). Default no-op
-    // for back-compat with callers wired before T235.
-    onSharedFoldersClick: () -> Unit = {},
-    // T50: Background & Notifications screen (battery optimisation +
-    // OEM autostart guidance). Default no-op so older callers/tests
-    // don't need to be retrofitted.
-    onBackgroundClick: () -> Unit = {},
-    onWebSearchClick: () -> Unit = {},
-    // [GH#131] Lifecycle hooks (session start / response / end → sandbox script).
-    onLifecycleHooksClick: () -> Unit = {},
-    // [T-dead-character-extras] onCharacterExtrasClick removed: no row invoked
-    // it, so the CHARACTER_EXTRAS page was unreachable — deleted along with
-    // its navigation destination.
-    onTranslateClick: () -> Unit = {},
-    onOpenBrowser: () -> Unit = {},
-    onBrowserSettings: () -> Unit = {},
-    onAboutClick: () -> Unit = {},
+private fun CategoryRow(
+    category: SettingsCategory,
+    onCategoryClick: (SettingsCategory) -> Unit,
+    showDivider: Boolean = true,
 ) {
-    val context = LocalContext.current
-    var showFeedbackSheet by remember { mutableStateOf(false) }
-    // [T-ssh-workspace] (#32) Inline host-management sheet (no nav route).
-    var showSshWorkspaceSheet by remember { mutableStateOf(false) }
-    Scaffold(
-        topBar = {
-            MinisCenterTopBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                // [T-android-settings-back] 之前这个 topBar 没有 navigationIcon：
-                // Routes.SETTINGS 是 push 进栈的独立 composable，进来后既没有
-                // 返回箭头，也没有 actions，用户只能靠系统手势/返回键退出——
-                // 在无手势导航的设备上等于出不去。onBack 参数本来就有（见
-                // 函数签名第 90 行），AppNavigation 也早已传入
-                // `navController.safePopBackStack()`，只是从没被消费。
-                //
-                // 写法照抄同包其余页面的标准形态（MemoryManagementScreen /
-                // SkillsManagementScreen / MinisSkillsBrowserScreen）：IconButton +
-                // m3Icon(ArrowBack) + common_back 无障碍文案。用 common_back 而非
-                // SettingsComponents 里那个 cd_back，是因为 ui/settings 下 7 处
-                // 返回箭头有 6 处用 common_back。
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
-                            contentDescription = stringResource(R.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-        ) {
-            SettingsGroupLabel("常用")
-
-            // -- LLM Providers --
-            SettingsSection(
-                header = stringResource(R.string.settings_section_llm_providers),
-                footer = stringResource(R.string.settings_section_llm_providers_footer),
-            ) {
-                SettingsRow(
-                    icon = Icons.Outlined.Lock,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_manage_providers),
-                    subtitle = stringResource(R.string.settings_manage_providers_subtitle),
-                    onClick = onProvidersClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Shield,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.client_disguise_title),
-                    subtitle = stringResource(R.string.client_disguise_subtitle),
-                    onClick = onClientDisguiseClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Settings,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_model_groups),
-                    subtitle = stringResource(R.string.settings_model_groups_subtitle),
-                    onClick = onModelGroupsClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.BarChart,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_token_usage),
-                    subtitle = stringResource(R.string.settings_token_usage_subtitle),
-                    onClick = onUsageClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Dns,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.provider_type_gateway),
-                    subtitle = stringResource(R.string.add_provider_subtitle_gateway),
-                    onClick = onGatewayClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Tune,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_a2a_gateway),
-                    subtitle = stringResource(R.string.settings_a2a_gateway_subtitle),
-                    onClick = {
-                        context.startActivity(
-                            android.content.Intent(
-                                context,
-                                com.openminis.app.a2a.A2aSettingsActivity::class.java,
-                            ),
-                        )
-                    },
-                    showDivider = false,
-                )
-            }
-
-            // -- Appearance --
-            SettingsSection(header = stringResource(R.string.settings_section_appearance)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Palette,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.settings_section_appearance),
-                    subtitle = stringResource(R.string.settings_appearance_subtitle),
-                    onClick = onAppearanceClick,
-                    showDivider = false,
-                )
-            }
-
-            SettingsGroupLabel("Agent")
-
-            // -- Agent Runtime --
-            SettingsSection(header = stringResource(R.string.settings_section_agent_runtime)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Tune,
-                    iconColor = IosTeal,
-                    title = stringResource(R.string.settings_section_agent_runtime),
-                    subtitle = stringResource(R.string.settings_compact_threshold_subtitle),
-                    onClick = onAgentRuntimeClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Groups,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.settings_multi_agent),
-                    subtitle = stringResource(R.string.settings_multi_agent_subtitle),
-                    onClick = onMultiAgentClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Extension,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_skills),
-                    subtitle = stringResource(R.string.settings_skills_subtitle),
-                    onClick = onSkillsClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.TravelExplore,
-                    iconColor = IosGreen,
-                    title = stringResource(R.string.settings_web_search),
-                    subtitle = stringResource(R.string.settings_web_search_subtitle),
-                    onClick = onWebSearchClick,
-                )
-                // [GH#131] Session lifecycle hooks (start / response / end).
-                SettingsRow(
-                    icon = Icons.Outlined.Build,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.settings_lifecycle_hooks),
-                    subtitle = stringResource(R.string.settings_lifecycle_hooks_subtitle),
-                    onClick = onLifecycleHooksClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Translate,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_translate),
-                    subtitle = stringResource(R.string.settings_translate_subtitle),
-                    onClick = onTranslateClick,
-                )
-                // [T-soul-md] insertion between Skills and Memory per spec.
-                SettingsRow(
-                    icon = Icons.Outlined.AutoAwesome,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.settings_soul),
-                    subtitle = stringResource(R.string.settings_soul_subtitle),
-                    onClick = onSoulClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Psychology,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.settings_memory),
-                    subtitle = stringResource(R.string.settings_memory_subtitle),
-                    onClick = onMemoryClick,
-                )
-                // Evolution lives inside Memory. Translation lives on the message bubble.
-                // [T-mcp-integration-android] MCP Integrations — directly below Memory.
-                // [T-android-mcp-icon-distinct] Dashboard (2x2 block grid) instead of
-                // Extension so MCP no longer shares the Skills row's puzzle-piece icon —
-                // the grid reads as "multiple composed blocks/servers". teal unchanged.
-                SettingsRow(
-                    icon = Icons.Outlined.Dashboard,
-                    iconColor = IosTeal,
-                    title = stringResource(R.string.settings_mcp),
-                    subtitle = stringResource(R.string.settings_mcp_subtitle),
-                    onClick = onMcpClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Extension,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.plugin_market_title),
-                    subtitle = stringResource(R.string.plugin_market_subtitle),
-                    onClick = onPluginMarketClick,
-                )
-            SettingsSection(header = stringResource(R.string.settings_group_connections)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Terminal,
-                    iconColor = IosGreen,
-                    title = stringResource(R.string.settings_env_vars),
-                    subtitle = stringResource(R.string.settings_env_vars_subtitle),
-                    onClick = onEnvVarsClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Terminal,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.ssh_hosts_title),
-                    subtitle = stringResource(R.string.settings_ssh_subtitle),
-                    onClick = onSshClick,
-                    showDivider = false,
-                )
-            }
-
-            }
-
-            SettingsSection(header = stringResource(R.string.settings_section_tools)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Terminal,
-                    iconColor = IosIndigo,
-                    title = stringResource(R.string.sessionlist_shell_terminal),
-                    subtitle = stringResource(R.string.settings_section_tools),
-                    onClick = onTerminalClick,
-                )
-                // [T-ssh-workspace] (#32) SSH host registry + connection test.
-                // Hosted inline as a sheet — AppNavigation is pinned at its
-                // architecture ceiling, so this destination does not get a
-                // nav route. Per-session binding lives in the chat menu.
-                SettingsRow(
-                    icon = Icons.Outlined.Dns,
-                    iconColor = IosTeal,
-                    title = stringResource(R.string.ssh_workspace_menu_title),
-                    subtitle = stringResource(R.string.ssh_hosts_row_subtitle),
-                    onClick = { showSshWorkspaceSheet = true },
-                )
-                // [T-tool-approval-removed] 审批门按 LO 裁决移除。
-                SettingsRow(
-                    icon = Icons.Outlined.Language,
-                    iconColor = IosGreen,
-                    title = stringResource(R.string.sessionlist_open_browser),
-                    subtitle = stringResource(R.string.sessionlist_browser_settings),
-                    onClick = onOpenBrowser,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Settings,
-                    iconColor = IosGray,
-                    title = stringResource(R.string.sessionlist_browser_settings),
-                    subtitle = null,
-                    onClick = onBrowserSettings,
-                    showDivider = false,
-                )
-            }
-
-            SettingsGroupLabel("工具与权限")
-
-            // -- Permissions --
-            SettingsSection(header = stringResource(R.string.settings_section_permissions)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Shield,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_section_permissions),
-                    subtitle = stringResource(R.string.settings_permissions_subtitle),
-                    // [T-settings-single-permissions-entry] One entry: the
-                    // permissions page also carries the OS-level grants
-                    // (a11y repair, OEM keep-alive, voice-correction consent)
-                    // that used to live on a separate screen.
-                    onClick = onPermissionsClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Background & Notifications (T50) --
-            SettingsSection(
-                header = stringResource(R.string.bg_section_header),
-                footer = stringResource(R.string.bg_section_footer),
-            ) {
-                SettingsRow(
-                    icon = Icons.Outlined.BatteryFull,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.bg_section_header),
-                    subtitle = stringResource(R.string.bg_section_subtitle),
-                    onClick = onBackgroundClick,
-                    showDivider = false,
-                )
-            }
-
-            SettingsGroupLabel("数据")
-
-            // -- Storage --
-            SettingsSection(header = stringResource(R.string.settings_section_storage)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Inventory2,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_section_storage),
-                    subtitle = stringResource(R.string.settings_storage_subtitle),
-                    onClick = onRootfsClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Folder,
-                    iconColor = IosGreen,
-                    title = stringResource(R.string.settings_shared_folders),
-                    subtitle = stringResource(R.string.settings_shared_folders_subtitle),
-                    onClick = onSharedFoldersClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.FolderShared,
-                    iconColor = IosOrange,
-                    title = stringResource(R.string.settings_mount_external_folders),
-                    subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
-                    onClick = onMountedFoldersClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Backup,
-                    iconColor = IosGreen,
-                    title = stringResource(R.string.settings_backup_restore),
-                    subtitle = stringResource(R.string.settings_backup_restore_subtitle),
-                    onClick = onBackupClick,
-                    showDivider = false,
-                )
-            }
-
-            SettingsGroupLabel("网络")
-
-            // -- Network [port-upstream-1.16] --
-            SettingsSection(header = stringResource(R.string.settings_network_title)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Wifi,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_network_title),
-                    subtitle = stringResource(R.string.settings_network_subtitle),
-                    onClick = onNetworkClick,
-                    showDivider = false,
-                )
-            }
-
-            SettingsGroupLabel("系统")
-
-            // -- Logs --
-            SettingsSection(header = stringResource(R.string.settings_section_logs)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Description,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_section_logs),
-                    subtitle = stringResource(R.string.settings_logs_subtitle),
-                    onClick = onLogsClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- About --
-            SettingsSection(header = stringResource(R.string.settings_section_about)) {
-                SettingsRow(
-                    icon = Icons.Outlined.Info,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_about_minis),
-                    subtitle = stringResource(R.string.settings_about_subtitle),
-                    onClick = onAboutClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.FrontHand,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_privacy_policy),
-                    subtitle = null,
-                    // iOS canonical URL — ContentView.swift / AddProviderView.swift
-                    onClick = { openExternalUrl(context, "https://openminis.github.io/privacy-policy.html") },
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Feedback,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_feedback),
-                    subtitle = null,
-                    onClick = { showFeedbackSheet = true },
-                    showDivider = false,
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
-        }
-    }
-
-    if (showSshWorkspaceSheet) {
-        SshHostsManagerSheet(onDismiss = { showSshWorkspaceSheet = false })
-    }
-
-    if (showFeedbackSheet) {
-        ModalBottomSheet(onDismissRequest = { showFeedbackSheet = false }) {
-            Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                // [v3-P2-2] Was a private FeedbackSheetItem; the shared
-                // SettingsRow covers it — bare icon via the `leading` slot
-                // (no accent tile), no chevron, no divider.
-                SettingsRow(
-                    title = stringResource(R.string.settings_submit_github_issues),
-                    leading = {
-                        Icon(
-                            imageVector = Icons.Outlined.BugReport,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    },
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, buildBugReportUrl())
-                    },
-                    showChevron = false,
-                    showDivider = false,
-                )
-                SettingsRow(
-                    title = stringResource(R.string.settings_feedback_telegram),
-                    leading = {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Send,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    },
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, "https://t.me/+2NzhOJuzRyI1YmM1")
-                    },
-                    showChevron = false,
-                    showDivider = false,
-                )
-                SettingsRow(
-                    title = stringResource(R.string.settings_feedback_email),
-                    leading = {
-                        Icon(
-                            imageVector = Icons.Outlined.Email,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    },
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, buildFeedbackMailto())
-                    },
-                    showChevron = false,
-                    showDivider = false,
-                )
-            }
-        }
-    }
+    // Localized feature names form a useful index inside help without filling the home.
+    val summary = category.groups.flatten().map { stringResource(it.titleRes) }.joinToString(" · ")
+    SettingsRow(
+        title = stringResource(category.titleRes),
+        helpText = summary,
+        icon = category.icon,
+        onClick = { onCategoryClick(category) },
+        showDivider = showDivider,
+    )
 }

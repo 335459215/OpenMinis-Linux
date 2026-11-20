@@ -1,5 +1,6 @@
 package com.openminis.app.ui.settings
 
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -84,34 +85,32 @@ import com.openminis.app.i18n.uppercaseForDisplay
 @Composable
 fun SettingsScaffold(
     title: String,
-    // [T-android-settings-ui-md3] #11 onBack is nullable so an EDIT screen can
-    // suppress the back arrow and use an explicit Cancel/Save action pair instead
-    // (a back arrow + a "Cancel" action that both pop the screen is redundant and
-    // semantically muddy). Non-edit screens keep passing a non-null onBack and get
-    // the usual back arrow — unchanged.
+    // Without a callback use the host's back dispatcher. Edit screens can
+    // replace it with Cancel/Save through the explicit navigation slot.
     onBack: (() -> Unit)? = null,
     actions: @Composable (() -> Unit)? = null,
-    // [T-android-modeldetail-savecancel-ios-parity] Optional custom
-    // navigation slot — e.g. a leading Cancel text action on modal-style
-    // edit screens. When null, the slot falls back to the back arrow iff
-    // onBack is set, so every existing caller renders unchanged.
+    // An explicit empty navigation slot suppresses the default back button.
     navigation: @Composable (() -> Unit)? = null,
     floatingActionButton: @Composable (() -> Unit)? = null,
     scrollable: Boolean = true,
+    largeTitle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     Scaffold(
         topBar = {
             val titleSlot: @Composable () -> Unit = {
-                Text(
-                    title,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                if (!largeTitle) {
+                    Text(title, fontWeight = FontWeight.SemiBold)
+                }
             }
             val navigationSlot: @Composable () -> Unit = {
                 when {
                     navigation != null -> navigation()
-                    onBack != null -> IconButton(onClick = onBack) {
+                    else -> IconButton(
+                        onClick = { if (onBack != null) onBack() else backDispatcher?.onBackPressed() },
+                        enabled = onBack != null || backDispatcher != null,
+                    ) {
                         Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.cd_back))
                     }
                 }
@@ -140,8 +139,17 @@ fun SettingsScaffold(
             .imePadding()
         Column(
             modifier = if (scrollable) baseMod.verticalScroll(rememberScrollState()) else baseMod,
-            content = content,
-        )
+        ) {
+            if (largeTitle) {
+                Text(
+                    title,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = SectionDesign.ScreenHorizontalPadding, vertical = 8.dp),
+                )
+            }
+            content()
+        }
     }
 }
 
@@ -220,7 +228,7 @@ fun SettingsSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 24.dp),
+            .padding(top = SectionDesign.SectionTopGap),
     ) {
         if (header != null) {
             Text(
@@ -249,9 +257,9 @@ fun SettingsSection(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                .padding(horizontal = SectionDesign.ScreenHorizontalPadding)
+                .clip(SectionDesign.CardShape)
+                .background(SectionDesign.cardColor()),
             content = content,
         )
         if (footer != null) {
@@ -274,7 +282,8 @@ fun SettingsSection(
 
 /**
  * Generic row: left icon (optional colored circle) + title/subtitle + trailing slot + optional chevron.
- * Pass `showDivider = false` on the last row of a section.
+ * Pass `showDivider = false` on the last row of a section. Descriptions belong
+ * in [helpText]; [subtitle] stays visible for model IDs, status and errors.
  */
 @Composable
 fun SettingsRow(
@@ -294,8 +303,10 @@ fun SettingsRow(
     // [T-android-settings-ui-md3] #8 single-line List Item is 56dp; a caller with
     // two-line content (e.g. the model list: name + id) passes 72dp for the MD3
     // double-line height. Default keeps every other row at the single-line 56dp.
-    minHeight: Dp = 56.dp,
+    minHeight: Dp = SectionDesign.SettingsRowMinHeight,
+    helpText: String? = null,
 ) {
+    val hasHelp = !helpText.isNullOrBlank()
     Column {
         Row(
             modifier = Modifier
@@ -314,7 +325,10 @@ fun SettingsRow(
                 // 外边距也是 16。只有这里和它派生出的分隔线 inset 一起停在 14，
                 // 于是 SettingsRow 的文字和相邻的 choice/card 行差 2dp，卡片
                 // 圆角内缘也少这一截。改成消费 SectionDesign 的单一真相源。
-                .padding(horizontal = SectionDesign.RowHorizontalPadding, vertical = 12.dp),
+                .padding(
+                    horizontal = SectionDesign.RowHorizontalPadding,
+                    vertical = if (hasHelp) SectionDesign.SettingsHelpRowVerticalPadding else SectionDesign.RowVerticalPadding,
+                ),
             // #10 keep the trailing control (Switch/value) vertically centered
             // against the title — already centered, kept explicit.
             verticalAlignment = Alignment.CenterVertically,
@@ -330,7 +344,7 @@ fun SettingsRow(
                 val chipFg = monetIconTileContentColor(iconColor)
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(SectionDesign.SettingsIconTileSize)
                         .background(chipBg, RoundedCornerShape(8.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -340,27 +354,32 @@ fun SettingsRow(
                         imageVector = m3Icon(icon),
                         contentDescription = null,
                         tint = chipFg,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(SectionDesign.SettingsIconSize),
                     )
                 }
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(SectionDesign.SettingsIconGap))
             }
             if (leading != null) {
                 leading()
-                Spacer(Modifier.width(14.dp))
+                Spacer(Modifier.width(SectionDesign.SettingsIconGap))
             }
 
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(1.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = titleColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = SectionDesign.SettingsRowTitleSize,
+                        color = titleColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (hasHelp) SettingsHelpButton(title = title, helpText = helpText.orEmpty())
+                }
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
@@ -395,7 +414,8 @@ fun SettingsRow(
             // 统一到 16 后如果不跟着改，分隔线会比图标块左移 2dp、不再对齐
             // 标题文字的左缘。end 用同一个 RowHorizontalPadding，之前是写死的
             // 14，导致卡片右缘露出一截不该有的缝。
-            val insetStart = if (icon != null) 60.dp else SectionDesign.RowHorizontalPadding
+            val insetStart = SectionDesign.RowHorizontalPadding +
+                if (icon != null) SectionDesign.SettingsIconTileSize + SectionDesign.SettingsIconGap else 0.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -418,10 +438,12 @@ fun SettingsSwitchRow(
     iconColor: Color = MaterialTheme.colorScheme.primary,
     enabled: Boolean = true,
     showDivider: Boolean = true,
+    helpText: String? = null,
 ) {
     SettingsRow(
         title = title,
         subtitle = subtitle,
+        helpText = helpText,
         icon = icon,
         iconColor = iconColor,
         onClick = if (enabled) ({ onCheckedChange(!checked) }) else null,
@@ -449,10 +471,12 @@ fun SettingsValueRow(
     valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onClick: (() -> Unit)? = null,
     showDivider: Boolean = true,
+    helpText: String? = null,
 ) {
     SettingsRow(
         title = title,
         subtitle = subtitle,
+        helpText = helpText,
         icon = icon,
         iconColor = iconColor,
         onClick = onClick,
@@ -485,9 +509,9 @@ fun SettingsChoiceRow(
                 .fillMaxWidth()
                 // [T-android-settings-ui-md3] #1 match SettingsRow's 56dp min so
                 // choice/radio rows line up with toggle/value rows in mixed lists.
-                .heightIn(min = 56.dp)
+                .heightIn(min = SectionDesign.SettingsRowMinHeight)
                 .clickable(onClick = onSelect)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = SectionDesign.RowHorizontalPadding, vertical = SectionDesign.RowVerticalPadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (leading != null) {
@@ -496,7 +520,8 @@ fun SettingsChoiceRow(
             }
             Text(
                 title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
+                fontSize = SectionDesign.SettingsRowTitleSize,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
             )

@@ -79,7 +79,7 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
             ) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.web_search_tool_enabled),
-                    subtitle = stringResource(R.string.web_search_tool_enabled_sub),
+                    helpText = stringResource(R.string.web_search_tool_enabled_sub),
                     checked = toolEnabled,
                     onCheckedChange = {
                         toolEnabled = it
@@ -120,7 +120,7 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
             SettingsSection(footer = stringResource(R.string.web_search_fallback_footer)) {
                 SettingsSwitchRow(
                     title = stringResource(R.string.web_search_fallback),
-                    subtitle = stringResource(R.string.web_search_fallback_sub),
+                    helpText = stringResource(R.string.web_search_fallback_sub),
                     checked = fallback,
                     onCheckedChange = {
                         fallback = it
@@ -130,7 +130,7 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
                 )
                 SettingsSwitchRow(
                     title = stringResource(R.string.web_search_keyless),
-                    subtitle = stringResource(R.string.web_search_keyless_sub),
+                    helpText = stringResource(R.string.web_search_keyless_sub),
                     checked = keyless,
                     onCheckedChange = {
                         keyless = it
