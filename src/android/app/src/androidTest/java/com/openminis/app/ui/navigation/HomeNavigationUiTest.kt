@@ -47,7 +47,8 @@ class HomeNavigationUiTest {
                     NavHost(nav, startDestination = Routes.SESSION_LIST, modifier = modifier) {
                         composable(Routes.SESSION_LIST) { entry ->
                             val report = LocalHomeChatPaneReporter.current
-                            SideEffect { report(entry.id, listVisible) }
+                            val visible = listVisible
+                            SideEffect { report(entry.id, visible) }
                             Text("session-content")
                         }
                     }
@@ -74,7 +75,8 @@ class HomeNavigationUiTest {
                     NavHost(nav, startDestination = Routes.chat("quick"), modifier = modifier) {
                         composable(Routes.CHAT, arguments = listOf(navArgument("sessionId") { type = NavType.StringType })) { entry ->
                             val report = LocalHomeChatPaneReporter.current
-                            SideEffect { report(entry.id, listVisible) }
+                            val visible = listVisible
+                            SideEffect { report(entry.id, visible) }
                             Text("quick-chat-content")
                         }
                         composable(Routes.SESSION_LIST) { Text("sessions-content") }

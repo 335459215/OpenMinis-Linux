@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -67,7 +68,12 @@ class ChatComposerInsertMenuUiTest {
         }
         compose.runOnIdle { events.clear() }
         compose.onNodeWithText("open-insert").performClick()
+        compose.onNodeWithText(context.getString(R.string.chat_attach_take_photo)).assertIsDisplayed()
+        compose.waitForIdle()
+        Thread.sleep(350)
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.waitForIdle()
+        compose.waitUntil(2_000) { events.contains("dismiss") }
         compose.runOnIdle { assertEquals(listOf("dismiss"), events) }
     }
 

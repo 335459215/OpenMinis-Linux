@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -83,15 +84,16 @@ internal fun HomeNavigationScaffold(
 ) {
     val entry by navController.currentBackStackEntryAsState()
     val entryId = entry?.id
-    var chatListVisible by remember(entryId) { mutableStateOf<Boolean?>(null) }
-    val reportPane = remember(entryId) {
+    val paneVisibility = remember { mutableStateMapOf<String, Boolean>() }
+    val reportPane = remember {
         { sourceId: String, visible: Boolean ->
-            // NavHost composes outgoing and incoming entries during transitions.
-            // A pane belonging to the outgoing route cannot change current chrome.
-            if (sourceId == entryId) chatListVisible = visible
+            // The first report can precede the outer back-stack flow emission.
+            // Keep it by source entry instead of dropping it against a stale id.
+            // Outgoing transition reports cannot change the current entry's state.
+            paneVisibility[sourceId] = visible
         }
     }
-    val activeTab = HomeTab.fromRoute(entry?.destination?.route, chatListVisible)
+    val activeTab = HomeTab.fromRoute(entry?.destination?.route, paneVisibility[entryId])
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val useRail = maxWidth >= 840.dp
         Scaffold(

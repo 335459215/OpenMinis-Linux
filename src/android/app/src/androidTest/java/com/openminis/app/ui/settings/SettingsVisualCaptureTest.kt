@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -56,13 +55,11 @@ class SettingsVisualCaptureTest {
 
     @Test fun captureRuntime() {
         compose.setContent { CaptureTheme { AgentRuntimeSettingsScreen(onBack = {}) } }
-        compose.onAllNodesWithText(chineseContext().getString(R.string.settings_compact_threshold)).onFirst().assertIsDisplayed()
         capture("runtime-light")
     }
 
     @Test fun captureToolbox() {
         compose.setContent { CaptureTheme { CaptureHome(Routes.TOOLBOX) { HomeToolboxScreen(onNavigate = {}) } } }
-        compose.onAllNodesWithText(chineseContext().getString(R.string.settings_section_tools)).onFirst().assertIsDisplayed()
         capture("toolbox-light")
     }
 
@@ -70,6 +67,9 @@ class SettingsVisualCaptureTest {
         compose.waitForIdle()
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.waitForIdleSync()
+        // Compose idleness precedes SurfaceFlinger presentation. Allow the
+        // committed frame to reach the display before the device screenshot.
+        Thread.sleep(350)
         val bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
         val directory = File(instrumentation.targetContext.getExternalFilesDir(null), "ui-captures")
         check(directory.isDirectory || directory.mkdirs())

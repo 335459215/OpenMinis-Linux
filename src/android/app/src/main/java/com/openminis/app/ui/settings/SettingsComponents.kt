@@ -99,6 +99,7 @@ fun SettingsScaffold(
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     Scaffold(
         topBar = {
+            if (!largeTitle || onBack != null || actions != null) {
             val titleSlot: @Composable () -> Unit = {
                 if (!largeTitle) {
                     Text(title, fontWeight = FontWeight.SemiBold)
@@ -123,6 +124,7 @@ fun SettingsScaffold(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
+            }
         },
         floatingActionButton = { floatingActionButton?.invoke() },
         containerColor = MaterialTheme.colorScheme.background,
