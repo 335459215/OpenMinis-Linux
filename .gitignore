@@ -35,6 +35,15 @@ render.experimental.xml
 # project's upgrade identity. Copy signing.properties.example and fill it in
 # locally; CI supplies MINIS_UPLOAD_* from repository secrets.
 src/android/signing.properties
+# [T-signing-secret-untracked] Binary signing exports that land next to
+# release.keystore when a workstation configures release signing. These are
+# DER-encoded CMS SignedData blobs (cert chain + signature used to sign the
+# APK), machine-local and regenerable. Nothing in this tree reads or writes
+# them, so they are pure leak surface: a `git add -A` from a detached build
+# tree would push this machine's signing identity.
+src/android/signing-release.dat
+src/android/signing-release.der
+src/android/release-key.dat
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
