@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -55,13 +56,13 @@ class SettingsVisualCaptureTest {
 
     @Test fun captureRuntime() {
         compose.setContent { CaptureTheme { AgentRuntimeSettingsScreen(onBack = {}) } }
-        compose.onNodeWithText(chineseContext().getString(R.string.settings_compact_threshold)).assertIsDisplayed()
+        compose.onAllNodesWithText(chineseContext().getString(R.string.settings_compact_threshold)).onFirst().assertIsDisplayed()
         capture("runtime-light")
     }
 
     @Test fun captureToolbox() {
         compose.setContent { CaptureTheme { CaptureHome(Routes.TOOLBOX) { HomeToolboxScreen(onNavigate = {}) } } }
-        compose.onNodeWithText(chineseContext().getString(R.string.settings_section_tools)).assertIsDisplayed()
+        compose.onAllNodesWithText(chineseContext().getString(R.string.settings_section_tools)).onFirst().assertIsDisplayed()
         capture("toolbox-light")
     }
 
